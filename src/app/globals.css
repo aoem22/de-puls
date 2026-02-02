@@ -1,26 +1,147 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #141414;
+  --card-border: #262626;
+  --muted: #a1a1aa;
+  --accent: #22d3ee;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Leaflet tooltip styling - solid dark background with white text */
+.leaflet-tooltip,
+.leaflet-tooltip.custom-tooltip {
+  background: #1a1a1a !important;
+  border: 1px solid #333 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.7) !important;
+  padding: 0 !important;
+  font-family: var(--font-space-grotesk), system-ui, sans-serif !important;
+  color: #ffffff !important;
+}
+
+.leaflet-tooltip-top::before,
+.custom-tooltip.leaflet-tooltip-top::before {
+  border-top-color: #1a1a1a !important;
+}
+
+.leaflet-tooltip-bottom::before,
+.custom-tooltip.leaflet-tooltip-bottom::before {
+  border-bottom-color: #1a1a1a !important;
+}
+
+.leaflet-tooltip-left::before,
+.custom-tooltip.leaflet-tooltip-left::before {
+  border-left-color: #1a1a1a !important;
+}
+
+.leaflet-tooltip-right::before,
+.custom-tooltip.leaflet-tooltip-right::before {
+  border-right-color: #1a1a1a !important;
+}
+
+/* Ensure map fills container properly */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  background: var(--background);
+}
+
+/* Custom scrollbar for controls - dark mode */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: var(--card);
+  border-radius: 3px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
+
+/* Minimize map attribution for cleaner look - dark mode */
+.leaflet-control-attribution {
+  font-size: 8px;
+  background: rgba(20, 20, 20, 0.8) !important;
+  color: #52525b !important;
+  padding: 0 4px !important;
+  border-radius: 4px 0 0 0;
+}
+
+.leaflet-control-attribution a {
+  color: #71717a !important;
+}
+
+/* Select dropdown dark mode fix */
+select option {
+  background: var(--card);
+  color: var(--foreground);
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .leaflet-tooltip {
+    font-size: 12px !important;
+    max-width: 200px !important;
+  }
+
+  .leaflet-control-attribution {
+    font-size: 7px;
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Disable text selection on map controls */
+.leaflet-control {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Smoother polygon transitions */
+.leaflet-interactive {
+  transition: fill-opacity 0.15s ease, stroke-width 0.15s ease;
+}
+
+/* Touch-friendly tap targets */
+@media (pointer: coarse) {
+  select {
+    min-height: 44px;
+  }
+
+  button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Ensure tooltip text is always white and readable */
+.leaflet-tooltip * {
+  color: inherit;
 }
