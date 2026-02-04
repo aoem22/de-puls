@@ -111,8 +111,9 @@ export function ChoroplethMap() {
   // Zoom level tracking for fade effects
   const [currentZoom, setCurrentZoom] = useState<number>(GERMANY_ZOOM);
 
-  // Blaulicht selected crime state
+  // Blaulicht crime state
   const [selectedCrime, setSelectedCrime] = useState<CrimeRecord | null>(null);
+  const [hoveredCrime, setHoveredCrime] = useState<CrimeRecord | null>(null);
 
   // Determine which layer type to show based on indicator
   const showCityCrimeLayer = selectedIndicator === 'kriminalstatistik';
@@ -215,7 +216,9 @@ export function ChoroplethMap() {
             crimes={blaulichtCrimes}
             monochrome
             onCrimeClick={setSelectedCrime}
+            onCrimeHover={setHoveredCrime}
             selectedCrimeId={selectedCrime?.id}
+            hoveredCrimeId={hoveredCrime?.id}
           />
         )}
       </MapContainer>
@@ -327,11 +330,15 @@ export function ChoroplethMap() {
         />
       )}
 
-      {/* Blaulicht detail panel - shown when a crime is selected */}
-      {showBlaulichtLayer && selectedCrime && (
+      {/* Blaulicht detail panel - shown when a crime is selected or hovered */}
+      {showBlaulichtLayer && (selectedCrime || hoveredCrime) && (
         <BlaulichtDetailPanel
-          crime={selectedCrime}
-          onClose={() => setSelectedCrime(null)}
+          crime={selectedCrime || hoveredCrime!}
+          onClose={() => {
+            setSelectedCrime(null);
+            setHoveredCrime(null);
+          }}
+          isPreview={!selectedCrime && !!hoveredCrime}
         />
       )}
     </div>

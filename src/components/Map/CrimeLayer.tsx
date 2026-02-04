@@ -14,7 +14,9 @@ interface CrimeLayerProps {
   crimes: CrimeRecord[];
   monochrome?: boolean; // When true, use dark dots with severity-based sizing
   onCrimeClick?: (crime: CrimeRecord) => void;
+  onCrimeHover?: (crime: CrimeRecord | null) => void;
   selectedCrimeId?: string | null;
+  hoveredCrimeId?: string | null;
 }
 
 // Crime severity levels (higher = more severe = larger dot)
@@ -109,24 +111,27 @@ function createMarker(
   crime: CrimeRecord,
   monochrome: boolean,
   isSelected: boolean,
-  onClick?: (crime: CrimeRecord) => void
+  isHovered: boolean,
+  onClick?: (crime: CrimeRecord) => void,
+  onHover?: (crime: CrimeRecord | null) => void
 ): L.Marker | null {
   if (crime.latitude == null || crime.longitude == null) return null;
 
   const category = getPrimaryCategory(crime);
   const severity = getCrimeSeverity(crime);
   const baseSize = SEVERITY_SIZES[severity] ?? 10;
-  // Make selected marker larger
-  const size = isSelected ? baseSize * 1.4 : baseSize;
+  // Make selected/hovered marker larger
+  const size = isSelected ? baseSize * 1.5 : isHovered ? baseSize * 1.3 : baseSize;
   const halfSize = size / 2;
 
   // Monochrome: dark blue with glow effect
   // Colored: category-based colors
   const color = monochrome ? '#1e3a5f' : (categoryColorMap.get(category) ?? '#94a3b8');
-  const glowColor = isSelected ? '#60a5fa' : '#3b82f6'; // Brighter blue when selected
-  const borderColor = monochrome ? (isSelected ? '#60a5fa' : '#2563eb') : 'rgba(255,255,255,0.3)';
+  const isHighlighted = isSelected || isHovered;
+  const glowColor = isHighlighted ? '#60a5fa' : '#3b82f6';
+  const borderColor = monochrome ? (isHighlighted ? '#60a5fa' : '#2563eb') : 'rgba(255,255,255,0.3)';
 
-  const glowIntensity = isSelected ? 1.5 : 1;
+  const glowIntensity = isSelected ? 1.8 : isHovered ? 1.4 : 1;
   const glowStyle = monochrome
     ? `box-shadow:
         0 0 ${size * 0.5 * glowIntensity}px ${glowColor},
@@ -144,9 +149,9 @@ function createMarker(
       height:${size}px;
       background:${color};
       border-radius:50%;
-      border:${isSelected ? '2px' : '1px'} solid ${borderColor};
+      border:${isHighlighted ? '2px' : '1px'} solid ${borderColor};
       ${glowStyle}
-      transition: all 0.2s ease;
+      transition: all 0.15s ease;
     "></span>`,
     iconSize: [size, size],
     iconAnchor: [halfSize, halfSize],
@@ -154,9 +159,15 @@ function createMarker(
 
   const marker = L.marker([crime.latitude, crime.longitude], { icon });
 
-  // Use click handler if provided (monochrome/blaulicht mode), otherwise use popup
-  if (onClick && monochrome) {
-    marker.on('click', () => onClick(crime));
+  // Use click/hover handlers if provided (monochrome/blaulicht mode), otherwise use popup
+  if (monochrome) {
+    if (onClick) {
+      marker.on('click', () => onClick(crime));
+    }
+    if (onHover) {
+      marker.on('mouseover', () => onHover(crime));
+      marker.on('mouseout', () => onHover(null));
+    }
   } else {
     marker.bindPopup(createPopupHtml(crime), { maxWidth: 260 });
   }
@@ -168,7 +179,9 @@ export function CrimeLayer({
   crimes,
   monochrome = false,
   onCrimeClick,
+  onCrimeHover,
   selectedCrimeId,
+  hoveredCrimeId,
 }: CrimeLayerProps) {
   const map = useMap();
   const layerRef = useRef<L.MarkerClusterGroup | L.LayerGroup | null>(null);
@@ -202,9 +215,16 @@ export function CrimeLayer({
 
   const markers = useMemo(() => {
     return crimes
-      .map((crime) => createMarker(crime, monochrome, crime.id === selectedCrimeId, onCrimeClick))
+      .map((crime) => createMarker(
+        crime,
+        monochrome,
+        crime.id === selectedCrimeId,
+        crime.id === hoveredCrimeId,
+        onCrimeClick,
+        onCrimeHover
+      ))
       .filter(Boolean) as L.Marker[];
-  }, [crimes, monochrome, selectedCrimeId, onCrimeClick]);
+  }, [crimes, monochrome, selectedCrimeId, hoveredCrimeId, onCrimeClick, onCrimeHover]);
 
   useEffect(() => {
     if (!layerRef.current) return;

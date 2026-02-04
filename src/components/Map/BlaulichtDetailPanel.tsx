@@ -6,6 +6,7 @@ import { CRIME_CATEGORIES } from '@/lib/types/crime';
 interface BlaulichtDetailPanelProps {
   crime: CrimeRecord;
   onClose: () => void;
+  isPreview?: boolean; // When true, shown on hover without backdrop
 }
 
 // Category metadata for display
@@ -80,7 +81,7 @@ const Icons = {
   ),
 };
 
-export function BlaulichtDetailPanel({ crime, onClose }: BlaulichtDetailPanelProps) {
+export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: BlaulichtDetailPanelProps) {
   const primaryCategory = crime.categories[0] ?? 'other';
   const categoryInfo = getCategoryInfo(primaryCategory);
 
@@ -98,15 +99,17 @@ export function BlaulichtDetailPanel({ crime, onClose }: BlaulichtDetailPanelPro
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[1001] bg-black/30"
-        onClick={onClose}
-      />
+      {/* Backdrop - only for selected (not preview) */}
+      {!isPreview && (
+        <div
+          className="fixed inset-0 z-[1001] bg-black/30"
+          onClick={onClose}
+        />
+      )}
 
       {/* Right-side panel */}
-      <div className="fixed top-4 right-4 bottom-4 z-[1002] w-[380px] max-w-[calc(100vw-2rem)] pointer-events-none">
-        <div className="bg-[#0c0c0c] rounded-xl border border-[#1a1a1a] shadow-2xl shadow-black/60 h-full flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200">
+      <div className={`fixed top-4 right-4 z-[1002] w-[380px] max-w-[calc(100vw-2rem)] pointer-events-none ${isPreview ? 'bottom-auto max-h-[70vh]' : 'bottom-4'}`}>
+        <div className={`bg-[#0c0c0c] rounded-xl border shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200 ${isPreview ? 'border-[#252525]' : 'border-[#1a1a1a] h-full'}`}>
 
           {/* Header */}
           <div className="px-5 py-4 border-b border-[#1a1a1a] flex items-center justify-between flex-shrink-0">

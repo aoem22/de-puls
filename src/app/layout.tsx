@@ -16,7 +16,7 @@ const jollyLodger = Jolly_Lodger({
 });
 
 export const metadata: Metadata = {
-  title: 'KanakMap',
+  title: 'De-Puls',
   description:
     'Interaktive Karte sozialer Indikatoren in Deutschland - Ausländeranteil, Kinderarmut, Arbeitslosigkeit und mehr nach Kreisen',
   keywords: ['Deutschland', 'Sozialatlas', 'Ausländer', 'Migration', 'Karte', 'Statistik', 'Kreise'],

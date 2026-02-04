@@ -15,6 +15,7 @@ import {
   DEUTSCHLANDATLAS_META,
   isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
+import { CRIME_CATEGORIES, type CrimeCategory } from '@/lib/types/crime';
 
 interface LayerControlProps {
   // Indicator props
@@ -30,6 +31,12 @@ interface LayerControlProps {
   // Crime metric (HZ vs AQ) - only for kriminalstatistik
   cityCrimeMetric?: 'hz' | 'aq';
   onCityCrimeMetricChange?: (metric: 'hz' | 'aq') => void;
+  // Blaulicht crime stats
+  blaulichtStats?: {
+    total: number;
+    geocoded: number;
+    byCategory: Record<CrimeCategory, number>;
+  };
 }
 
 export function LayerControl({
