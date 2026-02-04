@@ -30,7 +30,7 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 # Constants
 BASE_URL = "https://www.presseportal.de"
 BLAULICHT_URL = f"{BASE_URL}/blaulicht/"
-USER_AGENT = "de-puls/1.0 (+contact: scraper@example.com)"
+USER_AGENT = "kanakmap/1.0 (+contact: scraper@example.com)"
 PAGE_DELAY_SECONDS = 1.5
 GEOCODE_DELAY_SECONDS = 1.1
 REQUEST_TIMEOUT_SECONDS = 30

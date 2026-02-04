@@ -12,7 +12,7 @@ export default function Home() {
           className="text-center text-white text-5xl md:text-7xl drop-shadow-[0_4px_24px_rgba(0,0,0,0.8)]"
           style={{ fontFamily: 'var(--font-jolly-lodger), cursive' }}
         >
-          De-Puls
+          KanakMap
         </h1>
       </div>
     </main>
