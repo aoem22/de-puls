@@ -5,3 +5,4 @@ geopy>=2.3.0
 openai>=1.0.0  # OpenRouter uses OpenAI-compatible API
 python-dotenv>=1.0.0  # Load .env files
 certifi>=2023.0.0  # SSL certificates for macOS
+python-dateutil>=2.8.0  # Date manipulation for pipeline chunks
