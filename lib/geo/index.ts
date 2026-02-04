@@ -1,0 +1,3 @@
+// Public API for geographic data module
+export * from './types';
+export { GeoDataService, geoService } from './service';

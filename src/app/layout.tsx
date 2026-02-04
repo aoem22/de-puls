@@ -16,10 +16,10 @@ const jollyLodger = Jolly_Lodger({
 });
 
 export const metadata: Metadata = {
-  title: 'Kanak Karte',
+  title: 'KanakMap',
   description:
-    'Interaktive Karte der sozialen Indikatoren in Darmstadt - Armutsindex, Kinderarmut, Erwachsenenarmut und Altersarmut nach Stadtbezirken',
-  keywords: ['Darmstadt', 'Sozialatlas', 'Armut', 'Karte', 'Statistik', 'Kanak'],
+    'Interaktive Karte sozialer Indikatoren in Deutschland - Ausländeranteil, Kinderarmut, Arbeitslosigkeit und mehr nach Kreisen',
+  keywords: ['Deutschland', 'Sozialatlas', 'Ausländer', 'Migration', 'Karte', 'Statistik', 'Kreise'],
 };
 
 export default function RootLayout({

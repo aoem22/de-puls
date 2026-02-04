@@ -62,6 +62,7 @@ body {
   height: 100%;
   font-family: var(--font-space-grotesk), system-ui, sans-serif;
   background: var(--background);
+  outline: none;
 }
 
 /* Custom scrollbar for controls - dark mode */
@@ -83,6 +84,24 @@ body {
   background: #525252;
 }
 
+/* Thin scrollbar variant */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 2px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
 /* Minimize map attribution for cleaner look - dark mode */
 .leaflet-control-attribution {
   font-size: 8px;
@@ -94,6 +113,21 @@ body {
 
 .leaflet-control-attribution a {
   color: #71717a !important;
+}
+
+/* Crime marker cluster dots */
+.crime-marker {
+  background: transparent;
+  border: none;
+}
+
+.crime-marker span {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
 }
 
 /* Select dropdown dark mode fix */
@@ -126,7 +160,12 @@ select option {
 
 /* Smoother polygon transitions */
 .leaflet-interactive {
-  transition: fill-opacity 0.15s ease, stroke-width 0.15s ease;
+  transition: fill-opacity 0.15s ease, stroke-width 0.15s ease, stroke 0.15s ease;
+  outline: none;
+}
+
+.leaflet-interactive:focus {
+  outline: none;
 }
 
 /* Touch-friendly tap targets */
@@ -144,4 +183,71 @@ select option {
 /* Ensure tooltip text is always white and readable */
 .leaflet-tooltip * {
   color: inherit;
+}
+
+/* Custom scrollbar for detail panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+
+/* Tailwind animate-in utilities for panel transitions */
+@keyframes slide-in-from-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes zoom-in-95 {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.slide-in-from-right-4 {
+  animation-name: slide-in-from-right;
+  animation-duration: 0.3s;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.zoom-in-95 {
+  animation-name: zoom-in-95;
+}
+
+.duration-200 {
+  animation-duration: 0.2s;
 }

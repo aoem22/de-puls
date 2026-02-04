@@ -1,260 +1,223 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import {
-  MapContainer,
-  TileLayer,
-  GeoJSON,
-} from 'react-leaflet';
-import type { Layer, LeafletMouseEvent, LatLngBoundsExpression } from 'leaflet';
+import { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import 'leaflet/dist/leaflet.css';
 
-import type { DistrictData, MetricKey } from '../../../lib/types/district';
-import { METRICS } from '../../../lib/types/district';
-import {
-  createColorScale,
-  calculateCorrelation,
-} from '../../../lib/utils/colorScale';
-import { Legend } from './Legend';
 import { LayerControl } from './LayerControl';
+import { CityCrimeLayer, CRIME_DATA_YEARS } from './CityCrimeLayer';
+import { KreisLayer, AUSLAENDER_YEARS, DEUTSCHLANDATLAS_YEAR } from './KreisLayer';
+import type { KreisHoverInfo } from './KreisLayer';
+import { KreisHoverCard } from './KreisHoverCard';
+import { RankingPanel } from './RankingPanel';
+import { CrimeLayer } from './CrimeLayer';
+import { GermanyMask } from './GermanyMask';
+import { CitiesLayer } from './CitiesLayer';
+import { BlaulichtDetailPanel } from './BlaulichtDetailPanel';
+import type { CrimeRecord } from '@/lib/types/crime';
+import type { CrimeTypeKey } from '../../../lib/types/cityCrime';
+import type { IndicatorKey, SubMetricKey } from '../../../lib/indicators/types';
 
-// Import data
-import districtsJson from '../../../lib/data/districts.json';
-import geojsonData from '../../../lib/data/geojson-merged.json';
+// Import Blaulicht crime data
+import crimesJson from '../../../lib/data/blaulicht-crimes.json';
+const blaulichtCrimes = (crimesJson as { records: CrimeRecord[] }).records;
 
-const districts = districtsJson as DistrictData[];
-const geojson = geojsonData as FeatureCollection;
+// Tile layer URLs
+const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+const LABELS_TILES = 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png';
 
-// Create a lookup map for district data by ID
-const districtMap = new Map<string, DistrictData>();
-districts.forEach((d) => districtMap.set(d.id, d));
+// Map view settings
+const MIN_ZOOM = 5;
+const MAX_ZOOM = 18;
 
-// Darmstadt bounds and center
-const DARMSTADT_CENTER: [number, number] = [49.8728, 8.6512];
-const DEFAULT_ZOOM = 12;
-const MIN_ZOOM = 11;
-const MAX_ZOOM = 16;
+// Germany-wide view settings
+const GERMANY_CENTER: [number, number] = [51.1657, 10.4515];
+const GERMANY_ZOOM = 6;
 
-// Bounding box for Darmstadt
-const DARMSTADT_BOUNDS: LatLngBoundsExpression = [
-  [49.78, 8.55],
-  [49.95, 8.75],
+// Germany bounds - tighter fit to actual Germany extent
+const GERMANY_BOUNDS: [[number, number], [number, number]] = [
+  [47.27, 5.87],   // Southwest corner (near Basel)
+  [55.06, 15.04],  // Northeast corner (near Szczecin)
 ];
 
-// Calculate city-wide totals for percentage calculations
-const cityTotals = {
-  population: districts.reduce((sum, d) => sum + d.population, 0),
-  migrationBackground: districts.reduce((sum, d) => sum + (d.migrationBackground || 0), 0),
-  foreign: districts.reduce((sum, d) => sum + (d.foreign || 0), 0),
-  households: districts.reduce((sum, d) => sum + (d.households || 0), 0),
-  singleParentHouseholds: districts.reduce((sum, d) => sum + (d.singleParentHouseholds || 0), 0),
-};
+// Zoom threshold for deselecting a Kreis (when zoomed out enough to see it fully)
+const KREIS_DESELECT_ZOOM_THRESHOLD = 7;
 
-// Calculate percentage for a metric value
-function getPercentage(district: DistrictData, metricKey: MetricKey): string | null {
-  if (metricKey === 'population') {
-    return ((district.population / cityTotals.population) * 100).toFixed(1) + '%';
-  }
-  if (metricKey === 'migrationBackground' && district.migrationBackground) {
-    return ((district.migrationBackground / district.population) * 100).toFixed(1) + '%';
-  }
-  if (metricKey === 'singleParentHouseholds' && district.singleParentHouseholds && district.householdsWithChildren) {
-    return ((district.singleParentHouseholds / district.householdsWithChildren) * 100).toFixed(1) + '%';
-  }
+// Component to track zoom level changes
+function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const handleZoom = () => onZoomChange(map.getZoom());
+    map.on('zoomend', handleZoom);
+    onZoomChange(map.getZoom()); // Initial value
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
+  }, [map, onZoomChange]);
+
   return null;
 }
 
-// Generate tooltip HTML content
-function getTooltipHTML(
-  district: DistrictData,
-  selectedMetric: MetricKey,
-  compareMetric: MetricKey | null,
-  correlation: number | null
-): string {
-  const metric = METRICS[selectedMetric];
-  const value = district[selectedMetric as keyof DistrictData] as number | null;
-  const percentage = getPercentage(district, selectedMetric);
+// Component to set initial map bounds
+function MapInitializer({ germanyBounds }: { germanyBounds: [[number, number], [number, number]] }) {
+  const map = useMap();
 
-  const compareValue = compareMetric
-    ? (district[compareMetric as keyof DistrictData] as number | null)
-    : null;
-  const comparePercentage = compareMetric ? getPercentage(district, compareMetric) : null;
+  useEffect(() => {
+    // Calculate padding: 10% of viewport on each side
+    const container = map.getContainer();
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    const padding: L.PointTuple = [height * 0.1, width * 0.1];
 
-  let html = `
-    <div style="padding: 12px; min-width: 180px;">
-      <div style="font-weight: 700; color: #fff; font-size: 14px; line-height: 1.3; border-bottom: 1px solid #444; padding-bottom: 8px; margin-bottom: 8px;">
-        ${district.name}
-      </div>
-      <div style="margin-bottom: 8px;">
-        <div style="font-size: 11px; color: #a1a1aa; margin-bottom: 2px;">${metric.labelDe}</div>
-        <div style="display: flex; align-items: baseline; gap: 8px;">
-          <span style="font-size: 18px; font-weight: 700; color: #fff;">${metric.format(value)}</span>
-          ${percentage ? `<span style="font-size: 11px; color: #22d3ee;">(${percentage})</span>` : ''}
-        </div>
-      </div>
-  `;
+    map.fitBounds(germanyBounds, {
+      paddingTopLeft: [padding[1], padding[0]],
+      paddingBottomRight: [padding[1], padding[0]],
+    });
 
-  if (compareMetric && compareValue !== null) {
-    const cMetric = METRICS[compareMetric];
-    html += `
-      <div style="margin-bottom: 8px; padding-top: 8px; border-top: 1px solid #444;">
-        <div style="font-size: 11px; color: #a1a1aa; margin-bottom: 2px;">${cMetric.labelDe}</div>
-        <div style="display: flex; align-items: baseline; gap: 8px;">
-          <span style="font-size: 18px; font-weight: 700; color: #fff;">${cMetric.format(compareValue)}</span>
-          ${comparePercentage ? `<span style="font-size: 11px; color: #f472b6;">(${comparePercentage})</span>` : ''}
-        </div>
-      </div>
-    `;
-  }
+    // Expand maxBounds slightly so user can pan a bit but not lose Germany
+    const expandedBounds: [[number, number], [number, number]] = [
+      [germanyBounds[0][0] - 1, germanyBounds[0][1] - 1],
+      [germanyBounds[1][0] + 1, germanyBounds[1][1] + 1],
+    ];
+    map.setMaxBounds(expandedBounds);
+    map.setMinZoom(MIN_ZOOM);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  html += `
-      <div style="font-size: 11px; color: #71717a; padding-top: 8px; border-top: 1px solid #444;">
-        ${district.population.toLocaleString('de-DE')} Einwohner
-        <span style="color: #52525b;"> · ${((district.population / cityTotals.population) * 100).toFixed(1)}% der Stadt</span>
-      </div>
-    </div>
-  `;
-
-  return html;
+  return null;
 }
 
 export function ChoroplethMap() {
-  const [selectedMetric, setSelectedMetric] = useState<MetricKey>('migrationBackground');
-  const [compareMetric, setCompareMetric] = useState<MetricKey | null>(null);
-  const [hoveredDistrict, setHoveredDistrict] = useState<string | null>(null);
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
 
-  // Store layer references for tooltip updates
-  const layersRef = useRef<Map<string, L.Layer>>(new Map());
+  // Unified indicator state (Ausländer, Deutschlandatlas, or Kriminalstatistik)
+  const [selectedIndicator, setSelectedIndicator] = useState<IndicatorKey>('auslaender');
+  const [selectedSubMetric, setSelectedSubMetric] = useState<SubMetricKey>('total');
+  const [selectedIndicatorYear, setSelectedIndicatorYear] = useState<string>(AUSLAENDER_YEARS[AUSLAENDER_YEARS.length - 1]);
+  const [isIndicatorPlaying, setIsIndicatorPlaying] = useState(false);
 
-  const metric = METRICS[selectedMetric];
-  const compareMetricConfig = compareMetric ? METRICS[compareMetric] : null;
+  // Crime-specific state (only used when selectedIndicator === 'kriminalstatistik')
+  const [cityCrimeMetric, setCityCrimeMetric] = useState<'hz' | 'aq'>('hz');
+  const [hoveredCity, setHoveredCity] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
-  // Calculate correlation when comparing
-  const correlation = useMemo(() => {
-    if (!compareMetric) return null;
-    return calculateCorrelation(metric, METRICS[compareMetric], districts);
-  }, [selectedMetric, compareMetric]);
+  // Kreis-specific state (used for auslaender and deutschlandatlas)
+  const [hoveredKreis, setHoveredKreis] = useState<string | null>(null);
+  const [selectedKreis, setSelectedKreis] = useState<string | null>(null);
+  const [kreisHoverInfo, setKreisHoverInfo] = useState<KreisHoverInfo | null>(null);
 
-  // Create appropriate color scale
-  const colorScale = useMemo(
-    () => createColorScale(metric, districts),
-    [selectedMetric]
-  );
+  // Zoom level tracking for fade effects
+  const [currentZoom, setCurrentZoom] = useState<number>(GERMANY_ZOOM);
 
+  // Blaulicht selected crime state
+  const [selectedCrime, setSelectedCrime] = useState<CrimeRecord | null>(null);
 
-  // Update tooltips when metrics change
+  // Determine which layer type to show based on indicator
+  const showCityCrimeLayer = selectedIndicator === 'kriminalstatistik';
+  const showBlaulichtLayer = selectedIndicator === 'blaulicht';
+  const showKreisLayer = !showCityCrimeLayer && !showBlaulichtLayer;
+
+  // Get available years for current indicator
+  const getIndicatorYears = (): string[] => {
+    if (selectedIndicator === 'auslaender') return AUSLAENDER_YEARS;
+    if (selectedIndicator === 'kriminalstatistik') return CRIME_DATA_YEARS;
+    if (selectedIndicator === 'blaulicht') return []; // No year selection for blaulicht
+    return [DEUTSCHLANDATLAS_YEAR];
+  };
+
+  // Indicator year playback animation
   useEffect(() => {
-    layersRef.current.forEach((layer, districtId) => {
-      const district = districtMap.get(districtId);
-      if (district && (layer as L.Path).getTooltip) {
-        const tooltip = (layer as L.Path).getTooltip();
-        if (tooltip) {
-          tooltip.setContent(getTooltipHTML(district, selectedMetric, compareMetric, correlation));
-        }
-      }
-    });
-  }, [selectedMetric, compareMetric, correlation]);
+    if (!isIndicatorPlaying) return;
+    const years = getIndicatorYears();
+    if (years.length <= 1) return;
 
-  // Style function for GeoJSON features
-  const getStyle = useCallback(
-    (feature?: Feature<Geometry, { districtId: string }>) => {
-      if (!feature?.properties?.districtId) {
-        return {
-          fillColor: '#333333',
-          weight: 1,
-          opacity: 0.8,
-          color: '#1a1a1a',
-          fillOpacity: 0.5,
-        };
-      }
-
-      const districtId = feature.properties.districtId;
-      const district = districtMap.get(districtId);
-      const isHovered = hoveredDistrict === districtId;
-
-      // Always use primary metric for coloring
-      const value = district
-        ? (district[selectedMetric as keyof DistrictData] as number | null)
-        : null;
-      const fillColor = colorScale(value);
-
-      return {
-        fillColor,
-        weight: isHovered ? 2 : 1,
-        opacity: 1,
-        color: isHovered ? '#ffffff' : 'rgba(255,255,255,0.15)',
-        fillOpacity: isHovered ? 0.9 : 0.7,
-      };
-    },
-    [selectedMetric, colorScale, hoveredDistrict]
-  );
-
-  // Event handlers for each feature
-  const onEachFeature = useCallback(
-    (
-      feature: Feature<Geometry, { districtId: string; stat_Bez_1?: string }>,
-      layer: Layer
-    ) => {
-      const districtId = feature.properties?.districtId;
-      if (!districtId) return;
-
-      const district = districtMap.get(districtId);
-      if (!district) return;
-
-      // Store layer reference
-      layersRef.current.set(districtId, layer);
-
-      // Bind tooltip to layer
-      (layer as L.Path).bindTooltip(
-        getTooltipHTML(district, selectedMetric, compareMetric, correlation),
-        {
-          sticky: true,
-          direction: 'top',
-          offset: [0, -10],
-          opacity: 1,
-          className: 'custom-tooltip',
-        }
-      );
-
-      // Mouse events
-      layer.on({
-        mouseover: (e: LeafletMouseEvent) => {
-          setHoveredDistrict(districtId);
-          e.target.bringToFront();
-        },
-        mouseout: () => {
-          setHoveredDistrict(null);
-        },
+    const interval = window.setInterval(() => {
+      setSelectedIndicatorYear((current) => {
+        const currentIndex = years.indexOf(current);
+        const nextIndex = (currentIndex + 1) % years.length;
+        return years[nextIndex];
       });
-    },
-    [selectedMetric, compareMetric, correlation]
-  );
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [isIndicatorPlaying, selectedIndicator]);
+
+  // Deselect Kreis when zooming out past threshold (seeing full map again)
+  useEffect(() => {
+    if (selectedKreis && currentZoom <= KREIS_DESELECT_ZOOM_THRESHOLD) {
+      setSelectedKreis(null);
+    }
+  }, [currentZoom, selectedKreis]);
 
   return (
     <div className="relative w-full h-full">
       <MapContainer
-        center={DARMSTADT_CENTER}
-        zoom={DEFAULT_ZOOM}
+        center={GERMANY_CENTER}
+        zoom={GERMANY_ZOOM}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
-        maxBounds={DARMSTADT_BOUNDS}
+        maxBounds={GERMANY_BOUNDS}
         maxBoundsViscosity={1.0}
         className="w-full h-full"
         zoomControl={false}
+        preferCanvas
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url={DARK_TILES}
         />
-        <GeoJSON
-          key={`${selectedMetric}-${compareMetric}`}
-          data={geojson}
-          style={getStyle}
-          onEachFeature={onEachFeature}
-        />
+
+        {/* Mask to darken areas outside Germany */}
+        <GermanyMask fillColor="#0a0a0a" fillOpacity={0.7} />
+
+        {/* Progressive city labels */}
+        <CitiesLayer currentZoom={currentZoom} />
+
+        {/* Zoom tracker for fade effects */}
+        <ZoomTracker onZoomChange={setCurrentZoom} />
+
+        {/* Initial map bounds setup */}
+        <MapInitializer germanyBounds={GERMANY_BOUNDS} />
+
+        {/* City crime layer (when kriminalstatistik is selected) */}
+        {showCityCrimeLayer && (
+          <CityCrimeLayer
+            selectedCrimeType={selectedSubMetric as CrimeTypeKey}
+            metric={cityCrimeMetric}
+            selectedYear={selectedIndicatorYear}
+            hoveredCity={hoveredCity}
+            onHoverCity={setHoveredCity}
+            onClickCity={setSelectedCity}
+            currentZoom={currentZoom}
+            selectedCity={selectedCity}
+          />
+        )}
+
+        {/* Kreis indicator layer (Ausländer or Deutschlandatlas) */}
+        {showKreisLayer && (
+          <KreisLayer
+            indicatorKey={selectedIndicator}
+            subMetric={selectedSubMetric}
+            selectedYear={selectedIndicatorYear}
+            hoveredKreis={hoveredKreis}
+            onHoverKreis={setHoveredKreis}
+            onHoverInfo={setKreisHoverInfo}
+            onClickKreis={setSelectedKreis}
+            selectedKreis={selectedKreis}
+            currentZoom={currentZoom}
+          />
+        )}
+
+        {/* Blaulicht crime markers (when blaulicht indicator selected) */}
+        {showBlaulichtLayer && (
+          <CrimeLayer
+            crimes={blaulichtCrimes}
+            monochrome
+            onCrimeClick={setSelectedCrime}
+            selectedCrimeId={selectedCrime?.id}
+          />
+        )}
       </MapContainer>
 
       {/* Mobile toggle button */}
@@ -298,25 +261,79 @@ export function ChoroplethMap() {
         `}
       >
         <LayerControl
-          selectedMetric={selectedMetric}
-          compareMetric={compareMetric}
-          correlation={correlation}
-          onMetricChange={(metric) => {
-            setSelectedMetric(metric);
+          selectedIndicator={selectedIndicator}
+          onIndicatorChange={(indicator) => {
+            setSelectedIndicator(indicator);
+            // Set appropriate defaults based on indicator type
+            if (indicator === 'auslaender') {
+              setSelectedSubMetric('total');
+              setSelectedIndicatorYear(AUSLAENDER_YEARS[AUSLAENDER_YEARS.length - 1]);
+            } else if (indicator === 'deutschlandatlas') {
+              setSelectedSubMetric('kinder_bg'); // Default to child poverty
+              setSelectedIndicatorYear(DEUTSCHLANDATLAS_YEAR);
+            } else if (indicator === 'kriminalstatistik') {
+              setSelectedSubMetric('total');
+              setSelectedIndicatorYear(CRIME_DATA_YEARS[CRIME_DATA_YEARS.length - 1]);
+            } else if (indicator === 'blaulicht') {
+              // Blaulicht has no sub-metrics or year selection
+              setSelectedSubMetric('all');
+              setSelectedIndicatorYear('');
+            }
+            // Clear selections when switching indicators
+            setSelectedKreis(null);
+            setSelectedCity(null);
+            setSelectedCrime(null);
             setIsControlsExpanded(false);
           }}
-          onCompareMetricChange={setCompareMetric}
+          selectedSubMetric={selectedSubMetric}
+          onSubMetricChange={setSelectedSubMetric}
+          indicatorYears={getIndicatorYears()}
+          selectedIndicatorYear={selectedIndicatorYear}
+          isIndicatorPlaying={isIndicatorPlaying}
+          onToggleIndicatorPlay={() => setIsIndicatorPlaying((prev) => !prev)}
+          onIndicatorYearChange={(year) => {
+            setSelectedIndicatorYear(year);
+            setIsIndicatorPlaying(false);
+          }}
+          // Crime-specific props (only used when kriminalstatistik is selected)
+          cityCrimeMetric={cityCrimeMetric}
+          onCityCrimeMetricChange={setCityCrimeMetric}
         />
       </div>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-2 right-2 md:left-4 md:right-auto z-[1000]">
-        <Legend
-          metric={metric}
-          compareMetric={null}
-          data={districts}
+      {/* Kreis hover card (custom positioned tooltip) */}
+      {kreisHoverInfo && !selectedKreis && showKreisLayer && (
+        <KreisHoverCard
+          mouseX={kreisHoverInfo.mouseX}
+          mouseY={kreisHoverInfo.mouseY}
+          kreisName={kreisHoverInfo.name}
+          ags={kreisHoverInfo.ags}
+          indicatorKey={selectedIndicator}
+          selectedSubMetric={selectedSubMetric}
+          selectedYear={selectedIndicatorYear}
         />
-      </div>
+      )}
+
+      {/* Unified ranking/detail panel (right side) - shown for Kreis-level indicators */}
+      {showKreisLayer && (
+        <RankingPanel
+          indicatorKey={selectedIndicator}
+          subMetric={selectedSubMetric}
+          selectedYear={selectedIndicatorYear}
+          hoveredAgs={hoveredKreis}
+          selectedAgs={selectedKreis}
+          onHoverAgs={setHoveredKreis}
+          onSelectAgs={setSelectedKreis}
+        />
+      )}
+
+      {/* Blaulicht detail panel - shown when a crime is selected */}
+      {showBlaulichtLayer && selectedCrime && (
+        <BlaulichtDetailPanel
+          crime={selectedCrime}
+          onClose={() => setSelectedCrime(null)}
+        />
+      )}
     </div>
   );
 }

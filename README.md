@@ -20,6 +20,27 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Crime Data Pipeline (Presseportal)
+
+Crime points are loaded from `public/crimes.json`. To build the dataset locally:
+
+```bash
+npx tsx scripts/scrape-presseportal.ts --geocode --output public/crimes.json
+```
+
+Optional flags:
+
+- `--start 2025-02-02` and `--end 2026-02-02` to control the date range
+- `--limit 200` to cap the number of articles for quick tests
+- `--concurrency 4` to tune fetch parallelism
+- `--use-ai` with `AI_CLASSIFIER_URL` to enrich classification
+
+For geocoding, set a contact email to comply with OpenStreetMap/Nominatim usage:
+
+```bash
+export NOMINATIM_EMAIL="you@example.com"
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
