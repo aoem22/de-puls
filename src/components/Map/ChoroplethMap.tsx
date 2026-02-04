@@ -29,7 +29,7 @@ const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{
 const LABELS_TILES = 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png';
 
 // Map view settings
-const MIN_ZOOM = 5;
+const MIN_ZOOM = 6;
 const MAX_ZOOM = 18;
 
 // Germany-wide view settings
@@ -189,7 +189,7 @@ export function ChoroplethMap() {
         />
 
         {/* Mask to darken areas outside Germany */}
-        <GermanyMask fillColor="#0a0a0a" fillOpacity={0.7} />
+        <GermanyMask fillColor="#000000" fillOpacity={0.85} showBorder />
 
         {/* Progressive city labels */}
         <CitiesLayer currentZoom={currentZoom} />

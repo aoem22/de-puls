@@ -43,16 +43,24 @@ const EUROPE_LAND_BOUNDS: [number, number][] = [
 interface GermanyMaskProps {
   fillColor?: string;
   fillOpacity?: number;
+  showBorder?: boolean;
+  borderColor?: string;
+  borderWeight?: number;
 }
 
 export function GermanyMask({
   fillColor = '#0a0a0a',
-  fillOpacity = 0.7
+  fillOpacity = 0.7,
+  showBorder = false,
+  borderColor = '#ffffff',
+  borderWeight = 2,
 }: GermanyMaskProps) {
   const map = useMap();
 
   useEffect(() => {
     if (!map) return;
+
+    const layers: L.Layer[] = [];
 
     // Create inverted polygon: Europe land with Germany hole
     const europeRing = EUROPE_LAND_BOUNDS.map(([lat, lng]) => [lng, lat]);
@@ -79,11 +87,87 @@ export function GermanyMask({
 
     invertedPolygon.addTo(map);
     invertedPolygon.bringToBack();
+    layers.push(invertedPolygon);
+
+    // Add glowing border around Germany if requested
+    if (showBorder) {
+      // Outer glow (larger, more transparent)
+      const outerGlow = L.geoJSON(
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [germanyRing],
+          },
+        } as GeoJSON.Feature,
+        {
+          style: {
+            fill: false,
+            stroke: true,
+            color: borderColor,
+            weight: borderWeight + 6,
+            opacity: 0.15,
+            interactive: false,
+          },
+        }
+      );
+      outerGlow.addTo(map);
+      layers.push(outerGlow);
+
+      // Middle glow
+      const middleGlow = L.geoJSON(
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [germanyRing],
+          },
+        } as GeoJSON.Feature,
+        {
+          style: {
+            fill: false,
+            stroke: true,
+            color: borderColor,
+            weight: borderWeight + 3,
+            opacity: 0.3,
+            interactive: false,
+          },
+        }
+      );
+      middleGlow.addTo(map);
+      layers.push(middleGlow);
+
+      // Main border (crisp white line)
+      const mainBorder = L.geoJSON(
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [germanyRing],
+          },
+        } as GeoJSON.Feature,
+        {
+          style: {
+            fill: false,
+            stroke: true,
+            color: borderColor,
+            weight: borderWeight,
+            opacity: 0.9,
+            interactive: false,
+          },
+        }
+      );
+      mainBorder.addTo(map);
+      layers.push(mainBorder);
+    }
 
     return () => {
-      map.removeLayer(invertedPolygon);
+      layers.forEach(layer => map.removeLayer(layer));
     };
-  }, [map, fillColor, fillOpacity]);
+  }, [map, fillColor, fillOpacity, showBorder, borderColor, borderWeight]);
 
   return null;
 }
