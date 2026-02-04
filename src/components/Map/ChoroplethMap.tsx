@@ -12,7 +12,6 @@ import type { KreisHoverInfo } from './KreisLayer';
 import { KreisHoverCard } from './KreisHoverCard';
 import { RankingPanel } from './RankingPanel';
 import { CrimeLayer } from './CrimeLayer';
-import { GermanyBorder } from './GermanyBorder';
 import { CitiesLayer } from './CitiesLayer';
 import { BlaulichtDetailPanel } from './BlaulichtDetailPanel';
 import type { CrimeRecord } from '@/lib/types/crime';
@@ -188,8 +187,6 @@ export function ChoroplethMap() {
           url={DARK_TILES}
         />
 
-        {/* Germany border with glow */}
-        <GermanyBorder />
 
         {/* Progressive city labels */}
         <CitiesLayer currentZoom={currentZoom} />
