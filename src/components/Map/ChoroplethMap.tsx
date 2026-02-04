@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -18,6 +18,7 @@ import { BlaulichtDetailPanel } from './BlaulichtDetailPanel';
 import type { CrimeRecord } from '@/lib/types/crime';
 import type { CrimeTypeKey } from '../../../lib/types/cityCrime';
 import type { IndicatorKey, SubMetricKey } from '../../../lib/indicators/types';
+import type { CrimeCategory } from '@/lib/types/crime';
 
 // Import Blaulicht crime data
 import crimesJson from '../../../lib/data/blaulicht-crimes.json';
@@ -114,11 +115,29 @@ export function ChoroplethMap() {
   // Blaulicht crime state
   const [selectedCrime, setSelectedCrime] = useState<CrimeRecord | null>(null);
   const [hoveredCrime, setHoveredCrime] = useState<CrimeRecord | null>(null);
+  const [selectedBlaulichtCategory, setSelectedBlaulichtCategory] = useState<CrimeCategory | null>(null);
 
   // Determine which layer type to show based on indicator
   const showCityCrimeLayer = selectedIndicator === 'kriminalstatistik';
   const showBlaulichtLayer = selectedIndicator === 'blaulicht';
   const showKreisLayer = !showCityCrimeLayer && !showBlaulichtLayer;
+
+  // Compute blaulicht stats for LayerControl
+  const blaulichtStats = useMemo(() => {
+    const byCategory = {} as Record<CrimeCategory, number>;
+    let geocoded = 0;
+    for (const crime of blaulichtCrimes) {
+      if (crime.latitude != null) geocoded++;
+      for (const cat of crime.categories) {
+        byCategory[cat] = (byCategory[cat] || 0) + 1;
+      }
+    }
+    return {
+      total: blaulichtCrimes.length,
+      geocoded,
+      byCategory,
+    };
+  }, []);
 
   // Get available years for current indicator
   const getIndicatorYears = (): string[] => {
@@ -219,6 +238,7 @@ export function ChoroplethMap() {
             onCrimeHover={setHoveredCrime}
             selectedCrimeId={selectedCrime?.id}
             hoveredCrimeId={hoveredCrime?.id}
+            filterCategory={selectedBlaulichtCategory}
           />
         )}
       </MapContainer>
@@ -286,6 +306,8 @@ export function ChoroplethMap() {
             setSelectedKreis(null);
             setSelectedCity(null);
             setSelectedCrime(null);
+            setHoveredCrime(null);
+            setSelectedBlaulichtCategory(null);
             setIsControlsExpanded(false);
           }}
           selectedSubMetric={selectedSubMetric}
@@ -301,6 +323,10 @@ export function ChoroplethMap() {
           // Crime-specific props (only used when kriminalstatistik is selected)
           cityCrimeMetric={cityCrimeMetric}
           onCityCrimeMetricChange={setCityCrimeMetric}
+          // Blaulicht stats and category filter
+          blaulichtStats={blaulichtStats}
+          selectedBlaulichtCategory={selectedBlaulichtCategory}
+          onBlaulichtCategoryChange={setSelectedBlaulichtCategory}
         />
       </div>
 

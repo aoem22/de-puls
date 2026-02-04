@@ -17,6 +17,7 @@ interface CrimeLayerProps {
   onCrimeHover?: (crime: CrimeRecord | null) => void;
   selectedCrimeId?: string | null;
   hoveredCrimeId?: string | null;
+  filterCategory?: CrimeCategory | null; // When set, highlight crimes in this category
 }
 
 // Crime severity levels (higher = more severe = larger dot)
@@ -112,6 +113,7 @@ function createMarker(
   monochrome: boolean,
   isSelected: boolean,
   isHovered: boolean,
+  filterCategory: CrimeCategory | null,
   onClick?: (crime: CrimeRecord) => void,
   onHover?: (crime: CrimeRecord | null) => void
 ): L.Marker | null {
@@ -120,19 +122,54 @@ function createMarker(
   const category = getPrimaryCategory(crime);
   const severity = getCrimeSeverity(crime);
   const baseSize = SEVERITY_SIZES[severity] ?? 10;
-  // Make selected/hovered marker larger
+
+  // Check if this crime matches the filter category
+  const matchesFilter = filterCategory === null || crime.categories.includes(filterCategory);
+  const categoryColor = categoryColorMap.get(category) ?? '#94a3b8';
+
+  // Make selected/hovered marker larger, dim non-matching when filtering
   const size = isSelected ? baseSize * 1.5 : isHovered ? baseSize * 1.3 : baseSize;
   const halfSize = size / 2;
 
-  // Monochrome: dark blue with glow effect
-  // Colored: category-based colors
-  const color = monochrome ? '#1e3a5f' : (categoryColorMap.get(category) ?? '#94a3b8');
-  const isHighlighted = isSelected || isHovered;
-  const glowColor = isHighlighted ? '#60a5fa' : '#3b82f6';
-  const borderColor = monochrome ? (isHighlighted ? '#60a5fa' : '#2563eb') : 'rgba(255,255,255,0.3)';
+  // Determine colors based on filter state
+  let color: string;
+  let glowColor: string;
+  let borderColor: string;
+  let opacity = 1;
 
-  const glowIntensity = isSelected ? 1.8 : isHovered ? 1.4 : 1;
-  const glowStyle = monochrome
+  if (monochrome) {
+    if (filterCategory !== null) {
+      // Category filter active
+      if (matchesFilter) {
+        // Matching crimes: use category color with glow
+        color = categoryColor;
+        glowColor = categoryColor;
+        borderColor = categoryColor;
+      } else {
+        // Non-matching crimes: dim and gray
+        color = '#1a1a1a';
+        glowColor = 'transparent';
+        borderColor = '#333';
+        opacity = 0.3;
+      }
+    } else {
+      // No filter: default blue glow
+      const isHighlighted = isSelected || isHovered;
+      color = '#1e3a5f';
+      glowColor = isHighlighted ? '#60a5fa' : '#3b82f6';
+      borderColor = isHighlighted ? '#60a5fa' : '#2563eb';
+    }
+  } else {
+    // Non-monochrome: category colors
+    color = categoryColor;
+    glowColor = 'transparent';
+    borderColor = 'rgba(255,255,255,0.3)';
+  }
+
+  const isHighlighted = isSelected || isHovered || (filterCategory !== null && matchesFilter);
+  const glowIntensity = isSelected ? 1.8 : isHovered ? 1.4 : (filterCategory !== null && matchesFilter) ? 1.2 : 1;
+
+  const glowStyle = monochrome && glowColor !== 'transparent'
     ? `box-shadow:
         0 0 ${size * 0.5 * glowIntensity}px ${glowColor},
         0 0 ${size * glowIntensity}px ${glowColor}60,
@@ -150,6 +187,7 @@ function createMarker(
       background:${color};
       border-radius:50%;
       border:${isHighlighted ? '2px' : '1px'} solid ${borderColor};
+      opacity:${opacity};
       ${glowStyle}
       transition: all 0.15s ease;
     "></span>`,
@@ -182,6 +220,7 @@ export function CrimeLayer({
   onCrimeHover,
   selectedCrimeId,
   hoveredCrimeId,
+  filterCategory = null,
 }: CrimeLayerProps) {
   const map = useMap();
   const layerRef = useRef<L.MarkerClusterGroup | L.LayerGroup | null>(null);
@@ -220,11 +259,12 @@ export function CrimeLayer({
         monochrome,
         crime.id === selectedCrimeId,
         crime.id === hoveredCrimeId,
+        filterCategory,
         onCrimeClick,
         onCrimeHover
       ))
       .filter(Boolean) as L.Marker[];
-  }, [crimes, monochrome, selectedCrimeId, hoveredCrimeId, onCrimeClick, onCrimeHover]);
+  }, [crimes, monochrome, selectedCrimeId, hoveredCrimeId, filterCategory, onCrimeClick, onCrimeHover]);
 
   useEffect(() => {
     if (!layerRef.current) return;

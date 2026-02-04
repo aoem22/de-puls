@@ -37,6 +37,9 @@ interface LayerControlProps {
     geocoded: number;
     byCategory: Record<CrimeCategory, number>;
   };
+  // Blaulicht category filter
+  selectedBlaulichtCategory?: CrimeCategory | null;
+  onBlaulichtCategoryChange?: (category: CrimeCategory | null) => void;
 }
 
 export function LayerControl({
@@ -51,6 +54,9 @@ export function LayerControl({
   onIndicatorYearChange,
   cityCrimeMetric,
   onCityCrimeMetricChange,
+  blaulichtStats,
+  selectedBlaulichtCategory,
+  onBlaulichtCategoryChange,
 }: LayerControlProps) {
   const indicators = Object.values(INDICATORS);
 
@@ -241,13 +247,8 @@ export function LayerControl({
         </div>
       )}
 
-      {/* Legend */}
-      {selectedIndicator === 'blaulicht' ? (
-        <div className="pt-2 border-t border-[#333]">
-          <div className="text-xs text-zinc-400 mb-2">Legende</div>
-          <BlaulichtLegend />
-        </div>
-      ) : selectedIndicatorYear && (
+      {/* Legend - not shown for blaulicht (replaced by category filters) */}
+      {selectedIndicator !== 'blaulicht' && selectedIndicatorYear && (
         <div className="pt-2 border-t border-[#333]">
           <div className="text-xs text-zinc-400 mb-2">Legende</div>
           {selectedIndicator === 'kriminalstatistik' ? (
@@ -262,6 +263,74 @@ export function LayerControl({
               year={selectedIndicatorYear}
             />
           )}
+        </div>
+      )}
+
+      {/* Blaulicht clickable category filters */}
+      {selectedIndicator === 'blaulicht' && blaulichtStats && onBlaulichtCategoryChange && (
+        <div className="pt-2 border-t border-[#333]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Kategorien</span>
+            <span className="text-[10px] text-zinc-600">{blaulichtStats.geocoded}/{blaulichtStats.total} verortet</span>
+          </div>
+          <div className="space-y-1">
+            {/* All categories button */}
+            <button
+              onClick={() => onBlaulichtCategoryChange(null)}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors ${
+                selectedBlaulichtCategory === null
+                  ? 'bg-blue-500/20 border border-blue-500/50'
+                  : 'hover:bg-[#1a1a1a] border border-transparent'
+              }`}
+            >
+              <div
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{
+                  backgroundColor: '#3b82f6',
+                  boxShadow: selectedBlaulichtCategory === null ? '0 0 6px #3b82f6' : 'none',
+                }}
+              />
+              <span className={`text-[11px] flex-1 text-left ${selectedBlaulichtCategory === null ? 'text-zinc-200' : 'text-zinc-400'}`}>
+                Alle anzeigen
+              </span>
+              <span className="text-[10px] text-zinc-500 tabular-nums">{blaulichtStats.total}</span>
+            </button>
+
+            {/* Individual category buttons */}
+            {CRIME_CATEGORIES.filter(cat => (blaulichtStats.byCategory[cat.key] || 0) > 0)
+              .sort((a, b) => (blaulichtStats.byCategory[b.key] || 0) - (blaulichtStats.byCategory[a.key] || 0))
+              .map((cat) => {
+                const count = blaulichtStats.byCategory[cat.key] || 0;
+                const isSelected = selectedBlaulichtCategory === cat.key;
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => onBlaulichtCategoryChange(isSelected ? null : cat.key)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors ${
+                      isSelected
+                        ? 'border'
+                        : 'hover:bg-[#1a1a1a] border border-transparent'
+                    }`}
+                    style={isSelected ? {
+                      backgroundColor: `${cat.color}20`,
+                      borderColor: `${cat.color}50`,
+                    } : {}}
+                  >
+                    <div
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{
+                        backgroundColor: cat.color,
+                        boxShadow: isSelected ? `0 0 6px ${cat.color}` : 'none',
+                      }}
+                    />
+                    <span className={`text-[11px] flex-1 text-left ${isSelected ? 'text-zinc-200' : 'text-zinc-400'}`}>
+                      {cat.label}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 tabular-nums">{count}</span>
+                  </button>
+                );
+              })}
+          </div>
         </div>
       )}
 
