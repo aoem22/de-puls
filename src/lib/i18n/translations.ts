@@ -69,7 +69,7 @@ export const translations = {
     auslaender: { de: 'Ausländer nach Herkunft', en: 'Foreigners by Origin' },
     deutschlandatlas: { de: 'Deutschlandatlas', en: 'Germany Atlas' },
     kriminalstatistik: { de: 'Kriminalstatistik', en: 'Crime Statistics' },
-    blaulicht: { de: 'Blaulicht-Meldungen', en: 'Police Reports' },
+    blaulicht: { de: 'Polizei-Meldungen', en: 'Police Reports' },
   },
 
   indicatorDescriptions: {
@@ -86,8 +86,8 @@ export const translations = {
       en: 'Police crime statistics for major cities'
     },
     blaulicht: {
-      de: 'Aktuelle Polizei- und Feuerwehrmeldungen aus Presseportalen',
-      en: 'Current police and fire department reports from press portals'
+      de: 'Aktuelle Polizeimeldungen aus Presseportalen',
+      en: 'Current police reports from press portals'
     },
   },
 

@@ -115,9 +115,12 @@ def validate_coordinates(lat: float, lon: float) -> bool:
 
 
 def main():
+    # Force unbuffered output for real-time logging
+    sys.stdout.reconfigure(line_buffering=True)
+
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        print("ERROR: OPENROUTER_API_KEY not set")
+        print("ERROR: OPENROUTER_API_KEY not set", flush=True)
         sys.exit(1)
 
     client = OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
@@ -125,16 +128,16 @@ def main():
     # Load test data (Bayern Jan 2026)
     input_file = Path("data/pipeline/chunks/raw/bayern/2026-01.json")
     if not input_file.exists():
-        print(f"ERROR: Input file not found: {input_file}")
+        print(f"ERROR: Input file not found: {input_file}", flush=True)
         sys.exit(1)
 
     articles = json.load(open(input_file, encoding="utf-8"))
-    print(f"Loaded {len(articles)} articles from {input_file}")
+    print(f"Loaded {len(articles)} articles from {input_file}", flush=True)
 
     # Limit to first 200
     max_articles = 200
     articles = articles[:max_articles]
-    print(f"Processing {len(articles)} articles...\n")
+    print(f"Processing {len(articles)} articles...\n", flush=True)
 
     results = []
     stats = {"total": 0, "with_coords": 0, "valid_coords": 0, "with_crime": 0, "errors": 0}
@@ -198,7 +201,7 @@ def main():
             stats["errors"] += 1
             results.append(art)
 
-        print()  # Blank line between articles
+        print(flush=True)  # Blank line between articles
 
     # Save results
     output_dir = Path("data/pipeline/chunks/enriched")

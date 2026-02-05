@@ -58,3 +58,43 @@ CREATE TRIGGER update_crime_records_updated_at
   BEFORE UPDATE ON crime_records
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- Geo Boundaries Table (Kreis, City, Country)
+-- Stores GeoJSON boundaries keyed by level + AGS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS geo_boundaries (
+  id BIGSERIAL PRIMARY KEY,
+  level TEXT NOT NULL CHECK (level IN ('country', 'land', 'kreis', 'gemeinde', 'city')),
+  ags TEXT NOT NULL,
+  name TEXT NOT NULL,
+  bundesland TEXT,
+  geometry JSONB NOT NULL,
+  properties JSONB NOT NULL DEFAULT '{}'::jsonb,
+  bbox DOUBLE PRECISION[] NOT NULL CHECK (array_length(bbox, 1) = 4),
+  source TEXT,
+  source_dataset TEXT,
+  snapshot TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(level, ags)
+);
+
+CREATE INDEX IF NOT EXISTS idx_geo_boundaries_level ON geo_boundaries(level);
+CREATE INDEX IF NOT EXISTS idx_geo_boundaries_bundesland ON geo_boundaries(bundesland) WHERE bundesland IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_geo_boundaries_properties_gin ON geo_boundaries USING GIN(properties);
+
+ALTER TABLE geo_boundaries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read geo boundaries"
+  ON geo_boundaries
+  FOR SELECT
+  TO public
+  USING (true);
+
+DROP TRIGGER IF EXISTS update_geo_boundaries_updated_at ON geo_boundaries;
+CREATE TRIGGER update_geo_boundaries_updated_at
+  BEFORE UPDATE ON geo_boundaries
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();

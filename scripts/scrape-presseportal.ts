@@ -27,6 +27,17 @@ const CATEGORY_RULES: Array<{ category: CrimeCategory; patterns: RegExp[] }> = [
 const PRECISE_TYPES = new Set(['house', 'building', 'residential', 'street']);
 const NEIGHBORHOOD_TYPES = new Set(['neighbourhood', 'suburb', 'quarter', 'locality', 'hamlet']);
 const CITY_TYPES = new Set(['city', 'town', 'village', 'municipality']);
+const VALID_CRIME_CATEGORIES = new Set<CrimeCategory>([
+  'knife',
+  'burglary',
+  'robbery',
+  'arson',
+  'assault',
+  'fraud',
+  'traffic',
+  'missing_person',
+  'other',
+]);
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -47,6 +58,20 @@ interface ExtractedArticle {
   sourceAgency: string | null;
   locationText: string | null;
   bodyText: string;
+}
+
+interface AiClassifierResponse {
+  categories?: unknown;
+  confidence?: unknown;
+}
+
+interface NominatimResult {
+  lat?: string;
+  lon?: string;
+  type?: string;
+  address?: {
+    house_number?: string;
+  };
 }
 
 function parseArgs() {
@@ -119,10 +144,15 @@ async function classifyWithAi(text: string): Promise<{ categories: CrimeCategory
       body: JSON.stringify({ text }),
     });
     if (!response.ok) return null;
-    const data = await response.json();
-    if (!data || !Array.isArray(data.categories)) return null;
+    const data = await response.json() as AiClassifierResponse;
+    if (!Array.isArray(data.categories)) return null;
+    const categories = data.categories.filter(
+      (value): value is CrimeCategory =>
+        typeof value === 'string' && VALID_CRIME_CATEGORIES.has(value as CrimeCategory)
+    );
+    if (categories.length === 0) return null;
     return {
-      categories: data.categories as CrimeCategory[],
+      categories,
       confidence: typeof data.confidence === 'number' ? data.confidence : 0.6,
     };
   } catch {
@@ -191,7 +221,7 @@ async function parseSitemap(url: string): Promise<SitemapEntry[]> {
       return normalizeArray<SitemapEntry>(data.urlset.url);
     }
     return [];
-  } catch (error) {
+  } catch {
     console.warn(`Skipping sitemap due to fetch error: ${url}`);
     return [];
   }
@@ -205,7 +235,7 @@ function extractLocationText(rawText: string): string | null {
   return line.replace(/[-–].*$/, '').trim();
 }
 
-function getPrecisionFromGeocode(result: any, locationText: string | null): LocationPrecision {
+function getPrecisionFromGeocode(result: NominatimResult | null, locationText: string | null): LocationPrecision {
   if (result?.address?.house_number || /(\d{1,4})/.test(locationText ?? '')) {
     return 'street';
   }
@@ -216,7 +246,10 @@ function getPrecisionFromGeocode(result: any, locationText: string | null): Loca
   return 'unknown';
 }
 
-async function geocodeLocation(locationText: string, cache: Record<string, any>): Promise<any | null> {
+async function geocodeLocation(
+  locationText: string,
+  cache: Record<string, NominatimResult | null>
+): Promise<NominatimResult | null> {
   const query = `${locationText}, Germany`;
   if (cache[query]) return cache[query];
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
@@ -227,8 +260,8 @@ async function geocodeLocation(locationText: string, cache: Record<string, any>)
     },
   });
   if (!response.ok) return null;
-  const data = await response.json();
-  const result = Array.isArray(data) && data.length > 0 ? data[0] : null;
+  const data = await response.json() as unknown;
+  const result = Array.isArray(data) && data.length > 0 ? data[0] as NominatimResult : null;
   cache[query] = result;
   return result;
 }
@@ -316,7 +349,7 @@ async function main() {
 
   const cacheDir = path.join(process.cwd(), '.cache');
   const cachePath = path.join(cacheDir, 'presseportal-geocode.json');
-  let geocodeCache: Record<string, any> = {};
+  let geocodeCache: Record<string, NominatimResult | null> = {};
   if (args.geocode) {
     try {
       const cacheText = await fs.readFile(cachePath, 'utf-8');
@@ -374,7 +407,15 @@ async function main() {
           await new Promise((resolve) => setTimeout(resolve, 1100));
         }
 
-        const { bodyText: _bodyText, ...recordBase } = extracted;
+        const recordBase = {
+          id: extracted.id,
+          title: extracted.title,
+          summary: extracted.summary,
+          publishedAt: extracted.publishedAt,
+          sourceUrl: extracted.sourceUrl,
+          sourceAgency: extracted.sourceAgency,
+          locationText: extracted.locationText,
+        };
         results.push({
           ...recordBase,
           categories: classification.categories,
@@ -384,7 +425,7 @@ async function main() {
           precision,
         });
         successCount += 1;
-      } catch (error) {
+      } catch {
         failedCount += 1;
         console.warn(`Failed article: ${url}`);
       } finally {

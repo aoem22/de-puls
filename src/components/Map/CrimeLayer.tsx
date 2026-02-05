@@ -15,6 +15,8 @@ interface CrimeLayerProps {
   selectedCrimeId?: string | null;
   hoveredCrimeId?: string | null;
   filterCategory?: CrimeCategory | null; // When set, highlight crimes in this category
+  visibleCrimeIds?: Set<string> | null; // Timeline visibility window
+  flashingCrimeIds?: Set<string> | null; // Newly appeared crimes
 }
 
 const categoryColorMap = new Map<CrimeCategory, string>(
@@ -42,14 +44,25 @@ function getCircleMarkerStyle(
   monochrome: boolean,
   isSelected: boolean,
   isHovered: boolean,
-  filterCategory: CrimeCategory | null
+  filterCategory: CrimeCategory | null,
+  isVisible: boolean,
+  isFlashing: boolean
 ): L.CircleMarkerOptions {
+  if (!isVisible) {
+    return {
+      radius: 0,
+      fillOpacity: 0,
+      opacity: 0,
+      weight: 0,
+    };
+  }
+
   const category = getPrimaryCategory(crime);
   const matchesFilter = filterCategory === null || crime.categories.includes(filterCategory);
   const categoryColor = categoryColorMap.get(category) ?? '#94a3b8';
 
   // Simple radius: slightly larger for selected/hovered
-  const radius = isSelected ? 7 : isHovered ? 6 : 4;
+  const radius = isSelected ? 8 : isHovered ? 7 : isFlashing ? 7 : 4;
 
   if (monochrome) {
     if (filterCategory !== null) {
@@ -64,24 +77,24 @@ function getCircleMarkerStyle(
           opacity: 1,
         };
       } else {
-        // Non-matching: dim gray
+        // Non-matching crimes are hidden (skipped in render loop),
+        // but return invisible style as fallback
         return {
-          radius: 3,
-          fillColor: '#1a1a1a',
-          fillOpacity: 0.3,
-          color: '#333',
-          weight: 1,
-          opacity: 0.3,
+          radius: 0,
+          fillOpacity: 0,
+          opacity: 0,
+          weight: 0,
         };
       }
     } else {
-      // No filter: use category colors
-      const isHighlighted = isSelected || isHovered;
+      // No filter: uniform blue for all markers
+      const isHighlighted = isSelected || isHovered || isFlashing;
+      const blueColor = '#3b82f6';
       return {
         radius,
-        fillColor: categoryColor,
-        fillOpacity: 0.85,
-        color: isHighlighted ? '#fff' : categoryColor,
+        fillColor: blueColor,
+        fillOpacity: isFlashing ? 1 : 0.85,
+        color: isHighlighted ? '#fff' : blueColor,
         weight: isHighlighted ? 2 : 1,
         opacity: 1,
       };
@@ -107,6 +120,8 @@ export function CrimeLayer({
   selectedCrimeId,
   hoveredCrimeId,
   filterCategory = null,
+  visibleCrimeIds = null,
+  flashingCrimeIds = null,
 }: CrimeLayerProps) {
   const map = useMap();
   const layerRef = useRef<L.FeatureGroup | null>(null);
@@ -116,14 +131,19 @@ export function CrimeLayer({
   // Stable callback refs to avoid recreating markers on handler changes
   const onClickRef = useRef(onCrimeClick);
   const onHoverRef = useRef(onCrimeHover);
-  onClickRef.current = onCrimeClick;
-  onHoverRef.current = onCrimeHover;
+
+  useEffect(() => {
+    onClickRef.current = onCrimeClick;
+    onHoverRef.current = onCrimeHover;
+  }, [onCrimeClick, onCrimeHover]);
 
   // Initialize feature group once
   useEffect(() => {
     if (!map) return;
 
     const layer = L.featureGroup();
+    const markersMap = markersMapRef.current;
+    const crimesMap = crimesMapRef.current;
 
     layerRef.current = layer;
     map.addLayer(layer);
@@ -131,8 +151,8 @@ export function CrimeLayer({
     return () => {
       map.removeLayer(layer);
       layerRef.current = null;
-      markersMapRef.current.clear();
-      crimesMapRef.current.clear();
+      markersMap.clear();
+      crimesMap.clear();
     };
   }, [map]);
 
@@ -151,8 +171,10 @@ export function CrimeLayer({
 
     for (const crime of crimes) {
       if (crime.latitude == null || crime.longitude == null) continue;
+      // Skip non-matching crimes entirely when a filter is active
+      if (filterCategory !== null && !crime.categories.includes(filterCategory)) continue;
 
-      const style = getCircleMarkerStyle(crime, monochrome, false, false, filterCategory);
+      const style = getCircleMarkerStyle(crime, monochrome, false, false, filterCategory, true, false);
       const marker = L.circleMarker([crime.latitude, crime.longitude], style);
 
       // Store crime reference for lookups
@@ -207,22 +229,23 @@ export function CrimeLayer({
 
   // Update styles for selected/hovered markers (without recreating)
   useEffect(() => {
-    const markersMap = markersMapRef.current;
     const crimesMap = crimesMapRef.current;
 
     for (const [marker, crime] of crimesMap) {
       const isSelected = crime.id === selectedCrimeId;
       const isHovered = crime.id === hoveredCrimeId;
-      const style = getCircleMarkerStyle(crime, monochrome, isSelected, isHovered, filterCategory);
+      const isVisible = visibleCrimeIds === null || visibleCrimeIds.has(crime.id);
+      const isFlashing = flashingCrimeIds?.has(crime.id) ?? false;
+      const style = getCircleMarkerStyle(crime, monochrome, isSelected, isHovered, filterCategory, isVisible, isFlashing);
       marker.setStyle(style);
       marker.setRadius(style.radius ?? 4);
 
       // Bring selected/hovered to front
-      if (isSelected || isHovered) {
+      if (isSelected || isHovered || isFlashing) {
         marker.bringToFront();
       }
     }
-  }, [selectedCrimeId, hoveredCrimeId, monochrome, filterCategory]);
+  }, [selectedCrimeId, hoveredCrimeId, monochrome, filterCategory, visibleCrimeIds, flashingCrimeIds]);
 
   return null;
 }

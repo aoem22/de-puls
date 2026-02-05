@@ -6,7 +6,7 @@
  */
 
 import type { GeoLevel } from '../geo/types';
-import { CITY_CRIME_TYPES, CRIME_CATEGORIES_META, type CrimeTypeKey, type CrimeCategory } from '../types/cityCrime';
+import { CITY_CRIME_TYPES } from '../types/cityCrime';
 
 /**
  * Unique identifier for each indicator type
@@ -874,4 +874,3 @@ export const INDICATORS: Record<IndicatorKey, IndicatorConfig> = {
 export function isDeutschlandatlasKey(key: string): key is DeutschlandatlasKey {
   return DEUTSCHLANDATLAS_KEYS.includes(key as DeutschlandatlasKey);
 }
-

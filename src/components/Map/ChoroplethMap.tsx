@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -15,7 +15,10 @@ import { CrimeLayer } from './CrimeLayer';
 import { CitiesLayer } from './CitiesLayer';
 import { GermanyBorder } from './GermanyBorder';
 import { BlaulichtDetailPanel } from './BlaulichtDetailPanel';
-import type { CrimeRecord } from '@/lib/types/crime';
+import { TimelineFloatingControl } from './TimelineFloatingControl';
+import { BlaulichtPlaybackControl } from './BlaulichtPlaybackControl';
+import { PulseMarkerOverlay } from './PulseMarkerOverlay';
+import { CRIME_CATEGORIES, type CrimeRecord } from '@/lib/types/crime';
 import type { CrimeTypeKey } from '../../../lib/types/cityCrime';
 import type { IndicatorKey, SubMetricKey } from '../../../lib/indicators/types';
 import type { CrimeCategory } from '@/lib/types/crime';
@@ -23,7 +26,8 @@ import { useCrimes, useCrimeStats, useAuslaenderData, useDeutschlandatlasData, u
 
 // Tile layer URLs
 const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
-const LABELS_TILES = 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png';
+const FALLBACK_AUSLAENDER_YEARS = ['2024'];
+const FALLBACK_CRIME_YEARS = ['2024'];
 
 // Map view settings
 const MIN_ZOOM = 6;
@@ -41,6 +45,18 @@ const GERMANY_BOUNDS: [[number, number], [number, number]] = [
 
 // Zoom threshold for deselecting a Kreis (when zoomed out enough to see it fully)
 const KREIS_DESELECT_ZOOM_THRESHOLD = 7;
+const BLAULICHT_PLAYBACK_INTERVAL_MS = 1100;
+const BLAULICHT_FLASH_DURATION_MS = 1300;
+const DEFAULT_BLAULICHT_COLOR = '#3b82f6';
+
+const crimeColorMap = new Map(
+  CRIME_CATEGORIES.map((category) => [category.key, category.color])
+);
+
+function getCrimeTimestamp(crime: CrimeRecord): number {
+  const timestamp = Date.parse(crime.publishedAt);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
 
 // Component to track zoom level changes
 function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
@@ -54,6 +70,33 @@ function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void })
       map.off('zoomend', handleZoom);
     };
   }, [map, onZoomChange]);
+
+  return null;
+}
+
+// Zoom map back out when leaving selected Kreis detail mode.
+function KreisSelectionResetter({
+  selectedKreis,
+  enabled,
+  germanyBounds,
+}: {
+  selectedKreis: string | null;
+  enabled: boolean;
+  germanyBounds: [[number, number], [number, number]];
+}) {
+  const map = useMap();
+  const previousSelectedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const hadSelection = Boolean(previousSelectedRef.current);
+    const leftSelectionMode = hadSelection && !selectedKreis;
+
+    if (enabled && leftSelectionMode) {
+      map.fitBounds(germanyBounds, { padding: [80, 80], maxZoom: GERMANY_ZOOM });
+    }
+
+    previousSelectedRef.current = selectedKreis;
+  }, [enabled, selectedKreis, germanyBounds, map]);
 
   return null;
 }
@@ -95,9 +138,9 @@ export function ChoroplethMap() {
   const { data: datasetMeta } = useAllDatasetMeta();
 
   // Derive year arrays from metadata (with fallbacks while loading)
-  const auslaenderYears = datasetMeta?.auslaender?.years ?? ['2024'];
+  const auslaenderYears = datasetMeta?.auslaender?.years ?? FALLBACK_AUSLAENDER_YEARS;
   const deutschlandatlasYear = datasetMeta?.deutschlandatlas?.years?.[0] ?? '2022';
-  const crimeDataYears = datasetMeta?.kriminalstatistik?.years ?? ['2024'];
+  const crimeDataYears = datasetMeta?.kriminalstatistik?.years ?? FALLBACK_CRIME_YEARS;
 
   // Unified indicator state (Ausländer, Deutschlandatlas, or Kriminalstatistik)
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorKey>('auslaender');
@@ -105,19 +148,25 @@ export function ChoroplethMap() {
   const [selectedIndicatorYear, setSelectedIndicatorYear] = useState<string>('2024');
   const [isIndicatorPlaying, setIsIndicatorPlaying] = useState(false);
 
-  // Update initial year when metadata loads
-  useEffect(() => {
-    if (datasetMeta?.auslaender && selectedIndicator === 'auslaender') {
-      const years = datasetMeta.auslaender.years;
-      if (years.length > 0 && !years.includes(selectedIndicatorYear)) {
-        setSelectedIndicatorYear(years[years.length - 1]);
-      }
-    }
-  }, [datasetMeta]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Compute available years for the currently selected indicator
+  const indicatorYears = useMemo((): string[] => {
+    if (selectedIndicator === 'auslaender') return auslaenderYears;
+    if (selectedIndicator === 'kriminalstatistik') return crimeDataYears;
+    if (selectedIndicator === 'blaulicht') return [];
+    return [deutschlandatlasYear];
+  }, [selectedIndicator, auslaenderYears, crimeDataYears, deutschlandatlasYear]);
+
+  // Always use a valid year for fetch/rendering, even if metadata changed.
+  const effectiveIndicatorYear = useMemo(() => {
+    if (selectedIndicator === 'blaulicht') return '';
+    if (indicatorYears.length === 0) return selectedIndicatorYear;
+    if (indicatorYears.includes(selectedIndicatorYear)) return selectedIndicatorYear;
+    return indicatorYears[indicatorYears.length - 1];
+  }, [selectedIndicator, indicatorYears, selectedIndicatorYear]);
 
   // Fetch indicator data from Supabase
   const { data: ausData } = useAuslaenderData(
-    selectedIndicator === 'auslaender' ? selectedIndicatorYear : ''
+    selectedIndicator === 'auslaender' ? effectiveIndicatorYear : ''
   );
   const { data: datlasData } = useDeutschlandatlasData();
   const { data: cityCrimeData } = useCityCrimeData();
@@ -139,6 +188,11 @@ export function ChoroplethMap() {
   const [selectedCrime, setSelectedCrime] = useState<CrimeRecord | null>(null);
   const [hoveredCrime, setHoveredCrime] = useState<CrimeRecord | null>(null);
   const [selectedBlaulichtCategory, setSelectedBlaulichtCategory] = useState<CrimeCategory | null>(null);
+  const [isBlaulichtPlaying, setIsBlaulichtPlaying] = useState(false);
+  const [blaulichtPlaybackIndex, setBlaulichtPlaybackIndex] = useState<number | null>(null);
+  const [flashingCrimeIds, setFlashingCrimeIds] = useState<Set<string>>(new Set());
+  const [detailPanelFlashToken, setDetailPanelFlashToken] = useState(0);
+  const flashTimeoutsRef = useRef<Map<string, number>>(new Map());
 
   // Determine which layer type to show based on indicator
   const showCityCrimeLayer = selectedIndicator === 'kriminalstatistik';
@@ -152,36 +206,179 @@ export function ChoroplethMap() {
   // Default stats while loading
   const stats = blaulichtStats ?? { total: 0, geocoded: 0, byCategory: {} };
 
-  // Get available years for current indicator
-  const getIndicatorYears = (): string[] => {
-    if (selectedIndicator === 'auslaender') return auslaenderYears;
-    if (selectedIndicator === 'kriminalstatistik') return crimeDataYears;
-    if (selectedIndicator === 'blaulicht') return []; // No year selection for blaulicht
-    return [deutschlandatlasYear];
-  };
+  // Geocoded Blaulicht crimes sorted from oldest to newest for timeline playback.
+  const orderedBlaulichtCrimes = useMemo(() => {
+    const filtered = blaulichtCrimes
+      .filter((crime) => crime.latitude != null && crime.longitude != null)
+      .filter((crime) => {
+        if (!selectedBlaulichtCategory) return true;
+        return crime.categories.includes(selectedBlaulichtCategory);
+      });
+
+    filtered.sort((left, right) => getCrimeTimestamp(left) - getCrimeTimestamp(right));
+    return filtered;
+  }, [blaulichtCrimes, selectedBlaulichtCategory]);
+
+  const clampedBlaulichtIndex = useMemo(() => {
+    if (orderedBlaulichtCrimes.length === 0) return -1;
+    if (blaulichtPlaybackIndex === null) return orderedBlaulichtCrimes.length - 1;
+    if (blaulichtPlaybackIndex < 0) return -1;
+    if (blaulichtPlaybackIndex >= orderedBlaulichtCrimes.length) return orderedBlaulichtCrimes.length - 1;
+    return blaulichtPlaybackIndex;
+  }, [orderedBlaulichtCrimes.length, blaulichtPlaybackIndex]);
+
+  const visibleBlaulichtCrimeIds = useMemo(() => {
+    if (!showBlaulichtLayer) return null;
+    if (orderedBlaulichtCrimes.length === 0 || clampedBlaulichtIndex < 0) return new Set<string>();
+    return new Set(orderedBlaulichtCrimes.slice(0, clampedBlaulichtIndex + 1).map((crime) => crime.id));
+  }, [showBlaulichtLayer, orderedBlaulichtCrimes, clampedBlaulichtIndex]);
+
+  const crimeById = useMemo(() => {
+    const map = new Map<string, CrimeRecord>();
+    for (const crime of orderedBlaulichtCrimes) {
+      map.set(crime.id, crime);
+    }
+    return map;
+  }, [orderedBlaulichtCrimes]);
+
+  const flashingCrimes = useMemo(() => {
+    const items: CrimeRecord[] = [];
+    for (const crimeId of flashingCrimeIds) {
+      const crime = crimeById.get(crimeId);
+      if (crime) items.push(crime);
+    }
+    return items;
+  }, [crimeById, flashingCrimeIds]);
+
+  const playbackCurrentCrime = useMemo(() => {
+    if (clampedBlaulichtIndex < 0) return null;
+    return orderedBlaulichtCrimes[clampedBlaulichtIndex] ?? null;
+  }, [orderedBlaulichtCrimes, clampedBlaulichtIndex]);
+
+  const selectedCrimeInTimeline = useMemo(() => {
+    if (!selectedCrime) return null;
+    return crimeById.has(selectedCrime.id) ? selectedCrime : null;
+  }, [selectedCrime, crimeById]);
+
+  const hoveredCrimeInTimeline = useMemo(() => {
+    if (!hoveredCrime) return null;
+    return crimeById.has(hoveredCrime.id) ? hoveredCrime : null;
+  }, [hoveredCrime, crimeById]);
 
   // Indicator year playback animation
   useEffect(() => {
     if (!isIndicatorPlaying) return;
-    const years = getIndicatorYears();
-    if (years.length <= 1) return;
+    if (indicatorYears.length <= 1) return;
 
     const interval = window.setInterval(() => {
       setSelectedIndicatorYear((current) => {
-        const currentIndex = years.indexOf(current);
-        const nextIndex = (currentIndex + 1) % years.length;
-        return years[nextIndex];
+        const currentIndex = indicatorYears.indexOf(current);
+        const nextIndex = (currentIndex + 1) % indicatorYears.length;
+        return indicatorYears[nextIndex];
       });
     }, 1500);
     return () => window.clearInterval(interval);
-  }, [isIndicatorPlaying, selectedIndicator]);
+  }, [isIndicatorPlaying, indicatorYears]);
 
-  // Deselect Kreis when zooming out past threshold (seeing full map again)
+  // Clear pending flash timeouts on unmount.
   useEffect(() => {
-    if (selectedKreis && currentZoom <= KREIS_DESELECT_ZOOM_THRESHOLD) {
-      setSelectedKreis(null);
+    const timeoutRegistry = flashTimeoutsRef.current;
+    return () => {
+      for (const timeoutId of timeoutRegistry.values()) {
+        window.clearTimeout(timeoutId);
+      }
+      timeoutRegistry.clear();
+    };
+  }, []);
+
+  // Timeline playback for Blaulicht points and synchronized press release panel.
+  useEffect(() => {
+    if (!showBlaulichtLayer || !isBlaulichtPlaying) return;
+    if (orderedBlaulichtCrimes.length === 0) return;
+
+    const interval = window.setInterval(() => {
+      setBlaulichtPlaybackIndex((current) => {
+        const currentIndex = current ?? orderedBlaulichtCrimes.length - 1;
+        const nextIndex = currentIndex + 1;
+
+        if (nextIndex >= orderedBlaulichtCrimes.length) {
+          setIsBlaulichtPlaying(false);
+          return orderedBlaulichtCrimes.length - 1;
+        }
+
+        const nextCrime = orderedBlaulichtCrimes[nextIndex];
+        setSelectedCrime(nextCrime);
+        setHoveredCrime(null);
+        setDetailPanelFlashToken((token) => token + 1);
+
+        setFlashingCrimeIds((previous) => {
+          const next = new Set(previous);
+          next.add(nextCrime.id);
+          return next;
+        });
+
+        const existingTimeout = flashTimeoutsRef.current.get(nextCrime.id);
+        if (existingTimeout) {
+          window.clearTimeout(existingTimeout);
+        }
+
+        const timeoutId = window.setTimeout(() => {
+          setFlashingCrimeIds((previous) => {
+            if (!previous.has(nextCrime.id)) return previous;
+            const next = new Set(previous);
+            next.delete(nextCrime.id);
+            return next;
+          });
+          flashTimeoutsRef.current.delete(nextCrime.id);
+        }, BLAULICHT_FLASH_DURATION_MS);
+
+        flashTimeoutsRef.current.set(nextCrime.id, timeoutId);
+        return nextIndex;
+      });
+    }, BLAULICHT_PLAYBACK_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [showBlaulichtLayer, isBlaulichtPlaying, orderedBlaulichtCrimes]);
+
+  const handleZoomChange = useCallback((zoom: number) => {
+    setCurrentZoom(zoom);
+    if (zoom <= KREIS_DESELECT_ZOOM_THRESHOLD) {
+      setSelectedKreis((prev) => (prev ? null : prev));
     }
-  }, [currentZoom, selectedKreis]);
+  }, []);
+
+  const handleToggleBlaulichtPlayback = useCallback(() => {
+    if (orderedBlaulichtCrimes.length === 0) return;
+
+    setIsBlaulichtPlaying((previous) => {
+      if (previous) return false;
+      if (clampedBlaulichtIndex >= orderedBlaulichtCrimes.length - 1) {
+        setBlaulichtPlaybackIndex(-1);
+        setSelectedCrime(null);
+        setHoveredCrime(null);
+      }
+      return true;
+    });
+  }, [orderedBlaulichtCrimes.length, clampedBlaulichtIndex]);
+
+  const handleBlaulichtCategoryChange = useCallback((category: CrimeCategory | null) => {
+    setSelectedBlaulichtCategory(category);
+    setIsBlaulichtPlaying(false);
+    setBlaulichtPlaybackIndex(null);
+    setSelectedCrime(null);
+    setHoveredCrime(null);
+    setFlashingCrimeIds(new Set());
+  }, []);
+
+  const handleBlaulichtScrub = useCallback((nextIndex: number) => {
+    if (orderedBlaulichtCrimes.length === 0) return;
+    const clampedIndex = Math.max(0, Math.min(nextIndex, orderedBlaulichtCrimes.length - 1));
+    const activeCrime = orderedBlaulichtCrimes[clampedIndex];
+    setBlaulichtPlaybackIndex(clampedIndex);
+    setIsBlaulichtPlaying(false);
+    setHoveredCrime(null);
+    setSelectedCrime(activeCrime ?? null);
+  }, [orderedBlaulichtCrimes]);
 
   return (
     <div className="relative w-full h-full">
@@ -209,7 +406,14 @@ export function ChoroplethMap() {
         <CitiesLayer currentZoom={currentZoom} />
 
         {/* Zoom tracker for fade effects */}
-        <ZoomTracker onZoomChange={setCurrentZoom} />
+        <ZoomTracker onZoomChange={handleZoomChange} />
+
+        {/* Reset view when leaving selected Kreis detail */}
+        <KreisSelectionResetter
+          selectedKreis={selectedKreis}
+          enabled={showKreisLayer}
+          germanyBounds={GERMANY_BOUNDS}
+        />
 
         {/* Initial map bounds setup */}
         <MapInitializer germanyBounds={GERMANY_BOUNDS} />
@@ -219,7 +423,7 @@ export function ChoroplethMap() {
           <CityCrimeLayer
             selectedCrimeType={selectedSubMetric as CrimeTypeKey}
             metric={cityCrimeMetric}
-            selectedYear={selectedIndicatorYear}
+            selectedYear={effectiveIndicatorYear}
             hoveredCity={hoveredCity}
             onHoverCity={setHoveredCity}
             onClickCity={setSelectedCity}
@@ -234,7 +438,7 @@ export function ChoroplethMap() {
           <KreisLayer
             indicatorKey={selectedIndicator}
             subMetric={selectedSubMetric}
-            selectedYear={selectedIndicatorYear}
+            selectedYear={effectiveIndicatorYear}
             hoveredKreis={hoveredKreis}
             onHoverKreis={setHoveredKreis}
             onHoverInfo={setKreisHoverInfo}
@@ -249,15 +453,39 @@ export function ChoroplethMap() {
         {/* Blaulicht crime markers (when blaulicht indicator selected) */}
         {showBlaulichtLayer && (
           <CrimeLayer
-            crimes={blaulichtCrimes}
+            crimes={orderedBlaulichtCrimes}
             monochrome
-            onCrimeClick={setSelectedCrime}
-            onCrimeHover={setHoveredCrime}
-            selectedCrimeId={selectedCrime?.id}
-            hoveredCrimeId={hoveredCrime?.id}
+            onCrimeClick={(crime) => {
+              setIsBlaulichtPlaying(false);
+              setSelectedCrime(crime);
+              setHoveredCrime(null);
+            }}
+            onCrimeHover={(crime) => {
+              if (isBlaulichtPlaying) return;
+              setHoveredCrime(crime);
+            }}
+            selectedCrimeId={selectedCrimeInTimeline?.id}
+            hoveredCrimeId={hoveredCrimeInTimeline?.id}
             filterCategory={selectedBlaulichtCategory}
+            visibleCrimeIds={visibleBlaulichtCrimeIds}
+            flashingCrimeIds={flashingCrimeIds}
           />
         )}
+
+        {/* Pulse overlay for newly appeared crimes while playing */}
+        {showBlaulichtLayer && flashingCrimes.map((crime) => {
+          if (crime.latitude == null || crime.longitude == null) return null;
+          const category = crime.categories[0];
+          const color = (category ? crimeColorMap.get(category) : null) ?? DEFAULT_BLAULICHT_COLOR;
+          return (
+            <PulseMarkerOverlay
+              key={crime.id}
+              lat={crime.latitude}
+              lng={crime.longitude}
+              color={color}
+            />
+          );
+        })}
       </MapContainer>
 
       {/* Mobile controls backdrop */}
@@ -313,16 +541,18 @@ export function ChoroplethMap() {
           selectedIndicator={selectedIndicator}
           onIndicatorChange={(indicator) => {
             setSelectedIndicator(indicator);
+            setIsIndicatorPlaying(false);
+            setIsBlaulichtPlaying(false);
             // Set appropriate defaults based on indicator type
             if (indicator === 'auslaender') {
               setSelectedSubMetric('total');
-              setSelectedIndicatorYear(auslaenderYears[auslaenderYears.length - 1]);
+              setSelectedIndicatorYear(auslaenderYears[auslaenderYears.length - 1] ?? '2024');
             } else if (indicator === 'deutschlandatlas') {
               setSelectedSubMetric('kinder_bg'); // Default to child poverty
               setSelectedIndicatorYear(deutschlandatlasYear);
             } else if (indicator === 'kriminalstatistik') {
               setSelectedSubMetric('total');
-              setSelectedIndicatorYear(crimeDataYears[crimeDataYears.length - 1]);
+              setSelectedIndicatorYear(crimeDataYears[crimeDataYears.length - 1] ?? '2024');
             } else if (indicator === 'blaulicht') {
               // Blaulicht has no sub-metrics or year selection
               setSelectedSubMetric('all');
@@ -334,32 +564,54 @@ export function ChoroplethMap() {
             setSelectedCrime(null);
             setHoveredCrime(null);
             setSelectedBlaulichtCategory(null);
+            setBlaulichtPlaybackIndex(null);
+            setFlashingCrimeIds(new Set());
             setIsControlsExpanded(false);
             setIsMobileRankingOpen(false);
           }}
           selectedSubMetric={selectedSubMetric}
           onSubMetricChange={setSelectedSubMetric}
-          indicatorYears={getIndicatorYears()}
-          selectedIndicatorYear={selectedIndicatorYear}
-          isIndicatorPlaying={isIndicatorPlaying}
-          onToggleIndicatorPlay={() => setIsIndicatorPlaying((prev) => !prev)}
-          onIndicatorYearChange={(year) => {
-            setSelectedIndicatorYear(year);
-            setIsIndicatorPlaying(false);
-          }}
+          selectedIndicatorYear={effectiveIndicatorYear}
           // Crime-specific props (only used when kriminalstatistik is selected)
           cityCrimeMetric={cityCrimeMetric}
           onCityCrimeMetricChange={setCityCrimeMetric}
           // Blaulicht stats and category filter
           blaulichtStats={stats}
           selectedBlaulichtCategory={selectedBlaulichtCategory}
-          onBlaulichtCategoryChange={setSelectedBlaulichtCategory}
+          onBlaulichtCategoryChange={handleBlaulichtCategoryChange}
           // Data props for legends
           auslaenderData={ausData}
           deutschlandatlasData={datlasData}
           cityCrimeData={cityCrimeData}
         />
       </div>
+
+      {/* Floating bottom-center timeline transport controls */}
+      {!showBlaulichtLayer && (
+        <TimelineFloatingControl
+          years={indicatorYears}
+          selectedYear={effectiveIndicatorYear}
+          isPlaying={isIndicatorPlaying}
+          onTogglePlay={() => setIsIndicatorPlaying((prev) => !prev)}
+          onYearChange={(year) => {
+            setSelectedIndicatorYear(year);
+            setIsIndicatorPlaying(false);
+          }}
+          className={showKreisLayer ? 'bottom-20 md:bottom-4' : 'bottom-4'}
+        />
+      )}
+
+      {showBlaulichtLayer && (
+        <BlaulichtPlaybackControl
+          totalEvents={orderedBlaulichtCrimes.length}
+          currentIndex={clampedBlaulichtIndex}
+          isPlaying={isBlaulichtPlaying}
+          onTogglePlay={handleToggleBlaulichtPlayback}
+          onIndexChange={handleBlaulichtScrub}
+          currentTimestamp={playbackCurrentCrime?.publishedAt}
+          className="bottom-4"
+        />
+      )}
 
       {/* Kreis hover card (custom positioned tooltip) - desktop only */}
       <div className="hidden md:block">
@@ -371,7 +623,6 @@ export function ChoroplethMap() {
             ags={kreisHoverInfo.ags}
             indicatorKey={selectedIndicator}
             selectedSubMetric={selectedSubMetric}
-            selectedYear={selectedIndicatorYear}
             auslaenderData={ausData}
             deutschlandatlasData={datlasData}
           />
@@ -383,7 +634,7 @@ export function ChoroplethMap() {
         <RankingPanel
           indicatorKey={selectedIndicator}
           subMetric={selectedSubMetric}
-          selectedYear={selectedIndicatorYear}
+          selectedYear={effectiveIndicatorYear}
           hoveredAgs={hoveredKreis}
           selectedAgs={selectedKreis}
           onHoverAgs={setHoveredKreis}
@@ -397,14 +648,16 @@ export function ChoroplethMap() {
       )}
 
       {/* Blaulicht detail panel - shown when a crime is selected or hovered */}
-      {showBlaulichtLayer && (selectedCrime || hoveredCrime) && (
+      {showBlaulichtLayer && (selectedCrimeInTimeline || hoveredCrimeInTimeline) && (
         <BlaulichtDetailPanel
-          crime={selectedCrime || hoveredCrime!}
+          crime={selectedCrimeInTimeline || hoveredCrimeInTimeline!}
           onClose={() => {
             setSelectedCrime(null);
             setHoveredCrime(null);
+            setIsBlaulichtPlaying(false);
           }}
-          isPreview={!selectedCrime && !!hoveredCrime}
+          isPreview={!selectedCrimeInTimeline && !!hoveredCrimeInTimeline}
+          flashToken={detailPanelFlashToken}
         />
       )}
     </div>

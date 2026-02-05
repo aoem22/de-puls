@@ -64,6 +64,7 @@ interface BlaulichtDetailPanelProps {
   crime: CrimeRecord;
   onClose: () => void;
   isPreview?: boolean; // When true, shown on hover without backdrop
+  flashToken?: number; // Increment to trigger a visual flash
 }
 
 // Category metadata for display
@@ -138,12 +139,13 @@ const Icons = {
   ),
 };
 
-export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: BlaulichtDetailPanelProps) {
+export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashToken = 0 }: BlaulichtDetailPanelProps) {
   const { sheetRef, handlers } = useDraggableSheet(onClose);
   const { lang } = useTranslation();
   const t = translations;
-  const primaryCategory = crime.categories[0] ?? 'other';
-  const categoryInfo = getCategoryInfo(primaryCategory);
+  const flashClass = flashToken > 0
+    ? (flashToken % 2 === 0 ? 'blaulicht-panel-flash-a' : 'blaulicht-panel-flash-b')
+    : '';
 
   // Get translated category label
   const getCategoryLabel = (cat: CrimeCategory) => {
@@ -175,7 +177,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: Blau
 
       {/* Desktop: Right-side panel */}
       <div className={`hidden md:block fixed top-4 right-4 z-[1002] w-[380px] max-w-[calc(100vw-2rem)] pointer-events-none ${isPreview ? 'bottom-auto max-h-[70vh]' : 'bottom-4'}`}>
-        <div className={`bg-[#0c0c0c] rounded-xl border shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200 ${isPreview ? 'border-[#252525]' : 'border-[#1a1a1a] h-full'}`}>
+        <div className={`bg-[#0c0c0c] rounded-xl border shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200 ${isPreview ? 'border-[#252525]' : 'border-[#1a1a1a] h-full'} ${flashClass}`}>
 
           {/* Header */}
           <div className="px-5 py-4 border-b border-[#1a1a1a] flex items-center justify-between flex-shrink-0">
@@ -302,7 +304,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: Blau
       {/* Mobile: Bottom sheet */}
       <div
         ref={sheetRef}
-        className="md:hidden fixed inset-x-0 bottom-0 z-[1002] max-h-[80vh] mobile-bottom-sheet flex flex-col bg-[#0c0c0c] rounded-t-2xl border-t border-[#1a1a1a] shadow-2xl shadow-black/60 overflow-hidden animate-slide-up-spring"
+        className={`md:hidden fixed inset-x-0 bottom-0 z-[1002] max-h-[80vh] mobile-bottom-sheet flex flex-col bg-[#0c0c0c] rounded-t-2xl border-t border-[#1a1a1a] shadow-2xl shadow-black/60 overflow-hidden animate-slide-up-spring ${flashClass}`}
         {...handlers}
       >
         {/* Drag handle */}

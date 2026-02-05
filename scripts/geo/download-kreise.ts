@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import type { FeatureCollection, Geometry } from 'geojson';
 import { GEO_LEVELS } from '../../lib/geo/types';
 
 const config = GEO_LEVELS.kreis;
@@ -19,6 +20,27 @@ const OUTPUT_PATH = path.join(OUTPUT_DIR, 'kreise.json');
 const TEMP_DIR = path.join(__dirname, '../../.tmp');
 const TEMP_RAW = path.join(TEMP_DIR, 'kreise-raw.json');
 const TEMP_PROCESSED = path.join(TEMP_DIR, 'kreise-processed.json');
+
+interface KreisProperties {
+  ags: string;
+  name: string;
+  bundesland: string;
+}
+
+type KreisCollection = FeatureCollection<Geometry, KreisProperties>;
+
+function countVertices(geometry: Geometry): number {
+  if (geometry.type === 'Polygon') {
+    return geometry.coordinates.reduce((sum, ring) => sum + ring.length, 0);
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.reduce(
+      (sum, polygon) => sum + polygon.reduce((ringSum, ring) => ringSum + ring.length, 0),
+      0
+    );
+  }
+  return 0;
+}
 
 async function downloadAndProcess(): Promise<void> {
   console.log(`Fetching ${config.dataset} from OpenDataSoft...`);
@@ -35,8 +57,9 @@ async function downloadAndProcess(): Promise<void> {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
 
-  const geojson = await response.json();
-  console.log(`Downloaded ${geojson.features.length} features\n`);
+  const geojson = await response.json() as { features?: unknown[] };
+  const downloadedCount = Array.isArray(geojson.features) ? geojson.features.length : 0;
+  console.log(`Downloaded ${downloadedCount} features\n`);
 
   // Save raw data
   fs.writeFileSync(TEMP_RAW, JSON.stringify(geojson));
@@ -66,10 +89,10 @@ async function downloadAndProcess(): Promise<void> {
   }
 
   // Read processed data
-  const processed = JSON.parse(fs.readFileSync(TEMP_PROCESSED, 'utf-8'));
+  const processed = JSON.parse(fs.readFileSync(TEMP_PROCESSED, 'utf-8')) as KreisCollection;
 
   // Sort by AGS for consistent output
-  processed.features.sort((a: any, b: any) =>
+  processed.features.sort((a, b) =>
     a.properties.ags.localeCompare(b.properties.ags)
   );
 
@@ -92,14 +115,7 @@ async function downloadAndProcess(): Promise<void> {
   // Count vertices in output
   let vertexCount = 0;
   for (const feature of processed.features) {
-    const geom = feature.geometry;
-    if (geom.type === 'Polygon') {
-      vertexCount += geom.coordinates.reduce((s: number, r: any[]) => s + r.length, 0);
-    } else if (geom.type === 'MultiPolygon') {
-      for (const poly of geom.coordinates) {
-        vertexCount += poly.reduce((s: number, r: any[]) => s + r.length, 0);
-      }
-    }
+    vertexCount += countVertices(feature.geometry);
   }
 
   console.log('\n=== Summary ===');
@@ -109,7 +125,7 @@ async function downloadAndProcess(): Promise<void> {
   console.log(`Output: ${OUTPUT_PATH}`);
 
   console.log('\n=== Sample Features ===');
-  processed.features.slice(0, 5).forEach((f: any) => {
+  processed.features.slice(0, 5).forEach((f) => {
     console.log(`  ${f.properties.ags}: ${f.properties.name} (${f.properties.bundesland})`);
   });
 

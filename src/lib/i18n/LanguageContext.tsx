@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Language } from './translations';
 
 interface LanguageContextType {
@@ -13,36 +13,31 @@ const LanguageContext = createContext<LanguageContextType | null>(null);
 
 const STORAGE_KEY = 'de-puls-language';
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('de');
-  const [isHydrated, setIsHydrated] = useState(false);
+function getStoredLanguage(): Language {
+  if (typeof window === 'undefined') return 'de';
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  return stored === 'en' || stored === 'de' ? stored : 'de';
+}
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'en' || stored === 'de') {
-      setLanguageState(stored);
-    }
-    setIsHydrated(true);
-  }, []);
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [languageOverride, setLanguageOverride] = useState<Language | null>(null);
+  const isHydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const language = languageOverride ?? (isHydrated ? getStoredLanguage() : 'de');
 
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    localStorage.setItem(STORAGE_KEY, lang);
+    setLanguageOverride(lang);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(STORAGE_KEY, lang);
+    }
   };
 
   const toggleLanguage = () => {
     setLanguage(language === 'de' ? 'en' : 'de');
   };
-
-  // Prevent hydration mismatch by rendering with default until hydrated
-  if (!isHydrated) {
-    return (
-      <LanguageContext.Provider value={{ language: 'de', setLanguage, toggleLanguage }}>
-        {children}
-      </LanguageContext.Provider>
-    );
-  }
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage }}>

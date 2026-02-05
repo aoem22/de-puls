@@ -70,6 +70,47 @@ export interface Database {
         Insert: { ags: string; year: string; name: string; crimes: Json };
         Update: Partial<{ ags: string; year: string; name: string; crimes: Json }>;
       };
+      geo_boundaries: {
+        Row: {
+          id: number;
+          level: 'country' | 'land' | 'kreis' | 'gemeinde' | 'city';
+          ags: string;
+          name: string;
+          bundesland: string | null;
+          geometry: Json;
+          properties: Json;
+          bbox: number[];
+          source: string | null;
+          source_dataset: string | null;
+          snapshot: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          level: 'country' | 'land' | 'kreis' | 'gemeinde' | 'city';
+          ags: string;
+          name: string;
+          bundesland?: string | null;
+          geometry: Json;
+          properties?: Json;
+          bbox: number[];
+          source?: string | null;
+          source_dataset?: string | null;
+          snapshot?: string | null;
+        };
+        Update: Partial<{
+          level: 'country' | 'land' | 'kreis' | 'gemeinde' | 'city';
+          ags: string;
+          name: string;
+          bundesland: string | null;
+          geometry: Json;
+          properties: Json;
+          bbox: number[];
+          source: string | null;
+          source_dataset: string | null;
+          snapshot: string | null;
+        }>;
+      };
       dataset_meta: {
         Row: { dataset: string; years: string[]; source: string | null; description: string | null; updated_at: string };
         Insert: { dataset: string; years: string[]; source: string | null; description: string | null };
@@ -121,6 +162,25 @@ export interface CityCrimeRow {
   year: string;
   name: string;
   crimes: Record<string, { cases: number; hz: number; aq: number }>;
+}
+
+/**
+ * Stored boundary row (GeoJSON geometry + metadata)
+ */
+export interface GeoBoundaryRow {
+  id: number;
+  level: 'country' | 'land' | 'kreis' | 'gemeinde' | 'city';
+  ags: string;
+  name: string;
+  bundesland: string | null;
+  geometry: unknown;
+  properties: Record<string, unknown>;
+  bbox: number[];
+  source: string | null;
+  source_dataset: string | null;
+  snapshot: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /**

@@ -9,7 +9,7 @@ import { scaleQuantile } from 'd3-scale';
 import { interpolateYlOrRd, interpolateRdYlGn } from 'd3-scale-chromatic';
 
 import type { IndicatorKey, SubMetricKey, AuslaenderRegionKey } from '../../../lib/indicators/types';
-import { INDICATORS, DEUTSCHLANDATLAS_META, isDeutschlandatlasKey } from '../../../lib/indicators/types';
+import { DEUTSCHLANDATLAS_META, isDeutschlandatlasKey } from '../../../lib/indicators/types';
 import type { AuslaenderRow, DeutschlandatlasRow } from '@/lib/supabase';
 
 // Import Kreis geo data
@@ -225,11 +225,13 @@ export function KreisLayer({
 }: KreisLayerProps) {
   const map = useMap();
   const layersRef = useRef<Map<string, L.Layer>>(new Map());
-  const indicator = INDICATORS[indicatorKey];
 
   // Use ref to track selectedKreis for event handlers (avoids stale closure)
   const selectedKreisRef = useRef(selectedKreis);
-  selectedKreisRef.current = selectedKreis;
+
+  useEffect(() => {
+    selectedKreisRef.current = selectedKreis;
+  }, [selectedKreis]);
 
   // Get all values for color scale calculation
   const allValues = useMemo(() => {
@@ -256,8 +258,8 @@ export function KreisLayer({
     return values;
   }, [indicatorKey, subMetric, ausData, datlasData]);
 
-  // Calculate color scale based on indicator type and sub-metric
-  const colorScale = useMemo(() => {
+  // Calculate color scale based on indicator type and sub-metric.
+  const colorScale = (() => {
     if (allValues.length === 0) {
       return () => '#333';
     }
@@ -270,7 +272,7 @@ export function KreisLayer({
     }
 
     return createSequentialColorScale(allValues);
-  }, [allValues, indicatorKey, subMetric]);
+  })();
 
   // Style function with zoom-based transparency
   const getStyle = useCallback(
@@ -324,9 +326,11 @@ export function KreisLayer({
       // Mouse events - use ref to get current selectedKreis value
       layer.on({
         mouseover: (e: LeafletMouseEvent) => {
-          // Only show hover info if no Kreis is selected (use ref for current value)
+          // Keep hover state synced with ranking panel in all modes.
+          onHoverKreis(ags);
+
+          // Only show hover card info when no Kreis is selected.
           if (!selectedKreisRef.current) {
-            onHoverKreis(ags);
             onHoverInfo({
               ags,
               name: kreisName,
@@ -416,4 +420,3 @@ export function KreisLayer({
     />
   );
 }
-

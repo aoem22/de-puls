@@ -1,5 +1,13 @@
 import { supabase } from './client';
-import type { CrimeRecordRow, BlaulichtStats, AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow } from './types';
+import type {
+  CrimeRecordRow,
+  BlaulichtStats,
+  AuslaenderRow,
+  DeutschlandatlasRow,
+  CityCrimeRow,
+  DatasetMetaRow,
+  GeoBoundaryRow,
+} from './types';
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
 
 /**
@@ -196,6 +204,28 @@ export async function fetchAllDatasetMeta(): Promise<Record<string, DatasetMetaR
   const result: Record<string, DatasetMetaRow> = {};
   for (const row of rows) {
     result[row.dataset] = row;
+  }
+  return result;
+}
+
+/**
+ * Fetch boundaries by level, keyed by AGS
+ */
+export async function fetchGeoBoundaries(level: GeoBoundaryRow['level']): Promise<Record<string, GeoBoundaryRow>> {
+  const { data, error } = await supabase
+    .from('geo_boundaries')
+    .select('*')
+    .eq('level', level);
+
+  if (error) {
+    console.error('Error fetching geo boundaries:', error);
+    throw new Error(`Failed to fetch geo boundaries: ${error.message}`);
+  }
+
+  const rows = (data ?? []) as unknown as GeoBoundaryRow[];
+  const result: Record<string, GeoBoundaryRow> = {};
+  for (const row of rows) {
+    result[row.ags] = row;
   }
   return result;
 }

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { AuslaenderRegionKey, IndicatorKey, DeutschlandatlasKey } from '../../../lib/indicators/types';
-import { AUSLAENDER_REGION_META, DEUTSCHLANDATLAS_META, isDeutschlandatlasKey } from '../../../lib/indicators/types';
+import { AUSLAENDER_REGION_META, DEUTSCHLANDATLAS_META } from '../../../lib/indicators/types';
 import { formatNumber, formatValue, calcPercentParens } from '../../../lib/utils/formatters';
 import type { AuslaenderRow, DeutschlandatlasRow } from '@/lib/supabase';
 
@@ -14,7 +14,6 @@ interface KreisHoverCardProps {
   ags: string;
   indicatorKey: IndicatorKey;
   selectedSubMetric: string;
-  selectedYear: string;
   auslaenderData?: Record<string, AuslaenderRow>;
   deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
 }
@@ -206,22 +205,15 @@ export function KreisHoverCard({
   ags,
   indicatorKey,
   selectedSubMetric,
-  selectedYear,
   auslaenderData: ausData,
   deutschlandatlasData: datlasData,
 }: KreisHoverCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!cardRef.current) return;
-
     const card = cardRef.current;
+    if (!card || typeof window === 'undefined') return;
+
     const cardRect = card.getBoundingClientRect();
     const cardWidth = cardRect.width || 280;
     const cardHeight = cardRect.height || 400;
@@ -249,11 +241,11 @@ export function KreisHoverCard({
     if (y + cardHeight > viewportHeight - padding) {
       y = viewportHeight - cardHeight - padding;
     }
+    card.style.left = `${x}px`;
+    card.style.top = `${y}px`;
+  }, [mouseX, mouseY, indicatorKey, selectedSubMetric, kreisName, ags]);
 
-    setPosition({ x, y });
-  }, [mouseX, mouseY]);
-
-  if (!mounted) return null;
+  if (typeof document === 'undefined') return null;
 
   // Get record based on indicator type
   const getRecord = () => {
@@ -271,8 +263,8 @@ export function KreisHoverCard({
       ref={cardRef}
       className="fixed z-[10000] pointer-events-none"
       style={{
-        left: position.x,
-        top: position.y,
+        left: 0,
+        top: 0,
         transform: 'translateZ(0)',
       }}
     >

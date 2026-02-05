@@ -33,11 +33,13 @@ interface RawRow {
   aq: number;
 }
 
+type ExcelCell = string | number | boolean | Date | null | undefined;
+
 function parseExcel(filePath: string): RawRow[] {
   const workbook = XLSX.readFile(filePath);
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
-  const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+  const data = XLSX.utils.sheet_to_json<ExcelCell[]>(sheet, { header: 1 });
 
   const rows: RawRow[] = [];
 

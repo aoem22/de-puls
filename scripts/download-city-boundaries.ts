@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as turf from '@turf/turf';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
 
 const DATA_DIR = path.join(process.cwd(), 'lib', 'data');
 const CRIME_DATA_FILE = path.join(DATA_DIR, 'city-crimes.json');
@@ -20,19 +21,39 @@ const OUTPUT_FILE = path.join(DATA_DIR, 'cities-geojson.json');
 // This dataset contains Gemeinde (municipality) polygons with 12-digit AGS codes
 const OPENDATASOFT_API = 'https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/georef-germany-gemeinde/exports/geojson';
 
-async function fetchCityBoundaries(): Promise<any> {
+interface CrimeCityData {
+  cities: Record<string, { name: string }>;
+}
+
+interface OpenDataSoftProperties {
+  gem_code?: string[];
+  gem_name?: string[] | string;
+  lan_name?: string[] | string;
+}
+
+type OpenDataSoftFeature = Feature<Geometry, OpenDataSoftProperties>;
+
+interface OpenDataSoftResponse {
+  features: OpenDataSoftFeature[];
+}
+
+interface CityBoundaryProperties {
+  ags: string;
+  name: string;
+  state: string | null;
+  originalAgs?: string;
+}
+
+type CityBoundaryFeature = Feature<Geometry, CityBoundaryProperties>;
+type CityBoundaryCollection = FeatureCollection<Geometry, CityBoundaryProperties>;
+
+async function fetchCityBoundaries(): Promise<CityBoundaryCollection> {
   console.log('Fetching German municipality boundaries from OpenDataSoft...');
 
   // Load our city list from crime data
-  const crimeData = JSON.parse(fs.readFileSync(CRIME_DATA_FILE, 'utf-8'));
+  const crimeData = JSON.parse(fs.readFileSync(CRIME_DATA_FILE, 'utf-8')) as CrimeCityData;
   const cityKeys = new Set(Object.keys(crimeData.cities));
   console.log(`Looking for ${cityKeys.size} cities\n`);
-
-  // Create a map of 8-digit AGS to city data
-  const cityMap = new Map<string, { name: string; ags: string }>();
-  for (const ags of cityKeys) {
-    cityMap.set(ags, { name: crimeData.cities[ags].name, ags });
-  }
 
   // Fetch the GeoJSON
   const response = await fetch(OPENDATASOFT_API, {
@@ -45,12 +66,12 @@ async function fetchCityBoundaries(): Promise<any> {
     throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
   }
 
-  const geojson = await response.json();
+  const geojson = await response.json() as OpenDataSoftResponse;
   console.log(`Fetched ${geojson.features.length} total municipalities\n`);
 
   // Filter to only our cities
   // OpenDataSoft uses 12-digit AGS codes in arrays, we need to match first 8 digits
-  const matchedFeatures: any[] = [];
+  const matchedFeatures: CityBoundaryFeature[] = [];
   const unmatchedCities = new Set(cityKeys);
 
   for (const feature of geojson.features) {
@@ -76,8 +97,8 @@ async function fetchCityBoundaries(): Promise<any> {
         type: 'Feature',
         properties: {
           ags: ags8,
-          name: crimeData.cities[ags8]?.name || gemName,
-          state: lanName,
+          name: crimeData.cities[ags8]?.name || gemName || ags8,
+          state: lanName ?? null,
         },
         geometry: feature.geometry,
       });
@@ -119,7 +140,7 @@ async function fetchCityBoundaries(): Promise<any> {
             properties: {
               ags: ags,
               name: cityName,
-              state: lanName,
+              state: lanName ?? null,
               originalAgs: gemCodeArr[0],
             },
             geometry: feature.geometry,
@@ -131,7 +152,7 @@ async function fetchCityBoundaries(): Promise<any> {
   }
 
   // Deduplicate - keep only one feature per AGS
-  const uniqueByAgs = new Map<string, any>();
+  const uniqueByAgs = new Map<string, CityBoundaryFeature>();
   for (const feature of matchedFeatures) {
     const ags = feature.properties.ags;
     if (!uniqueByAgs.has(ags)) {
@@ -156,21 +177,21 @@ async function fetchCityBoundaries(): Promise<any> {
   };
 }
 
-function simplifyGeometry(geojson: any): any {
+function simplifyGeometry(geojson: CityBoundaryCollection): CityBoundaryCollection {
   console.log('\nSimplifying geometries...');
 
-  const simplified = {
+  const simplified: CityBoundaryCollection = {
     type: 'FeatureCollection',
-    features: geojson.features.map((feature: any) => {
+    features: geojson.features.map((feature) => {
       try {
         // Simplify with tolerance of 0.001 degrees (~100m at German latitudes)
         const simpleFeature = turf.simplify(feature, {
           tolerance: 0.001,
           highQuality: true,
-        });
+        }) as CityBoundaryFeature;
         return simpleFeature;
-      } catch (e) {
-        console.warn(`Failed to simplify ${feature.properties.name}:`, e);
+      } catch (error: unknown) {
+        console.warn(`Failed to simplify ${feature.properties.name}:`, error);
         return feature;
       }
     }),

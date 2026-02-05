@@ -7,7 +7,7 @@ import {
 } from '../../../lib/types/cityCrime';
 import { getCityCrimeLegendStops } from './CityCrimeLayer';
 import { getKreisLegendStops } from './KreisLayer';
-import type { IndicatorKey, SubMetricKey, DeutschlandatlasKey } from '../../../lib/indicators/types';
+import type { IndicatorKey, SubMetricKey } from '../../../lib/indicators/types';
 import {
   INDICATORS,
   getAuslaenderRegionsByCategory,
@@ -25,11 +25,7 @@ interface LayerControlProps {
   onIndicatorChange: (indicator: IndicatorKey) => void;
   selectedSubMetric: SubMetricKey;
   onSubMetricChange: (subMetric: SubMetricKey) => void;
-  indicatorYears?: string[];
   selectedIndicatorYear?: string;
-  isIndicatorPlaying?: boolean;
-  onToggleIndicatorPlay?: () => void;
-  onIndicatorYearChange?: (year: string) => void;
   // Crime metric (HZ vs AQ) - only for kriminalstatistik
   cityCrimeMetric?: 'hz' | 'aq';
   onCityCrimeMetricChange?: (metric: 'hz' | 'aq') => void;
@@ -53,11 +49,7 @@ export function LayerControl({
   onIndicatorChange,
   selectedSubMetric,
   onSubMetricChange,
-  indicatorYears,
   selectedIndicatorYear,
-  isIndicatorPlaying,
-  onToggleIndicatorPlay,
-  onIndicatorYearChange,
   cityCrimeMetric,
   onCityCrimeMetricChange,
   blaulichtStats,
@@ -69,15 +61,6 @@ export function LayerControl({
 }: LayerControlProps) {
   const { lang } = useTranslation();
   const indicators = Object.values(INDICATORS);
-
-  const hasTemporalData = Boolean(
-    indicatorYears &&
-    indicatorYears.length > 1 &&
-    selectedIndicatorYear &&
-    typeof isIndicatorPlaying === 'boolean' &&
-    onToggleIndicatorPlay &&
-    onIndicatorYearChange
-  );
 
   const crimeTypesByCategory = getCrimeTypesByCategory();
 
@@ -221,62 +204,6 @@ export function LayerControl({
           >
             {t('clearanceAq')}
           </button>
-        </div>
-      )}
-
-      {/* Year time slider */}
-      {hasTemporalData && indicatorYears && selectedIndicatorYear && onToggleIndicatorPlay && onIndicatorYearChange && (
-        <div className="pt-2 border-t border-[#333]">
-          <div className="text-[10px] text-zinc-500 mb-2">{t('timeSeries')}</div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onToggleIndicatorPlay}
-              aria-label={isIndicatorPlaying ? 'Pause animation' : 'Play animation'}
-              className={`w-10 h-10 md:w-7 md:h-7 flex items-center justify-center rounded-lg md:rounded-md border transition-colors touch-feedback ${
-                isIndicatorPlaying
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                  : 'bg-[#0a0a0a] border-[#333] text-zinc-100 hover:border-amber-500/70 active:bg-amber-500/10'
-              }`}
-            >
-              {isIndicatorPlaying ? (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
-                </svg>
-              ) : (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </button>
-
-            <div className="flex-1">
-              <input
-                type="range"
-                min={0}
-                max={indicatorYears.length - 1}
-                value={indicatorYears.indexOf(selectedIndicatorYear)}
-                onChange={(e) => onIndicatorYearChange(indicatorYears[parseInt(e.target.value)])}
-                className="w-full"
-              />
-              <div className="text-lg font-bold text-amber-400 text-center mt-1">
-                {selectedIndicatorYear}
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -493,41 +420,6 @@ function KreisIndicatorLegend({
             <span className="text-red-400">{t.redHigh[lang]}</span> = {t.many[lang]}
           </>
         )}
-      </p>
-    </div>
-  );
-}
-
-// Blaulicht severity legend component
-function BlaulichtLegend() {
-  const severityItems = [
-    { label: 'Messer / Schwer', severity: 5, size: 16 },
-    { label: 'Raub / Körperverl.', severity: 4, size: 14 },
-    { label: 'Brandstiftung / Einbruch', severity: 3, size: 12 },
-    { label: 'Betrug', severity: 2, size: 10 },
-    { label: 'Verkehr / Sonstiges', severity: 1, size: 8 },
-  ];
-
-  return (
-    <div className="space-y-1.5">
-      <div className="text-[10px] text-zinc-500">Schweregrad (Punktgröße)</div>
-      {severityItems.map((item) => (
-        <div key={item.severity} className="flex items-center gap-2">
-          <div
-            className="rounded-full flex-shrink-0"
-            style={{
-              width: item.size,
-              height: item.size,
-              backgroundColor: '#1e3a5f',
-              border: '1px solid #2563eb',
-              boxShadow: `0 0 ${item.size * 0.5}px #3b82f6, 0 0 ${item.size}px #3b82f640`,
-            }}
-          />
-          <span className="text-[10px] text-zinc-400">{item.label}</span>
-        </div>
-      ))}
-      <p className="text-[8px] text-zinc-500 mt-2">
-        Größer = Schwerer
       </p>
     </div>
   );

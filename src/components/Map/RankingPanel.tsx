@@ -3,7 +3,6 @@
 import { useMemo, useRef, useEffect, useCallback, useState, type TouchEvent } from 'react';
 import type { IndicatorKey, SubMetricKey, AuslaenderRegionKey, DeutschlandatlasKey } from '../../../lib/indicators/types';
 import {
-  INDICATORS,
   AUSLAENDER_REGION_META,
   DEUTSCHLANDATLAS_META,
   isDeutschlandatlasKey,
@@ -619,9 +618,10 @@ export function RankingPanel({
 }: RankingPanelProps) {
   const { lang } = useTranslation();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const miniRankingRef = useRef<HTMLDivElement>(null);
+  const isHoverFromListRef = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const lastManualScrollRef = useRef<number>(0);
+  const lastManualInputRef = useRef<number>(0);
+  const hoverScrollRafRef = useRef<number | null>(null);
   const t = translations;
 
   // Compute rankings from indicator data
@@ -691,10 +691,61 @@ export function RankingPanel({
     );
   }, [rankings, searchQuery]);
 
-  // Auto-scroll to hovered item when hovering on map
-  const scrollToItem = useCallback((ags: string) => {
+  const markManualInput = useCallback(() => {
+    lastManualInputRef.current = Date.now();
+  }, []);
+
+  const cancelHoverScrollAnimation = useCallback(() => {
+    if (hoverScrollRafRef.current !== null) {
+      cancelAnimationFrame(hoverScrollRafRef.current);
+      hoverScrollRafRef.current = null;
+    }
+  }, []);
+
+  const animateContainerScroll = useCallback(
+    (container: HTMLElement, targetScrollTop: number, durationMs = 180) => {
+      cancelHoverScrollAnimation();
+
+      const startScrollTop = container.scrollTop;
+      const delta = targetScrollTop - startScrollTop;
+      if (Math.abs(delta) < 1) {
+        container.scrollTop = targetScrollTop;
+        return;
+      }
+
+      const startTime = performance.now();
+      const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
+
+      const step = (now: number) => {
+        const progress = Math.min((now - startTime) / durationMs, 1);
+        container.scrollTop = startScrollTop + delta * easeOutQuart(progress);
+
+        if (progress < 1) {
+          hoverScrollRafRef.current = requestAnimationFrame(step);
+          return;
+        }
+        hoverScrollRafRef.current = null;
+      };
+
+      hoverScrollRafRef.current = requestAnimationFrame(step);
+    },
+    [cancelHoverScrollAnimation]
+  );
+
+  const scrollElementIntoContainerCenter = useCallback((container: HTMLElement, element: HTMLElement) => {
+    const containerHeight = container.clientHeight;
+    const elementHeight = element.offsetHeight;
+    const elementTop = element.offsetTop;
+    const targetScrollTop = elementTop - (containerHeight - elementHeight) / 2;
+    const maxScroll = container.scrollHeight - containerHeight;
+    const clampedScroll = Math.max(0, Math.min(targetScrollTop, maxScroll));
+    animateContainerScroll(container, clampedScroll, 170);
+  }, [animateContainerScroll]);
+
+  // Auto-scroll to hovered item in the main list (ranking mode).
+  const scrollMainListToItem = useCallback((ags: string) => {
     const now = Date.now();
-    if (now - lastManualScrollRef.current < 500) return;
+    if (now - lastManualInputRef.current < 500) return;
 
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -702,73 +753,39 @@ export function RankingPanel({
     const element = container.querySelector(`[data-ags="${ags}"]`) as HTMLElement;
     if (!element) return;
 
-    // Calculate scroll position to center the element in the container
-    // Using manual scrollTop instead of scrollIntoView to avoid nested scroll container issues
-    const containerHeight = container.clientHeight;
-    const elementHeight = element.offsetHeight;
-    const elementTop = element.offsetTop;
-
-    // Target scroll: element's top - offset to center it
-    const targetScrollTop = elementTop - (containerHeight - elementHeight) / 2;
-
-    // Clamp to valid scroll range
-    const maxScroll = container.scrollHeight - containerHeight;
-    const clampedScroll = Math.max(0, Math.min(targetScrollTop, maxScroll));
-
-    container.scrollTo({
-      top: clampedScroll,
-      behavior: 'smooth',
-    });
-  }, []);
+    scrollElementIntoContainerCenter(container, element);
+  }, [scrollElementIntoContainerCenter]);
 
   // Scroll to hovered item when it changes (from map hover)
   useEffect(() => {
-    if (hoveredAgs && !selectedAgs) {
-      scrollToItem(hoveredAgs);
+    if (hoveredAgs && !selectedAgs && !isHoverFromListRef.current) {
+      scrollMainListToItem(hoveredAgs);
     }
-  }, [hoveredAgs, selectedAgs, scrollToItem]);
-
-  // Track manual scrolling
-  const handleScroll = useCallback(() => {
-    lastManualScrollRef.current = Date.now();
-  }, []);
+  }, [hoveredAgs, selectedAgs, scrollMainListToItem]);
 
   // Scroll back to top when not hovering (with delay to avoid jarring animation)
   useEffect(() => {
-    if (!hoveredAgs) {
+    if (!hoveredAgs && !selectedAgs) {
       const timeout = setTimeout(() => {
-        // Scroll mini ranking back to top
-        if (miniRankingRef.current) {
-          miniRankingRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        if (scrollContainerRef.current) {
+          animateContainerScroll(scrollContainerRef.current, 0, 170);
         }
-        // Scroll main ranking list back to top
-        if (scrollContainerRef.current && !selectedAgs) {
-          scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }, 300);
+      }, 120);
       return () => clearTimeout(timeout);
     }
-  }, [hoveredAgs, selectedAgs]);
+  }, [hoveredAgs, selectedAgs, animateContainerScroll]);
+
+  useEffect(() => {
+    return () => {
+      cancelHoverScrollAnimation();
+    };
+  }, [cancelHoverScrollAnimation]);
 
   const indicatorLabel = getIndicatorLabel(indicatorKey, subMetric, lang);
   const unit = getUnit(indicatorKey, subMetric);
 
-  // Get items around the selected item for mini ranking display
-  const getMiniRankingItems = useCallback(() => {
-    if (!selectedAgs) return [];
-    const selectedIndex = rankings.findIndex(r => r.ags === selectedAgs);
-    if (selectedIndex === -1) return rankings.slice(0, 5);
-
-    // Show 2 before, selected, 2 after (5 total)
-    const start = Math.max(0, selectedIndex - 2);
-    const end = Math.min(rankings.length, selectedIndex + 3);
-    return rankings.slice(start, end);
-  }, [selectedAgs, rankings]);
-
   // ============ Render Detail View ============
   if (selectedAgs && selectedRecord) {
-    const miniRankingItems = getMiniRankingItems();
-
     return (
       <>
         {/* Desktop detail view */}
@@ -797,57 +814,6 @@ export function RankingPanel({
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
-          </div>
-
-          {/* Mini ranking list - shows hover highlights */}
-          <div className="shrink-0 border-b border-[#262626]/50">
-            <div className="px-3 py-1.5 flex items-center justify-between">
-              <span className="text-zinc-600 text-[10px] uppercase tracking-wider">{t.ranking[lang]}</span>
-              <button
-                onClick={() => onSelectAgs(null)}
-                className="text-zinc-500 hover:text-amber-400 text-[10px] transition-colors"
-              >
-                {t.showAll[lang]} →
-              </button>
-            </div>
-            <div ref={miniRankingRef} className="max-h-32 overflow-y-auto scrollbar-thin">
-              {miniRankingItems.map((item) => {
-                const isHovered = hoveredAgs === item.ags;
-                const isSelected = item.ags === selectedAgs;
-
-                return (
-                  <div
-                    key={item.ags}
-                    className={`px-3 py-1.5 cursor-pointer transition-colors flex items-center gap-2 ${
-                      isSelected
-                        ? 'bg-amber-500/20'
-                        : isHovered
-                          ? 'bg-amber-500/10'
-                          : 'hover:bg-white/5'
-                    }`}
-                    onMouseEnter={() => onHoverAgs(item.ags)}
-                    onMouseLeave={() => onHoverAgs(null)}
-                    onClick={() => onSelectAgs(item.ags)}
-                  >
-                    <span className={`w-6 text-right text-[10px] font-mono ${
-                      isSelected ? 'text-amber-400' : isHovered ? 'text-amber-400' : 'text-zinc-600'
-                    }`}>
-                      {item.rank}.
-                    </span>
-                    <span className={`flex-1 text-xs truncate ${
-                      isSelected ? 'text-amber-400 font-medium' : isHovered ? 'text-amber-400' : 'text-zinc-300'
-                    }`}>
-                      {item.name}
-                    </span>
-                    <span className={`text-[10px] font-mono ${
-                      isSelected ? 'text-amber-400' : isHovered ? 'text-amber-400' : 'text-zinc-500'
-                    }`}>
-                      {formatRankingValue(item.value, indicatorKey, subMetric)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
           </div>
 
           {/* Scrollable detail content */}
@@ -896,6 +862,15 @@ export function RankingPanel({
   }
 
   // ============ Render Ranking View ============
+  const handleListItemMouseEnter = (ags: string) => {
+    isHoverFromListRef.current = true;
+    onHoverAgs(ags);
+  };
+
+  const handleListItemMouseLeave = () => {
+    onHoverAgs(null);
+  };
+
   return (
     <>
       {/* Mobile ranking toggle button */}
@@ -935,7 +910,7 @@ export function RankingPanel({
       )}
 
       {/* Desktop panel */}
-      <div className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[#262626] w-72 max-h-[70vh] flex-col overflow-hidden transition-all duration-200">
+        <div className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[#262626] w-80 max-h-[80vh] flex-col overflow-hidden transition-all duration-200">
         {/* Header */}
         <div className="shrink-0 p-3 border-b border-[#262626]">
           <div className="flex items-center gap-2 mb-1">
@@ -976,8 +951,14 @@ export function RankingPanel({
         {/* Scrollable list */}
         <div
           ref={scrollContainerRef}
-          onScroll={handleScroll}
           className="flex-1 overflow-y-auto scrollbar-thin"
+          onWheel={markManualInput}
+          onTouchStart={markManualInput}
+          onMouseDown={markManualInput}
+          onMouseLeave={() => {
+            isHoverFromListRef.current = false;
+            onHoverAgs(null);
+          }}
         >
           {filteredRankings.length === 0 ? (
             <div className="p-4 text-center text-zinc-500 text-xs">
@@ -995,8 +976,8 @@ export function RankingPanel({
                     className={`px-3 py-2 cursor-pointer transition-colors ${
                       isHovered ? 'bg-amber-500/15' : 'hover:bg-white/5'
                     }`}
-                    onMouseEnter={() => onHoverAgs(item.ags)}
-                    onMouseLeave={() => onHoverAgs(null)}
+                    onMouseEnter={() => handleListItemMouseEnter(item.ags)}
+                    onMouseLeave={handleListItemMouseLeave}
                     onClick={() => onSelectAgs(item.ags)}
                   >
                     {/* Row content */}

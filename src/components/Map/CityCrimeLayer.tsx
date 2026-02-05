@@ -108,8 +108,8 @@ export function CityCrimeLayer({
     return dataMap;
   }, [selectedYear, cityCrimeData]);
 
-  // Calculate color scale based on current metric - use all years for consistent scale
-  const colorScale = useMemo(() => {
+  // Calculate color scale based on current metric - use all years for consistent scale.
+  const colorScale = (() => {
     const values: number[] = [];
 
     if (!cityCrimeData) return () => '#333333';
@@ -141,7 +141,7 @@ export function CityCrimeLayer({
       if (value === null) return '#333333';
       return scale(value);
     };
-  }, [selectedCrimeType, metric]);
+  })();
 
   // Style function for GeoJSON
   const getStyle = useCallback(
