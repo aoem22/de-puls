@@ -83,16 +83,6 @@ export interface Database {
 }
 
 /**
- * Bounding box type for spatial queries
- */
-export interface LatLngBounds {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
-}
-
-/**
  * Statistics type for Blaulicht data
  */
 export interface BlaulichtStats {

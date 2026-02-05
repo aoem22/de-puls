@@ -43,16 +43,6 @@ export interface CrimeRecord {
   confidence: number;
 }
 
-export interface CrimeDataset {
-  generatedAt: string;
-  source: 'presseportal';
-  range: {
-    start: string;
-    end: string;
-  };
-  records: CrimeRecord[];
-}
-
 export const CRIME_CATEGORIES: Array<{
   key: CrimeCategory;
   label: string;

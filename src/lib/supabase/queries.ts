@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import type { CrimeRecordRow, LatLngBounds, BlaulichtStats, AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow } from './types';
+import type { CrimeRecordRow, BlaulichtStats, AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow } from './types';
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
 
 /**
@@ -52,33 +52,6 @@ export async function fetchCrimes(category?: CrimeCategory): Promise<CrimeRecord
 }
 
 /**
- * Fetch crimes within a geographic bounding box
- * Useful for viewport-based loading on the map
- *
- * @param bounds - Geographic bounding box (north, south, east, west)
- * @returns Array of crime records within bounds
- */
-export async function fetchCrimesInBounds(bounds: LatLngBounds): Promise<CrimeRecord[]> {
-  const { data, error } = await supabase
-    .from('crime_records')
-    .select('*')
-    .not('latitude', 'is', null)
-    .not('longitude', 'is', null)
-    .gte('latitude', bounds.south)
-    .lte('latitude', bounds.north)
-    .gte('longitude', bounds.west)
-    .lte('longitude', bounds.east)
-    .order('published_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching crimes in bounds:', error);
-    throw new Error(`Failed to fetch crimes in bounds: ${error.message}`);
-  }
-
-  return (data ?? []).map(rowToCrimeRecord);
-}
-
-/**
  * Fetch aggregate statistics for Blaulicht crime data
  *
  * @returns Statistics including total count, geocoded count, and counts by category
@@ -115,31 +88,6 @@ export async function fetchCrimeStats(): Promise<BlaulichtStats> {
     geocoded,
     byCategory,
   };
-}
-
-/**
- * Fetch a single crime record by ID
- *
- * @param id - The crime record ID
- * @returns The crime record or null if not found
- */
-export async function fetchCrimeById(id: string): Promise<CrimeRecord | null> {
-  const { data, error } = await supabase
-    .from('crime_records')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') {
-      // No rows returned
-      return null;
-    }
-    console.error('Error fetching crime by ID:', error);
-    throw new Error(`Failed to fetch crime: ${error.message}`);
-  }
-
-  return data ? rowToCrimeRecord(data) : null;
 }
 
 // ============ Indicator Data Queries ============

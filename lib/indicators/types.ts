@@ -869,44 +869,9 @@ export const INDICATORS: Record<IndicatorKey, IndicatorConfig> = {
 };
 
 /**
- * Get indicator config by key
- */
-export function getIndicator(key: IndicatorKey): IndicatorConfig {
-  return INDICATORS[key];
-}
-
-/**
- * Get all indicators for a specific geographic level
- */
-export function getIndicatorsByGeoLevel(level: GeoLevel): IndicatorConfig[] {
-  return Object.values(INDICATORS).filter((ind) => ind.geoLevel === level);
-}
-
-/**
- * Check if a key is a valid indicator key
- */
-export function isIndicatorKey(key: string): key is IndicatorKey {
-  return key in INDICATORS;
-}
-
-/**
  * Check if a key is a valid Deutschlandatlas indicator
  */
 export function isDeutschlandatlasKey(key: string): key is DeutschlandatlasKey {
   return DEUTSCHLANDATLAS_KEYS.includes(key as DeutschlandatlasKey);
 }
 
-/**
- * Get formatted value string for a Deutschlandatlas indicator
- */
-export function formatDeutschlandatlasValue(key: DeutschlandatlasKey, value: number | null): string {
-  if (value === null) return '–';
-  const meta = DEUTSCHLANDATLAS_META[key];
-
-  // Format number based on scale
-  const formatted = value >= 1000
-    ? value.toLocaleString('de-DE', { maximumFractionDigits: 0 })
-    : value.toLocaleString('de-DE', { maximumFractionDigits: 1 });
-
-  return meta.unitDe ? `${formatted} ${meta.unitDe}` : formatted;
-}
