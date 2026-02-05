@@ -17,6 +17,7 @@ import {
 } from '../../../lib/indicators/types';
 import { CRIME_CATEGORIES, type CrimeCategory } from '@/lib/types/crime';
 import { useTranslation, translations, tNested } from '@/lib/i18n';
+import type { AuslaenderRow, DeutschlandatlasRow, CityCrimeRow } from '@/lib/supabase';
 
 interface LayerControlProps {
   // Indicator props
@@ -36,11 +37,15 @@ interface LayerControlProps {
   blaulichtStats?: {
     total: number;
     geocoded: number;
-    byCategory: Record<CrimeCategory, number>;
+    byCategory: Partial<Record<CrimeCategory, number>>;
   };
   // Blaulicht category filter
   selectedBlaulichtCategory?: CrimeCategory | null;
   onBlaulichtCategoryChange?: (category: CrimeCategory | null) => void;
+  // Data props for legend computation
+  auslaenderData?: Record<string, AuslaenderRow>;
+  deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
+  cityCrimeData?: Record<string, Record<string, CityCrimeRow>>;
 }
 
 export function LayerControl({
@@ -58,6 +63,9 @@ export function LayerControl({
   blaulichtStats,
   selectedBlaulichtCategory,
   onBlaulichtCategoryChange,
+  auslaenderData: ausData,
+  deutschlandatlasData: datlasData,
+  cityCrimeData,
 }: LayerControlProps) {
   const { lang } = useTranslation();
   const indicators = Object.values(INDICATORS);
@@ -281,6 +289,7 @@ export function LayerControl({
               crimeType={selectedSubMetric as CrimeTypeKey}
               metric={cityCrimeMetric || 'hz'}
               lang={lang}
+              cityCrimeData={cityCrimeData}
             />
           ) : (
             <KreisIndicatorLegend
@@ -288,6 +297,8 @@ export function LayerControl({
               subMetric={selectedSubMetric}
               year={selectedIndicatorYear}
               lang={lang}
+              auslaenderData={ausData}
+              deutschlandatlasData={datlasData}
             />
           )}
         </div>
@@ -409,13 +420,17 @@ function KreisIndicatorLegend({
   subMetric,
   year,
   lang,
+  auslaenderData,
+  deutschlandatlasData,
 }: {
   indicatorKey: IndicatorKey;
   subMetric: SubMetricKey;
   year: string;
   lang: 'de' | 'en';
+  auslaenderData?: Record<string, AuslaenderRow>;
+  deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
 }) {
-  const stops = getKreisLegendStops(indicatorKey, subMetric, year, 5);
+  const stops = getKreisLegendStops(indicatorKey, subMetric, year, 5, auslaenderData, deutschlandatlasData);
   const indicator = INDICATORS[indicatorKey];
 
   if (stops.length === 0) return null;
@@ -523,12 +538,14 @@ function CityCrimeLegend({
   crimeType,
   metric,
   lang,
+  cityCrimeData,
 }: {
   crimeType: CrimeTypeKey;
   metric: 'hz' | 'aq';
   lang: 'de' | 'en';
+  cityCrimeData?: Record<string, Record<string, CityCrimeRow>>;
 }) {
-  const stops = getCityCrimeLegendStops(crimeType, metric, 5);
+  const stops = getCityCrimeLegendStops(crimeType, metric, 5, cityCrimeData);
 
   if (stops.length === 0) return null;
 

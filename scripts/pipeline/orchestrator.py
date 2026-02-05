@@ -19,6 +19,7 @@ from .config import (
     MAX_RETRIES,
     RETRY_DELAYS_SECONDS,
     LOG_DIR,
+    BUNDESLAENDER,
 )
 from .chunk_manager import (
     get_or_create_manifest,
@@ -56,74 +57,149 @@ def ensure_directories(chunk: dict) -> None:
     enriched_path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def run_scraper(chunk: dict) -> tuple[bool, Optional[int], Optional[str]]:
+def run_scraper(chunk: dict, manifest: dict) -> tuple[bool, Optional[int], Optional[str]]:
     """
-    Run the scraper for a single chunk.
+    Run the scraper for a single monthly chunk (all Bundesländer).
+
+    Processes all 16 Bundesländer sequentially, aggregating results
+    into a single monthly JSON file.
 
     Returns: (success, article_count, error_message)
     """
-    cmd = [
-        sys.executable,
-        str(SCRAPER_SCRIPT),
-        "--bundesland", chunk["bundesland"],
-        "--start-date", chunk["start_date"],
-        "--end-date", chunk["end_date"],
-        "--output", chunk["raw_file"],
-    ]
+    chunk_id = chunk["id"]
+    all_articles = []
+    completed_states = chunk.get("bundeslaender_completed", [])
 
-    print(f"  Running scraper: {' '.join(cmd)}")
+    total_states = len(BUNDESLAENDER)
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=3600,  # 1 hour timeout per chunk
-        )
+    for i, bundesland in enumerate(BUNDESLAENDER, 1):
+        if _shutdown_requested:
+            return False, len(all_articles), "Shutdown requested"
 
-        if result.returncode != 0:
-            error = result.stderr.strip() or result.stdout.strip() or "Unknown error"
-            return False, None, f"Scraper failed: {error}"
+        # Skip already completed states (for resumption)
+        if bundesland in completed_states:
+            print(f"    Skipping {bundesland} ({i}/{total_states}) - already completed")
+            continue
 
-        # Count articles in output file
-        raw_path = Path(chunk["raw_file"])
-        if raw_path.exists():
-            with open(raw_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                article_count = len(data.get("articles", []))
-        else:
-            return False, None, "Scraper completed but output file not found"
+        print(f"    Scraping {bundesland} ({i}/{total_states}) for {chunk['year_month']}...")
 
-        return True, article_count, None
+        cmd = [
+            sys.executable,
+            str(SCRAPER_SCRIPT),
+            "--bundesland", bundesland,
+            "--start-date", chunk["start_date"],
+            "--end-date", chunk["end_date"],
+            "--output", f"/tmp/scrape_{bundesland}_{chunk['year_month']}.json",
+        ]
 
-    except subprocess.TimeoutExpired:
-        return False, None, "Scraper timed out after 1 hour"
-    except Exception as e:
-        return False, None, f"Scraper exception: {str(e)}"
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=1800,  # 30 min timeout per state
+            )
+
+            if result.returncode != 0:
+                error = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                print(f"    WARNING: {bundesland} failed: {error[:100]}")
+                # Continue with other states instead of failing entirely
+                continue
+
+            # Load articles from temp file
+            temp_path = Path(f"/tmp/scrape_{bundesland}_{chunk['year_month']}.json")
+            if temp_path.exists():
+                with open(temp_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    articles = data.get("articles", [])
+                    print(f"    Found {len(articles)} articles in {bundesland}")
+                    all_articles.extend(articles)
+                # Clean up temp file
+                temp_path.unlink()
+
+            # Track progress
+            completed_states.append(bundesland)
+            manifest["chunks"][chunk_id]["bundeslaender_completed"] = completed_states
+            save_manifest(manifest)
+
+        except subprocess.TimeoutExpired:
+            print(f"    WARNING: {bundesland} timed out after 30 min")
+            continue
+        except Exception as e:
+            print(f"    WARNING: {bundesland} exception: {str(e)}")
+            continue
+
+    # Save aggregated results
+    raw_path = Path(chunk["raw_file"])
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+
+    output_data = {
+        "year_month": chunk["year_month"],
+        "start_date": chunk["start_date"],
+        "end_date": chunk["end_date"],
+        "bundeslaender_scraped": completed_states,
+        "articles": all_articles,
+    }
+
+    with open(raw_path, "w", encoding="utf-8") as f:
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
+
+    print(f"    Total: {len(all_articles)} articles from {len(completed_states)} states")
+
+    return True, len(all_articles), None
 
 
 def run_enricher(chunk: dict) -> tuple[bool, Optional[int], Optional[str]]:
     """
-    Run the enricher for a single chunk.
+    Run the enricher for a single monthly chunk.
 
+    The enricher expects a JSON file with an "articles" array.
     Returns: (success, enriched_count, error_message)
     """
+    # First, extract articles from the raw file for the enricher
+    raw_path = Path(chunk["raw_file"])
+    if not raw_path.exists():
+        return False, None, f"Raw file not found: {raw_path}"
+
+    # Load raw data and extract articles for enricher
+    with open(raw_path, "r", encoding="utf-8") as f:
+        raw_data = json.load(f)
+
+    articles = raw_data.get("articles", [])
+    if not articles:
+        print("    No articles to enrich")
+        # Create empty enriched file
+        enriched_path = Path(chunk["enriched_file"])
+        enriched_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(enriched_path, "w", encoding="utf-8") as f:
+            json.dump([], f)
+        return True, 0, None
+
+    # Write articles to temp file for enricher (enricher expects list format)
+    temp_input = Path(f"/tmp/enrich_input_{chunk['year_month']}.json")
+    with open(temp_input, "w", encoding="utf-8") as f:
+        json.dump(articles, f, ensure_ascii=False)
+
     cmd = [
         sys.executable,
         str(ENRICHER_SCRIPT),
-        "--input", chunk["raw_file"],
+        "--input", str(temp_input),
         "--output", chunk["enriched_file"],
     ]
 
-    print(f"  Running enricher: {' '.join(cmd)}")
+    print(f"    Running enricher on {len(articles)} articles...")
 
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=7200,  # 2 hour timeout for enrichment (LLM calls take time)
+            timeout=14400,  # 4 hour timeout for enrichment (many articles)
         )
+
+        # Clean up temp file
+        if temp_input.exists():
+            temp_input.unlink()
 
         if result.returncode != 0:
             error = result.stderr.strip() or result.stdout.strip() or "Unknown error"
@@ -134,28 +210,37 @@ def run_enricher(chunk: dict) -> tuple[bool, Optional[int], Optional[str]]:
         if enriched_path.exists():
             with open(enriched_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                enriched_count = len(data.get("articles", []))
+                # Handle both list and dict formats
+                if isinstance(data, list):
+                    enriched_count = len(data)
+                else:
+                    enriched_count = len(data.get("articles", data))
         else:
             return False, None, "Enricher completed but output file not found"
 
         return True, enriched_count, None
 
     except subprocess.TimeoutExpired:
-        return False, None, "Enricher timed out after 2 hours"
+        if temp_input.exists():
+            temp_input.unlink()
+        return False, None, "Enricher timed out after 4 hours"
     except Exception as e:
+        if temp_input.exists():
+            temp_input.unlink()
         return False, None, f"Enricher exception: {str(e)}"
 
 
 def process_chunk(chunk: dict, manifest: dict) -> bool:
     """
-    Process a single chunk (scrape + enrich).
+    Process a single monthly chunk (scrape all states + enrich).
 
     Returns True if successful, False if failed.
     """
     chunk_id = chunk["id"]
     print(f"\n[{datetime.now().isoformat()}] Processing chunk: {chunk_id}")
-    print(f"  Bundesland: {chunk['bundesland']}")
+    print(f"  Month: {chunk['year_month']}")
     print(f"  Date range: {chunk['start_date']} to {chunk['end_date']}")
+    print(f"  Processing all {len(BUNDESLAENDER)} Bundesländer sequentially")
 
     # Mark as in progress
     update_chunk_status(manifest, chunk_id, "in_progress")
@@ -164,9 +249,9 @@ def process_chunk(chunk: dict, manifest: dict) -> bool:
     # Ensure directories exist
     ensure_directories(chunk)
 
-    # Step 1: Scrape
-    print(f"\n  Step 1/2: Scraping...")
-    success, article_count, error = run_scraper(chunk)
+    # Step 1: Scrape all Bundesländer
+    print(f"\n  Step 1/2: Scraping all Bundesländer...")
+    success, article_count, error = run_scraper(chunk, manifest)
 
     if not success:
         print(f"  FAILED: {error}")
@@ -174,7 +259,7 @@ def process_chunk(chunk: dict, manifest: dict) -> bool:
         save_manifest(manifest)
         return False
 
-    print(f"  Scraped {article_count} articles")
+    print(f"  Scraped {article_count} total articles")
     update_chunk_status(manifest, chunk_id, "in_progress", articles_count=article_count)
     save_manifest(manifest)
 

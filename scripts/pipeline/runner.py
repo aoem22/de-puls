@@ -27,6 +27,11 @@ from .chunk_manager import (
     reset_failed_chunks,
 )
 from .orchestrator import run_pipeline, retry_failed_chunks
+from .parallel_orchestrator import (
+    run_parallel_pipeline,
+    run_scrape_only,
+    run_enrich_only,
+)
 from .merge import run_merge, run_transform
 
 
@@ -53,6 +58,27 @@ def cmd_start(args):
             start_date=args.start_date,
             end_date=args.end_date,
         )
+
+
+def cmd_fast(args):
+    """Run the FAST parallel pipeline."""
+    run_parallel_pipeline(
+        start_date=args.start_date,
+        end_date=args.end_date,
+    )
+
+
+def cmd_scrape(args):
+    """Run scraping only (no LLM enrichment)."""
+    run_scrape_only(
+        start_date=args.start_date,
+        end_date=args.end_date,
+    )
+
+
+def cmd_enrich(args):
+    """Run enrichment only (on already-scraped data)."""
+    run_enrich_only()
 
 
 def cmd_status(args):
@@ -192,6 +218,47 @@ def main():
         help="Month for single chunk processing",
     )
     start_parser.set_defaults(func=cmd_start)
+
+    # fast command (parallel pipeline)
+    fast_parser = subparsers.add_parser(
+        "fast",
+        help="Run FAST parallel pipeline (8 scrapers + 4 enrichers)",
+    )
+    fast_parser.add_argument(
+        "--start-date",
+        default=DEFAULT_START_DATE,
+        help=f"Start date (default: {DEFAULT_START_DATE})",
+    )
+    fast_parser.add_argument(
+        "--end-date",
+        default=DEFAULT_END_DATE,
+        help=f"End date (default: {DEFAULT_END_DATE})",
+    )
+    fast_parser.set_defaults(func=cmd_fast)
+
+    # scrape command (scraping only)
+    scrape_parser = subparsers.add_parser(
+        "scrape",
+        help="Run ONLY scraping phase (no LLM, very fast)",
+    )
+    scrape_parser.add_argument(
+        "--start-date",
+        default=DEFAULT_START_DATE,
+        help=f"Start date (default: {DEFAULT_START_DATE})",
+    )
+    scrape_parser.add_argument(
+        "--end-date",
+        default=DEFAULT_END_DATE,
+        help=f"End date (default: {DEFAULT_END_DATE})",
+    )
+    scrape_parser.set_defaults(func=cmd_scrape)
+
+    # enrich command (enrichment only)
+    enrich_parser = subparsers.add_parser(
+        "enrich",
+        help="Run ONLY enrichment phase (on already-scraped data)",
+    )
+    enrich_parser.set_defaults(func=cmd_enrich)
 
     # status command
     status_parser = subparsers.add_parser("status", help="Show pipeline progress")

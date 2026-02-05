@@ -42,7 +42,7 @@ start() {
 
     # Start in background with nohup
     cd "$PROJECT_ROOT"
-    nohup python -m scripts.pipeline.runner start >> "$LOG_FILE" 2>&1 &
+    nohup python3 -m scripts.pipeline.runner start >> "$LOG_FILE" 2>&1 &
     pid=$!
     echo $pid > "$PID_FILE"
 
@@ -116,7 +116,7 @@ status() {
     # Also show manifest status
     echo ""
     cd "$PROJECT_ROOT"
-    python -m scripts.pipeline.runner status 2>/dev/null || true
+    python3 -m scripts.pipeline.runner status 2>/dev/null || true
 }
 
 logs() {

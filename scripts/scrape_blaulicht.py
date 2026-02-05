@@ -31,7 +31,7 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 BASE_URL = "https://www.presseportal.de"
 BLAULICHT_URL = f"{BASE_URL}/blaulicht/"
 USER_AGENT = "de-puls/1.0 (+contact: scraper@example.com)"
-PAGE_DELAY_SECONDS = 1.5
+PAGE_DELAY_SECONDS = 0.8  # Reduced from 1.5 for faster scraping
 GEOCODE_DELAY_SECONDS = 1.1
 REQUEST_TIMEOUT_SECONDS = 30
 MAX_RETRIES = 3
@@ -104,6 +104,48 @@ class GeocodeCache:
     def set(self, key: str, value: Optional[dict]) -> None:
         """Cache a geocode result (including None for failed lookups)."""
         self.cache[key] = value
+
+
+class ScrapedUrlsCache:
+    """Persistent cache for tracking already-scraped article URLs.
+
+    Prevents re-scraping articles across scraper runs by storing URLs
+    with their scrape timestamp.
+    """
+
+    def __init__(self, cache_dir: str = ".cache"):
+        self.cache_dir = Path(cache_dir)
+        self.cache_file = self.cache_dir / "scraped_urls.json"
+        self.urls: dict[str, str] = {}  # url -> timestamp
+        self._load()
+
+    def _load(self) -> None:
+        """Load cache from disk if exists."""
+        if self.cache_file.exists():
+            try:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
+                    self.urls = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Warning: Could not load scraped URLs cache: {e}")
+                self.urls = {}
+
+    def save(self) -> None:
+        """Persist cache to disk."""
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        with open(self.cache_file, "w", encoding="utf-8") as f:
+            json.dump(self.urls, f, ensure_ascii=False, indent=2)
+
+    def is_scraped(self, url: str) -> bool:
+        """Check if URL has already been scraped."""
+        return url in self.urls
+
+    def mark_scraped(self, url: str) -> None:
+        """Mark a URL as scraped with current timestamp."""
+        self.urls[url] = datetime.now().isoformat()
+
+    def __len__(self) -> int:
+        """Return number of cached URLs."""
+        return len(self.urls)
 
 
 class RequestSession:
@@ -422,23 +464,39 @@ class PresseportalScraper:
 
         self.session = RequestSession(verbose=verbose)
         self.geocode_cache = GeocodeCache(cache_dir) if not no_geocode else None
+        self.url_cache = ScrapedUrlsCache(cache_dir)
         self.geocoder = None
         if not no_geocode:
             self.geocoder = Nominatim(user_agent=USER_AGENT)
 
         self.articles: list[Article] = []
         self.seen_urls: set[str] = set()
+        self.skipped_cached_count = 0
 
     def _build_listing_url(self, page: int = 1) -> str:
-        """Build the listing page URL with optional Bundesland filter."""
+        """Build the listing page URL with optional Bundesland and date filters."""
+        # Build base URL
         if self.bundesland:
             if page == 1:
-                return f"{BASE_URL}/blaulicht/l/{self.bundesland}"
-            return f"{BASE_URL}/blaulicht/l/{self.bundesland}/{page}"
+                base = f"{BASE_URL}/blaulicht/l/{self.bundesland}"
+            else:
+                base = f"{BASE_URL}/blaulicht/l/{self.bundesland}/{page}"
         else:
             if page == 1:
-                return BLAULICHT_URL
-            return f"{BLAULICHT_URL}{page}"
+                base = f"{BASE_URL}/blaulicht/"
+            else:
+                base = f"{BASE_URL}/blaulicht/{page}"
+
+        # Add date parameters if specified (much faster than pagination!)
+        params = []
+        if self.start_date:
+            params.append(f"startDate={self.start_date.strftime('%Y-%m-%d')}")
+        if self.end_date:
+            params.append(f"endDate={self.end_date.strftime('%Y-%m-%d')}")
+
+        if params:
+            return f"{base}?{'&'.join(params)}"
+        return base
 
     def _is_in_date_range(self, date_str: Optional[str]) -> bool:
         """Check if article date falls within configured range."""
@@ -526,6 +584,9 @@ class PresseportalScraper:
                 break
 
             url = self._build_listing_url(page)
+            if page <= 3:  # Log first few URLs for debugging
+                print(f"\n  URL: {url}")
+            print(f"  Fetching page {page}...", end=" ", flush=True)
             html = self.session.get(url)
 
             if not html:
@@ -536,24 +597,74 @@ class PresseportalScraper:
 
             if not articles:
                 consecutive_empty += 1
+                print(f"(empty)", end=" ", flush=True)
                 if consecutive_empty >= 2:
-                    print(f"  No more articles found after page {page - 1}")
+                    print(f"\n  No more articles found after page {page - 1}")
                     break
             else:
                 consecutive_empty = 0
-                # Filter by date
+                # Filter by date and track if we've passed the start_date
+                added_this_page = 0
+                all_too_old = True  # Track if all articles are older than start_date
+
                 for article in articles:
+                    article_date_str = article.get("date")
+                    in_range = self._is_in_date_range(article_date_str)
+
+                    # Check if article is newer than or equal to start_date
+                    if article_date_str and self.start_date:
+                        try:
+                            if "T" in article_date_str:
+                                article_date = datetime.fromisoformat(article_date_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                            else:
+                                parsed = parse_german_date(article_date_str)
+                                if parsed:
+                                    article_date = datetime.fromisoformat(parsed)
+                                else:
+                                    article_date = None
+                            if article_date and article_date.date() >= self.start_date.date():
+                                all_too_old = False
+                        except (ValueError, AttributeError):
+                            all_too_old = False  # Keep going if can't parse
+                    else:
+                        all_too_old = False  # No date filter or no article date
+
                     if article["url"] not in self.seen_urls:
-                        if self._is_in_date_range(article.get("date")):
+                        # Skip if already in persistent cache
+                        if self.url_cache.is_scraped(article["url"]):
+                            self.skipped_cached_count += 1
+                            self.seen_urls.add(article["url"])
+                            continue
+
+                        if in_range:
                             all_articles.append(article)
                             self.seen_urls.add(article["url"])
+                            added_this_page += 1
 
+                print(f"({added_this_page}/{len(articles)})", end=" ", flush=True)
                 if self.verbose:
-                    print(f"  Page {page}: found {len(articles)} articles, {len(all_articles)} total")
+                    print(f"\n  Page {page}: found {len(articles)} articles, added {added_this_page}, {len(all_articles)} total")
+
+                # Early exit: if no articles matched for several consecutive pages, stop
+                if added_this_page == 0:
+                    consecutive_no_match = getattr(self, '_consecutive_no_match', 0) + 1
+                    self._consecutive_no_match = consecutive_no_match
+                    if consecutive_no_match >= 5:  # 5 pages with 0 matches = done
+                        print(f"\n  No matching articles for {consecutive_no_match} pages, stopping")
+                        break
+                else:
+                    self._consecutive_no_match = 0
+
+                # Also stop if all articles are clearly older than start_date
+                if self.start_date and all_too_old and len(articles) > 0:
+                    print(f"\n  Reached articles older than {self.start_date.date()}, stopping pagination")
+                    break
 
             page += 1
 
-        print(f"  Collected {len(all_articles)} article URLs")
+        if self.skipped_cached_count > 0:
+            print(f"  Skipped {self.skipped_cached_count} already-scraped articles")
+        print(f"  Collected {len(all_articles)} new article URLs")
         return all_articles
 
     def scrape_article(self, article_info: dict) -> Optional[Article]:
@@ -567,6 +678,9 @@ class PresseportalScraper:
         parsed = parse_article_page(html, url)
         if not parsed:
             return None
+
+        # Mark URL as scraped in persistent cache
+        self.url_cache.mark_scraped(url)
 
         # Use listing date as fallback
         if not parsed["date"] and article_info.get("date"):
@@ -638,7 +752,9 @@ class PresseportalScraper:
             if i % 10 == 0 or i == len(article_infos):
                 print(f"  Progress: {i}/{len(article_infos)} (success: {success_count}, failed: {failed_count})")
 
-        # Save geocode cache
+        # Save caches
+        self.url_cache.save()
+        print(f"  Saved URL cache ({len(self.url_cache)} URLs) to {self.url_cache.cache_file}")
         if self.geocode_cache:
             self.geocode_cache.save()
             print(f"  Saved geocode cache to {self.geocode_cache.cache_file}")
@@ -753,6 +869,7 @@ Examples:
         scraper.run()
     except KeyboardInterrupt:
         print("\nInterrupted by user")
+        scraper.url_cache.save()
         if scraper.geocode_cache:
             scraper.geocode_cache.save()
         sys.exit(1)

@@ -157,21 +157,23 @@ def lookup_city_coords(city: str) -> tuple[Optional[float], Optional[float]]:
 
 # PKS code to CrimeCategory mapping
 PKS_TO_CATEGORY = {
-    # Violence → assault
-    "0100": "assault",  # Mord
-    "0200": "assault",  # Totschlag
-    "0300": "assault",  # Tötung auf Verlangen
-    "2200": "assault",  # Körperverletzung
-    "2320": "assault",  # Freiheitsberaubung
-    "2330": "assault",  # Nötigung
-    "2340": "assault",  # Bedrohung
+    # Murder/Homicide → murder
+    "0100": "murder",   # Mord
+    "0200": "murder",   # Totschlag
+    "0300": "murder",   # Tötung auf Verlangen
+
+    # Sexual crimes → sexual
+    "1100": "sexual",   # Vergewaltigung
+    "1300": "sexual",   # Sexueller Missbrauch
 
     # Robbery
     "2100": "robbery",
 
-    # Sexual crimes → assault (for now)
-    "1100": "assault",  # Vergewaltigung
-    "1300": "assault",  # Sexueller Missbrauch
+    # Assault/Violence → assault
+    "2200": "assault",  # Körperverletzung
+    "2320": "assault",  # Freiheitsberaubung
+    "2330": "assault",  # Nötigung
+    "2340": "assault",  # Bedrohung
 
     # Burglary/Theft
     "3000": "burglary",  # Diebstahl ohne erschwerende Umstände
@@ -181,51 +183,100 @@ PKS_TO_CATEGORY = {
     "4780": "burglary",  # Kfz-Diebstahl
 
     # Fraud
-    "5100": "fraud",  # Betrug
-    "5180": "fraud",  # Leistungserschleichung
-    "5200": "fraud",  # Unterschlagung
+    "5100": "fraud",     # Betrug
+    "5180": "fraud",     # Leistungserschleichung
+    "5200": "fraud",     # Unterschlagung
+
+    # Other offenses
+    "6200": "other",     # Widerstand gegen Vollstreckungsbeamte
 
     # Arson
-    "6740": "arson",  # Brandstiftung
+    "6740": "arson",     # Brandstiftung
 
-    # Property damage → other
-    "6200": "other",  # Widerstand gegen Vollstreckungsbeamte
-    "6750": "other",  # Sachbeschädigung
+    # Vandalism
+    "6750": "vandalism", # Sachbeschädigung
 
     # Traffic
-    "7100": "traffic",  # Verkehrsunfall mit Personenschaden
-    "7200": "traffic",  # Unerlaubtes Entfernen vom Unfallort
-    "7300": "traffic",  # Trunkenheit im Verkehr
+    "7100": "traffic",   # Verkehrsunfall mit Personenschaden
+    "7200": "traffic",   # Unerlaubtes Entfernen vom Unfallort
+    "7300": "traffic",   # Trunkenheit im Verkehr
 
-    # Drugs → other
-    "8910": "other",  # Allgemeine Verstöße BtMG
-    "8920": "other",  # Illegaler Handel BtMG
+    # Drugs
+    "8910": "drugs",     # Allgemeine Verstöße BtMG
+    "8920": "drugs",     # Illegaler Handel BtMG
 }
 
-# Keywords for knife crime detection
-KNIFE_KEYWORDS = [
-    r'\bmesser\b',
-    r'\bmesserattacke\b',
-    r'\bmesserstich\b',
-    r'\bgestochen\b',
-    r'\bstichverletzung\b',
-    r'\bstichwaffe\b',
+# Weapon type detection patterns
+# Each tuple: (weapon_type, regex_pattern)
+WEAPON_PATTERNS = [
+    # Knife/stabbing weapons → messer
+    ('messer', re.compile(
+        r'\b(messer|küchenmesser|klappmesser|stich|gestochen|stichverletzung|stichwaffe|messerstich|messerattacke)\b',
+        re.IGNORECASE
+    )),
+    # Firearms → schusswaffe
+    ('schusswaffe', re.compile(
+        r'\b(pistole|revolver|gewehr|schusswaffe|schuss|geschossen|waffe\s*ge(zogen|richtet)|feuerwaffe)\b',
+        re.IGNORECASE
+    )),
+    # Machete → machete
+    ('machete', re.compile(r'\bmachete\b', re.IGNORECASE)),
+    # Axe → axt
+    ('axt', re.compile(r'\b(axt|beil)\b', re.IGNORECASE)),
+    # Blunt weapons → schlagwaffe
+    ('schlagwaffe', re.compile(
+        r'\b(baseballschläger|schlagstock|knüppel|hammer|eisenstange|holzlatte|schlagring)\b',
+        re.IGNORECASE
+    )),
+    # Pepper spray/irritant → reizgas
+    ('reizgas', re.compile(r'\b(pfefferspray|reizgas|cs-gas|tränengas)\b', re.IGNORECASE)),
 ]
-KNIFE_PATTERN = re.compile('|'.join(KNIFE_KEYWORDS), re.IGNORECASE)
+
+# Generic weapons keywords (for 'weapons' category when not knife-specific)
+GENERIC_WEAPONS_PATTERN = re.compile(
+    r'\b(waffe|bewaffnet|bedroht\s*mit|schoss|geschossen|schussabgabe)\b',
+    re.IGNORECASE
+)
+
+
+def detect_weapon_type(body: str) -> Optional[str]:
+    """
+    Detect the weapon type used in an incident.
+
+    Returns: weapon type string or None if no weapon detected
+    """
+    for weapon_type, pattern in WEAPON_PATTERNS:
+        if pattern.search(body):
+            return weapon_type
+    return None
 
 
 def detect_knife_crime(body: str) -> bool:
     """Check if article mentions knife crime."""
-    return bool(KNIFE_PATTERN.search(body))
+    weapon_type = detect_weapon_type(body)
+    return weapon_type == 'messer'
+
+
+def detect_weapons_crime(body: str) -> bool:
+    """Check if article mentions non-knife weapons."""
+    weapon_type = detect_weapon_type(body)
+    # 'weapons' category for non-knife weapons
+    if weapon_type and weapon_type != 'messer':
+        return True
+    # Also check for generic weapon mentions
+    return bool(GENERIC_WEAPONS_PATTERN.search(body))
 
 
 def get_crime_categories(pks_code: Optional[str], body: str) -> list[str]:
-    """Map PKS code to CrimeCategory, with knife detection."""
+    """Map PKS code to CrimeCategory, with weapon detection."""
     categories = []
 
     # Check for knife crime first (highest priority)
     if detect_knife_crime(body):
         categories.append("knife")
+    # Check for other weapons (non-knife)
+    elif detect_weapons_crime(body):
+        categories.append("weapons")
 
     # Map PKS code to category
     if pks_code and pks_code in PKS_TO_CATEGORY:
@@ -268,67 +319,104 @@ def build_location_text(location: dict) -> Optional[str]:
     return ", ".join(parts) if parts else None
 
 
-def transform_article(article: dict, verbose: bool = False) -> dict:
-    """Transform an enriched article to CrimeRecord format."""
+def transform_article(article: dict, verbose: bool = False) -> list[dict]:
+    """Transform an enriched article to CrimeRecord format(s).
 
-    location = article.get("location", {})
-    crime = article.get("crime", {})
-    incident_time = article.get("incident_time", {})
+    Returns a list of CrimeRecords. For articles with multiple crimes,
+    each crime becomes a separate record with a unique ID suffix.
+    """
+    # Handle new multi-crime format
+    crimes = article.get("crimes", [])
 
-    # Get coordinates from enrichment or lookup by city
-    lat = location.get("lat")
-    lon = location.get("lon")
-
-    # Use built-in city lookup if no coordinates
-    if lat is None:
-        city = location.get("city")
-        if city:
-            lat, lon = lookup_city_coords(city)
-            if verbose and lat:
-                print(f"    Looked up: {city} → ({lat}, {lon})")
-
-    # Determine precision
-    if lat is not None:
-        if location.get("street"):
-            precision = "street"
-        elif location.get("district"):
-            precision = "neighborhood"
-        elif location.get("city"):
-            precision = "city"
+    # Fallback for old single-crime format
+    if not crimes:
+        # Check if we have old-style top-level crime/location/incident_time
+        if article.get("crime") or article.get("location"):
+            crimes = [{
+                "pks_code": article.get("crime", {}).get("pks_code"),
+                "pks_category": article.get("crime", {}).get("pks_category"),
+                "sub_type": article.get("crime", {}).get("sub_type"),
+                "confidence": article.get("crime", {}).get("confidence", 0.5),
+                "keywords_matched": article.get("crime", {}).get("keywords_matched", []),
+                "location": article.get("location", {}),
+                "incident_time": article.get("incident_time", {}),
+            }]
         else:
-            precision = "region"
-    else:
-        precision = "unknown"
+            # No enrichment data - create a single record with defaults
+            crimes = [{}]
 
-    # Build categories
-    categories = get_crime_categories(crime.get("pks_code"), article.get("body", ""))
+    records = []
+    base_id = extract_article_id(article.get("url", ""))
+    body_text = article.get("body", "")
 
-    # Get timestamp
-    published_at = article.get("date", "")
-    if incident_time.get("date"):
-        # Use incident time if available
-        incident_date = incident_time["date"]
-        incident_hour = incident_time.get("time", "00:00")
-        if incident_hour:
-            published_at = f"{incident_date}T{incident_hour}:00"
+    for i, crime_data in enumerate(crimes):
+        # Generate unique ID for multi-crime articles
+        record_id = f"{base_id}_{i+1}" if len(crimes) > 1 else base_id
+
+        # Get location for this specific crime, or fall back to article-level
+        location = crime_data.get("location") or article.get("location", {})
+
+        # Get coordinates from enrichment or lookup by city
+        lat = location.get("lat")
+        lon = location.get("lon")
+
+        # Use built-in city lookup if no coordinates
+        if lat is None:
+            city = location.get("city")
+            if city:
+                lat, lon = lookup_city_coords(city)
+                if verbose and lat:
+                    print(f"    Looked up: {city} → ({lat}, {lon})")
+
+        # Determine precision
+        if lat is not None:
+            if location.get("street"):
+                precision = "street"
+            elif location.get("district"):
+                precision = "neighborhood"
+            elif location.get("city"):
+                precision = "city"
+            else:
+                precision = "region"
         else:
-            published_at = f"{incident_date}T00:00:00"
+            precision = "unknown"
 
-    return {
-        "id": extract_article_id(article.get("url", "")),
-        "title": article.get("title", ""),
-        "summary": crime.get("sub_type"),
-        "body": article.get("body"),  # Full press release text
-        "publishedAt": published_at,
-        "sourceUrl": article.get("url", ""),
-        "sourceAgency": article.get("source"),
-        "locationText": build_location_text(location),
-        "latitude": lat,
-        "longitude": lon,
-        "precision": precision,
-        "categories": categories,
-        "confidence": crime.get("confidence", 0.5),
-    }
+        # Build categories and detect weapon type
+        pks_code = crime_data.get("pks_code")
+        categories = get_crime_categories(pks_code, body_text)
+        weapon_type = detect_weapon_type(body_text)
+
+        # Get timestamp from this crime's incident_time, or fall back to article date
+        incident_time = crime_data.get("incident_time") or article.get("incident_time", {})
+        published_at = article.get("date", "")
+        if incident_time.get("date"):
+            # Use incident time if available
+            incident_date = incident_time["date"]
+            incident_hour = incident_time.get("time", "00:00")
+            if incident_hour:
+                published_at = f"{incident_date}T{incident_hour}:00"
+            else:
+                published_at = f"{incident_date}T00:00:00"
+
+        record = {
+            "id": record_id,
+            "title": article.get("title", ""),
+            "summary": crime_data.get("sub_type"),
+            "body": article.get("body"),  # Full press release text
+            "publishedAt": published_at,
+            "sourceUrl": article.get("url", ""),
+            "sourceAgency": article.get("source"),
+            "locationText": build_location_text(location),
+            "latitude": lat,
+            "longitude": lon,
+            "precision": precision,
+            "categories": categories,
+            "weaponType": weapon_type,
+            "confidence": crime_data.get("confidence", 0.5),
+        }
+        records.append(record)
+
+    return records
 
 
 def main():
@@ -365,19 +453,24 @@ def main():
     print(f"Loaded {len(articles)} enriched articles from {args.input}")
     print(f"Using built-in German city coordinates lookup")
 
-    # Transform articles
+    # Transform articles (each article may produce multiple records)
     records = []
     geocoded_count = 0
+    multi_crime_count = 0
 
     for i, article in enumerate(articles, 1):
-        record = transform_article(article, args.verbose)
-        records.append(record)
+        article_records = transform_article(article, args.verbose)
 
-        if record["latitude"] is not None:
-            geocoded_count += 1
+        if len(article_records) > 1:
+            multi_crime_count += 1
+
+        for record in article_records:
+            records.append(record)
+            if record["latitude"] is not None:
+                geocoded_count += 1
 
         if i % 10 == 0 or i == len(articles):
-            print(f"  Processed: {i}/{len(articles)} (geocoded: {geocoded_count})")
+            print(f"  Processed: {i}/{len(articles)} articles → {len(records)} records (geocoded: {geocoded_count})")
 
     # Build output dataset
     dates = [r["publishedAt"][:10] for r in records if r["publishedAt"]]
@@ -402,21 +495,33 @@ def main():
 
     # Summary
     category_counts = {}
+    weapon_counts = {}
     for r in records:
         for cat in r["categories"]:
             category_counts[cat] = category_counts.get(cat, 0) + 1
+        weapon = r.get("weaponType")
+        if weapon:
+            weapon_counts[weapon] = weapon_counts.get(weapon, 0) + 1
 
     print()
     print("=" * 50)
     print(f"Saved {len(records)} crime records to {args.output}")
     print()
     print("Summary:")
+    print(f"  Articles processed: {len(articles)}")
+    print(f"  Records generated:  {len(records)}")
+    if multi_crime_count > 0:
+        print(f"  Multi-crime articles: {multi_crime_count}")
     print(f"  Geocoded: {geocoded_count}/{len(records)}")
     print(f"  Date range: {date_range['start']} to {date_range['end']}")
     print()
     print("Categories:")
     for cat, count in sorted(category_counts.items(), key=lambda x: -x[1]):
         print(f"  {cat}: {count}")
+    print()
+    print("Weapon Types:")
+    for weapon, count in sorted(weapon_counts.items(), key=lambda x: -x[1]):
+        print(f"  {weapon}: {count}")
     print("=" * 50)
 
 

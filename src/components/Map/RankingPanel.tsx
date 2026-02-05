@@ -9,8 +9,8 @@ import {
   isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
 import { formatNumber, formatDetailValue, calcPercent } from '../../../lib/utils/formatters';
-import { auslaender, deutschlandatlas } from './KreisLayer';
 import { useTranslation, translations, tNested, type Language } from '@/lib/i18n';
+import type { AuslaenderRow, DeutschlandatlasRow } from '@/lib/supabase';
 
 interface RankingItem {
   ags: string;
@@ -30,6 +30,9 @@ interface RankingPanelProps {
   onSelectAgs: (ags: string | null) => void;
   isMobileOpen?: boolean;
   onMobileToggle?: () => void;
+  auslaenderData?: Record<string, AuslaenderRow>;
+  deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
+  deutschlandatlasYear?: string;
 }
 
 // ============ Draggable Bottom Sheet Hook ============
@@ -418,7 +421,7 @@ function MobileDetailSheet({
               <h3 className="text-white font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
             </div>
             <span className="text-zinc-500 text-xs">
-              {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
+              {selectedYear}
             </span>
           </div>
           <button
@@ -510,7 +513,7 @@ function MobileRankingSheet({
               </h3>
             </div>
             <div className="text-zinc-500 text-[10px]">
-              {rankings.length} {t.districts[lang]} · {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
+              {rankings.length} {t.districts[lang]} · {selectedYear}
             </div>
           </div>
           <button
@@ -610,6 +613,9 @@ export function RankingPanel({
   onSelectAgs,
   isMobileOpen = false,
   onMobileToggle,
+  auslaenderData: ausData,
+  deutschlandatlasData: datlasData,
+  deutschlandatlasYear,
 }: RankingPanelProps) {
   const { lang } = useTranslation();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -623,10 +629,9 @@ export function RankingPanel({
     const items: { ags: string; name: string; value: number }[] = [];
 
     if (indicatorKey === 'auslaender') {
-      const yearData = auslaender.data[selectedYear];
-      if (!yearData) return [];
+      if (!ausData) return [];
 
-      for (const [ags, record] of Object.entries(yearData)) {
+      for (const [ags, record] of Object.entries(ausData)) {
         const regionData = record.regions[subMetric as AuslaenderRegionKey];
         const value = regionData?.total;
         if (value !== null && value !== undefined && value > 0) {
@@ -634,7 +639,9 @@ export function RankingPanel({
         }
       }
     } else if (indicatorKey === 'deutschlandatlas') {
-      for (const [ags, record] of Object.entries(deutschlandatlas.data)) {
+      if (!datlasData) return [];
+
+      for (const [ags, record] of Object.entries(datlasData)) {
         const value = record.indicators[subMetric];
         if (value !== null && value !== undefined) {
           items.push({ ags, name: record.name, value });
@@ -652,20 +659,20 @@ export function RankingPanel({
       rank: index + 1,
       percentage: maxValue > 0 ? (item.value / maxValue) * 100 : 0,
     }));
-  }, [indicatorKey, subMetric, selectedYear]);
+  }, [indicatorKey, subMetric, ausData, datlasData]);
 
   // Get selected record for detail view
   const selectedRecord = useMemo(() => {
     if (!selectedAgs) return null;
 
     if (indicatorKey === 'auslaender') {
-      const yearData = auslaender.data[selectedYear];
-      if (!yearData) return null;
-      return yearData[selectedAgs] ?? null;
+      if (!ausData) return null;
+      return ausData[selectedAgs] ?? null;
     } else {
-      return deutschlandatlas.data[selectedAgs] ?? null;
+      if (!datlasData) return null;
+      return datlasData[selectedAgs] ?? null;
     }
-  }, [selectedAgs, indicatorKey, selectedYear]);
+  }, [selectedAgs, indicatorKey, ausData, datlasData]);
 
   // Get rank of selected item
   const selectedRank = useMemo(() => {
@@ -778,7 +785,7 @@ export function RankingPanel({
                 <h3 className="text-white font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
               </div>
               <span className="text-zinc-500 text-xs">
-                AGS: {selectedRecord.ags} · {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
+                AGS: {selectedRecord.ags} · {indicatorKey === 'deutschlandatlas' ? (deutschlandatlasYear || '2022') : selectedYear}
               </span>
             </div>
             <button
@@ -938,7 +945,7 @@ export function RankingPanel({
             </h3>
           </div>
           <div className="text-zinc-500 text-[10px]">
-            {rankings.length} {t.districts[lang]} · {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
+            {rankings.length} {t.districts[lang]} · {indicatorKey === 'deutschlandatlas' ? (deutschlandatlasYear || '2022') : selectedYear}
             {unit && <span className="ml-1">· {unit}</span>}
           </div>
         </div>

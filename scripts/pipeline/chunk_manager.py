@@ -28,10 +28,10 @@ def generate_all_chunks(
     end_date: str = DEFAULT_END_DATE,
 ) -> list[dict]:
     """
-    Generate all chunk definitions for the given date range and all Bundesländer.
+    Generate all chunk definitions for the given date range.
 
-    Each chunk represents one month of data for one Bundesland.
-    For 3 years × 16 states = 576 chunks.
+    Each chunk represents one month of data for ALL Bundesländer.
+    For 3 years = 36 chunks.
     """
     chunks = []
     start = datetime.strptime(start_date, "%Y-%m-%d")
@@ -46,15 +46,14 @@ def generate_all_chunks(
 
         year_month = current.strftime("%Y-%m")
 
-        for bundesland in BUNDESLAENDER:
-            chunk_id = f"{bundesland}_{year_month}"
-            chunks.append({
-                "id": chunk_id,
-                "bundesland": bundesland,
-                "year_month": year_month,
-                "start_date": current.strftime("%Y-%m-%d"),
-                "end_date": chunk_end.strftime("%Y-%m-%d"),
-            })
+        # One chunk per month, covering all Bundesländer
+        chunk_id = year_month
+        chunks.append({
+            "id": chunk_id,
+            "year_month": year_month,
+            "start_date": current.strftime("%Y-%m-%d"),
+            "end_date": chunk_end.strftime("%Y-%m-%d"),
+        })
 
         current = chunk_end
 
@@ -73,6 +72,7 @@ def create_initial_manifest(
             "start_date": start_date,
             "end_date": end_date,
             "created_at": datetime.now().isoformat(),
+            "bundeslaender": BUNDESLAENDER,
         },
         "statistics": {
             "total_chunks": len(chunks),
@@ -86,17 +86,16 @@ def create_initial_manifest(
 
     for chunk in chunks:
         chunk_id = chunk["id"]
-        bundesland = chunk["bundesland"]
         year_month = chunk["year_month"]
 
         manifest["chunks"][chunk_id] = {
             "status": "pending",
-            "bundesland": bundesland,
             "year_month": year_month,
             "start_date": chunk["start_date"],
             "end_date": chunk["end_date"],
-            "raw_file": str(CHUNKS_RAW_DIR / bundesland / f"{year_month}.json"),
-            "enriched_file": str(CHUNKS_ENRICHED_DIR / bundesland / f"{year_month}.json"),
+            "raw_file": str(CHUNKS_RAW_DIR / f"{year_month}.json"),
+            "enriched_file": str(CHUNKS_ENRICHED_DIR / f"{year_month}.json"),
+            "bundeslaender_completed": [],  # Track which states are done
             "articles_count": None,
             "enriched_count": None,
             "error": None,

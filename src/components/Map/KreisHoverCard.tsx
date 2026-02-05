@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import type { AuslaenderRegionKey, IndicatorKey, DeutschlandatlasKey } from '../../../lib/indicators/types';
 import { AUSLAENDER_REGION_META, DEUTSCHLANDATLAS_META, isDeutschlandatlasKey } from '../../../lib/indicators/types';
 import { formatNumber, formatValue, calcPercentParens } from '../../../lib/utils/formatters';
-import { auslaender, deutschlandatlas } from './KreisLayer';
+import type { AuslaenderRow, DeutschlandatlasRow } from '@/lib/supabase';
 
 interface KreisHoverCardProps {
   mouseX: number;
@@ -15,6 +15,8 @@ interface KreisHoverCardProps {
   indicatorKey: IndicatorKey;
   selectedSubMetric: string;
   selectedYear: string;
+  auslaenderData?: Record<string, AuslaenderRow>;
+  deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
 }
 
 // Ausländer hover content
@@ -205,6 +207,8 @@ export function KreisHoverCard({
   indicatorKey,
   selectedSubMetric,
   selectedYear,
+  auslaenderData: ausData,
+  deutschlandatlasData: datlasData,
 }: KreisHoverCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -254,10 +258,9 @@ export function KreisHoverCard({
   // Get record based on indicator type
   const getRecord = () => {
     if (indicatorKey === 'auslaender') {
-      const yearData = auslaender.data[selectedYear];
-      return yearData?.[ags] ?? null;
+      return ausData?.[ags] ?? null;
     } else {
-      return deutschlandatlas.data[ags] ?? null;
+      return datlasData?.[ags] ?? null;
     }
   };
 

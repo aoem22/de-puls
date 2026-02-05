@@ -8,56 +8,14 @@ import L from 'leaflet';
 import { scaleQuantile } from 'd3-scale';
 import { interpolateYlOrRd, interpolateRdYlGn } from 'd3-scale-chromatic';
 
-import type { IndicatorKey, SubMetricKey, AuslaenderRegionKey, DeutschlandatlasKey } from '../../../lib/indicators/types';
-import { INDICATORS, AUSLAENDER_REGION_META, DEUTSCHLANDATLAS_META, isDeutschlandatlasKey } from '../../../lib/indicators/types';
+import type { IndicatorKey, SubMetricKey, AuslaenderRegionKey } from '../../../lib/indicators/types';
+import { INDICATORS, DEUTSCHLANDATLAS_META, isDeutschlandatlasKey } from '../../../lib/indicators/types';
+import type { AuslaenderRow, DeutschlandatlasRow } from '@/lib/supabase';
 
 // Import Kreis geo data
 import kreiseGeoJson from '../../../lib/data/geo/kreise.json';
 
-// Import indicator data
-import auslaenderData from '../../../lib/data/indicators/auslaender.json';
-import deutschlandatlasData from '../../../lib/data/indicators/deutschlandatlas.json';
-
 const kreise = kreiseGeoJson as FeatureCollection;
-
-// Ausländer data types
-interface RegionData {
-  male: number | null;
-  female: number | null;
-  total: number | null;
-}
-
-interface AuslaenderRecord {
-  ags: string;
-  name: string;
-  regions: Record<AuslaenderRegionKey, RegionData>;
-}
-
-interface AuslaenderDataset {
-  meta: {
-    years: string[];
-  };
-  data: Record<string, Record<string, AuslaenderRecord>>;
-}
-
-// Deutschlandatlas data types
-interface DeutschlandatlasRecord {
-  ags: string;
-  name: string;
-  indicators: Record<string, number | null>;
-}
-
-interface DeutschlandatlasDataset {
-  meta: {
-    year: string;
-    indicatorKeys: string[];
-    categories: string[];
-  };
-  data: Record<string, DeutschlandatlasRecord>;
-}
-
-const auslaender = auslaenderData as unknown as AuslaenderDataset;
-const deutschlandatlas = deutschlandatlasData as unknown as DeutschlandatlasDataset;
 
 interface HoverInfo {
   ags: string;
@@ -76,6 +34,8 @@ interface KreisLayerProps {
   onClickKreis: (ags: string | null) => void;
   selectedKreis: string | null;
   currentZoom: number;
+  auslaenderData?: Record<string, AuslaenderRow>;
+  deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
 }
 
 interface KreisFeatureProps {
@@ -152,17 +112,18 @@ function getValue(
   indicatorKey: IndicatorKey,
   subMetric: SubMetricKey,
   ags: string,
-  year: string
+  _year: string,
+  ausData?: Record<string, AuslaenderRow>,
+  datlasData?: Record<string, DeutschlandatlasRow>
 ): number | null {
   if (indicatorKey === 'auslaender') {
-    const yearData = auslaender.data[year];
-    if (!yearData) return null;
-    const record = yearData[ags];
+    if (!ausData) return null;
+    const record = ausData[ags];
     if (!record) return null;
     return record.regions[subMetric as AuslaenderRegionKey]?.total ?? null;
   } else {
-    // Deutschlandatlas - year is fixed (2022)
-    const record = deutschlandatlas.data[ags];
+    if (!datlasData) return null;
+    const record = datlasData[ags];
     if (!record) return null;
     return record.indicators[subMetric] ?? null;
   }
@@ -175,24 +136,25 @@ function getValue(
 export function getKreisLegendStops(
   indicatorKey: IndicatorKey,
   subMetric: SubMetricKey,
-  year: string,
-  numStops: number = 5
+  _year: string,
+  numStops: number = 5,
+  ausData?: Record<string, AuslaenderRow>,
+  datlasData?: Record<string, DeutschlandatlasRow>
 ): { value: number; color: string; label: string }[] {
   // Collect all values
   const values: number[] = [];
 
   if (indicatorKey === 'auslaender') {
-    const yearData = auslaender.data[year];
-    if (!yearData) return [];
-    for (const record of Object.values(yearData)) {
+    if (!ausData) return [];
+    for (const record of Object.values(ausData)) {
       const regionData = record.regions[subMetric as AuslaenderRegionKey];
       if (regionData?.total !== null && regionData?.total !== undefined) {
         values.push(regionData.total);
       }
     }
   } else {
-    // Deutschlandatlas
-    for (const record of Object.values(deutschlandatlas.data)) {
+    if (!datlasData) return [];
+    for (const record of Object.values(datlasData)) {
       const value = record.indicators[subMetric];
       if (value !== null && value !== undefined) {
         values.push(value);
@@ -258,6 +220,8 @@ export function KreisLayer({
   onClickKreis,
   selectedKreis,
   currentZoom,
+  auslaenderData: ausData,
+  deutschlandatlasData: datlasData,
 }: KreisLayerProps) {
   const map = useMap();
   const layersRef = useRef<Map<string, L.Layer>>(new Map());
@@ -272,17 +236,16 @@ export function KreisLayer({
     const values: number[] = [];
 
     if (indicatorKey === 'auslaender') {
-      const yearData = auslaender.data[selectedYear];
-      if (!yearData) return values;
-      for (const record of Object.values(yearData)) {
+      if (!ausData) return values;
+      for (const record of Object.values(ausData)) {
         const regionData = record.regions[subMetric as AuslaenderRegionKey];
         if (regionData?.total !== null && regionData?.total !== undefined) {
           values.push(regionData.total);
         }
       }
     } else {
-      // Deutschlandatlas
-      for (const record of Object.values(deutschlandatlas.data)) {
+      if (!datlasData) return values;
+      for (const record of Object.values(datlasData)) {
         const value = record.indicators[subMetric];
         if (value !== null && value !== undefined) {
           values.push(value);
@@ -291,7 +254,7 @@ export function KreisLayer({
     }
 
     return values;
-  }, [indicatorKey, subMetric, selectedYear]);
+  }, [indicatorKey, subMetric, ausData, datlasData]);
 
   // Calculate color scale based on indicator type and sub-metric
   const colorScale = useMemo(() => {
@@ -323,7 +286,7 @@ export function KreisLayer({
       }
 
       const ags = feature.properties.ags;
-      const value = getValue(indicatorKey, subMetric, ags, selectedYear);
+      const value = getValue(indicatorKey, subMetric, ags, selectedYear, ausData, datlasData);
       const isSelected = selectedKreis === ags;
       // Only show hover effect when no Kreis is selected (panel mode disables hover)
       const isHovered = !selectedKreis && hoveredKreis === ags;
@@ -344,7 +307,7 @@ export function KreisLayer({
           : (isHovered ? 0.85 : 0.75),
       };
     },
-    [indicatorKey, subMetric, selectedYear, colorScale, hoveredKreis, selectedKreis, currentZoom]
+    [indicatorKey, subMetric, selectedYear, colorScale, hoveredKreis, selectedKreis, currentZoom, ausData, datlasData]
   );
 
   // Event handlers
@@ -422,7 +385,7 @@ export function KreisLayer({
       if (path.setStyle) {
         const isHovered = !selectedKreis && hoveredKreis === ags;
         const isSelected = selectedKreis === ags;
-        const value = getValue(indicatorKey, subMetric, ags, selectedYear);
+        const value = getValue(indicatorKey, subMetric, ags, selectedYear, ausData, datlasData);
         const fillColor = colorScale(value);
         const isZoomedIn = currentZoom >= 9;
 
@@ -442,7 +405,7 @@ export function KreisLayer({
         }
       }
     });
-  }, [hoveredKreis, selectedKreis, colorScale, indicatorKey, subMetric, selectedYear, currentZoom]);
+  }, [hoveredKreis, selectedKreis, colorScale, indicatorKey, subMetric, selectedYear, currentZoom, ausData, datlasData]);
 
   return (
     <GeoJSON
@@ -454,11 +417,3 @@ export function KreisLayer({
   );
 }
 
-// Export available years from Ausländer data
-export const AUSLAENDER_YEARS = auslaender.meta.years;
-
-// Export Deutschlandatlas year (single year dataset)
-export const DEUTSCHLANDATLAS_YEAR = deutschlandatlas.meta.year;
-
-// Export data for detail panel access
-export { auslaender, deutschlandatlas };

@@ -11,16 +11,10 @@ import type { CityData, CrimeTypeKey } from '../../../lib/types/cityCrime';
 import { getCrimeTypeConfig } from '../../../lib/types/cityCrime';
 import { interpolateCrimeRate, interpolateClearanceRate } from '../../../lib/utils/colorInterpolators';
 import { formatNumber } from '../../../lib/utils/formatters';
+import type { CityCrimeRow } from '@/lib/supabase';
 
-// Import data statically
-import cityCrimesJson from '../../../lib/data/city-crimes.json';
 import citiesGeojsonJson from '../../../lib/data/cities-geojson.json';
 
-const cityCrimes = cityCrimesJson as {
-  years: string[];
-  dataByYear: Record<string, Record<string, CityData>>;
-  crimeTypes: Array<{ key: string; label: string; labelDe: string; category: string }>;
-};
 const citiesGeojson = citiesGeojsonJson as FeatureCollection;
 
 interface CityCrimeLayerProps {
@@ -32,6 +26,7 @@ interface CityCrimeLayerProps {
   onClickCity: (ags: string | null) => void;
   currentZoom?: number;
   selectedCity?: string | null;
+  cityCrimeData?: Record<string, Record<string, CityCrimeRow>>;
 }
 
 // Local formatNumber wrapper for tooltip HTML (takes non-null number)
@@ -97,6 +92,7 @@ export function CityCrimeLayer({
   onClickCity,
   currentZoom,
   selectedCity,
+  cityCrimeData,
 }: CityCrimeLayerProps) {
   const map = useMap();
   const layersRef = useRef<Map<string, L.Layer>>(new Map());
@@ -104,21 +100,24 @@ export function CityCrimeLayer({
   // Build city data map for the selected year
   const cityDataMap = useMemo(() => {
     const dataMap = new Map<string, CityData>();
-    const yearData = cityCrimes.dataByYear[selectedYear] || {};
-    for (const [ags, data] of Object.entries(yearData)) {
-      dataMap.set(ags, data as CityData);
+    if (!cityCrimeData) return dataMap;
+    const yearData = cityCrimeData[selectedYear] || {};
+    for (const [ags, row] of Object.entries(yearData)) {
+      dataMap.set(ags, { name: row.name, gemeindeschluessel: row.ags, crimes: row.crimes } as CityData);
     }
     return dataMap;
-  }, [selectedYear]);
+  }, [selectedYear, cityCrimeData]);
 
   // Calculate color scale based on current metric - use all years for consistent scale
   const colorScale = useMemo(() => {
     const values: number[] = [];
 
+    if (!cityCrimeData) return () => '#333333';
+
     // Collect values across ALL years for consistent color scale
-    for (const yearData of Object.values(cityCrimes.dataByYear)) {
-      for (const city of Object.values(yearData)) {
-        const stats = (city as CityData).crimes[selectedCrimeType];
+    for (const yearData of Object.values(cityCrimeData)) {
+      for (const row of Object.values(yearData)) {
+        const stats = row.crimes[selectedCrimeType];
         if (stats) {
           values.push(metric === 'hz' ? stats.hz : stats.aq);
         }
@@ -254,14 +253,17 @@ export function CityCrimeLayer({
 export function getCityCrimeLegendStops(
   crimeType: CrimeTypeKey,
   metric: 'hz' | 'aq',
-  numStops = 5
+  numStops = 5,
+  cityCrimeData?: Record<string, Record<string, CityCrimeRow>>
 ): { value: number; color: string; label: string }[] {
   const values: number[] = [];
 
+  if (!cityCrimeData) return [];
+
   // Use all years for consistent legend
-  for (const yearData of Object.values(cityCrimes.dataByYear)) {
-    for (const city of Object.values(yearData)) {
-      const stats = (city as CityData).crimes[crimeType];
+  for (const yearData of Object.values(cityCrimeData)) {
+    for (const row of Object.values(yearData)) {
+      const stats = row.crimes[crimeType];
       if (stats) {
         values.push(metric === 'hz' ? stats.hz : stats.aq);
       }
@@ -292,6 +294,3 @@ export function getCityCrimeLegendStops(
 
   return stops;
 }
-
-// Export available years
-export const CRIME_DATA_YEARS = cityCrimes.years;

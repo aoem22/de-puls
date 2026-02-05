@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { LayerControl } from './LayerControl';
-import { CityCrimeLayer, CRIME_DATA_YEARS } from './CityCrimeLayer';
-import { KreisLayer, AUSLAENDER_YEARS, DEUTSCHLANDATLAS_YEAR } from './KreisLayer';
+import { CityCrimeLayer } from './CityCrimeLayer';
+import { KreisLayer } from './KreisLayer';
 import type { KreisHoverInfo } from './KreisLayer';
 import { KreisHoverCard } from './KreisHoverCard';
 import { RankingPanel } from './RankingPanel';
@@ -19,10 +19,7 @@ import type { CrimeRecord } from '@/lib/types/crime';
 import type { CrimeTypeKey } from '../../../lib/types/cityCrime';
 import type { IndicatorKey, SubMetricKey } from '../../../lib/indicators/types';
 import type { CrimeCategory } from '@/lib/types/crime';
-
-// Import Blaulicht crime data
-import crimesJson from '../../../lib/data/blaulicht-crimes.json';
-const blaulichtCrimes = (crimesJson as { records: CrimeRecord[] }).records;
+import { useCrimes, useCrimeStats, useAuslaenderData, useDeutschlandatlasData, useCityCrimeData, useAllDatasetMeta } from '@/lib/supabase';
 
 // Tile layer URLs
 const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
@@ -94,11 +91,36 @@ export function ChoroplethMap() {
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
   const [isMobileRankingOpen, setIsMobileRankingOpen] = useState(false);
 
+  // Fetch dataset metadata (available years) from Supabase
+  const { data: datasetMeta } = useAllDatasetMeta();
+
+  // Derive year arrays from metadata (with fallbacks while loading)
+  const auslaenderYears = datasetMeta?.auslaender?.years ?? ['2024'];
+  const deutschlandatlasYear = datasetMeta?.deutschlandatlas?.years?.[0] ?? '2022';
+  const crimeDataYears = datasetMeta?.kriminalstatistik?.years ?? ['2024'];
+
   // Unified indicator state (Ausländer, Deutschlandatlas, or Kriminalstatistik)
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorKey>('auslaender');
   const [selectedSubMetric, setSelectedSubMetric] = useState<SubMetricKey>('total');
-  const [selectedIndicatorYear, setSelectedIndicatorYear] = useState<string>(AUSLAENDER_YEARS[AUSLAENDER_YEARS.length - 1]);
+  const [selectedIndicatorYear, setSelectedIndicatorYear] = useState<string>('2024');
   const [isIndicatorPlaying, setIsIndicatorPlaying] = useState(false);
+
+  // Update initial year when metadata loads
+  useEffect(() => {
+    if (datasetMeta?.auslaender && selectedIndicator === 'auslaender') {
+      const years = datasetMeta.auslaender.years;
+      if (years.length > 0 && !years.includes(selectedIndicatorYear)) {
+        setSelectedIndicatorYear(years[years.length - 1]);
+      }
+    }
+  }, [datasetMeta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch indicator data from Supabase
+  const { data: ausData } = useAuslaenderData(
+    selectedIndicator === 'auslaender' ? selectedIndicatorYear : ''
+  );
+  const { data: datlasData } = useDeutschlandatlasData();
+  const { data: cityCrimeData } = useCityCrimeData();
 
   // Crime-specific state (only used when selectedIndicator === 'kriminalstatistik')
   const [cityCrimeMetric, setCityCrimeMetric] = useState<'hz' | 'aq'>('hz');
@@ -123,29 +145,19 @@ export function ChoroplethMap() {
   const showBlaulichtLayer = selectedIndicator === 'blaulicht';
   const showKreisLayer = !showCityCrimeLayer && !showBlaulichtLayer;
 
-  // Compute blaulicht stats for LayerControl
-  const blaulichtStats = useMemo(() => {
-    const byCategory = {} as Record<CrimeCategory, number>;
-    let geocoded = 0;
-    for (const crime of blaulichtCrimes) {
-      if (crime.latitude != null) geocoded++;
-      for (const cat of crime.categories) {
-        byCategory[cat] = (byCategory[cat] || 0) + 1;
-      }
-    }
-    return {
-      total: blaulichtCrimes.length,
-      geocoded,
-      byCategory,
-    };
-  }, []);
+  // Fetch Blaulicht crime data from Supabase
+  const { data: blaulichtCrimes = [] } = useCrimes();
+  const { data: blaulichtStats } = useCrimeStats();
+
+  // Default stats while loading
+  const stats = blaulichtStats ?? { total: 0, geocoded: 0, byCategory: {} };
 
   // Get available years for current indicator
   const getIndicatorYears = (): string[] => {
-    if (selectedIndicator === 'auslaender') return AUSLAENDER_YEARS;
-    if (selectedIndicator === 'kriminalstatistik') return CRIME_DATA_YEARS;
+    if (selectedIndicator === 'auslaender') return auslaenderYears;
+    if (selectedIndicator === 'kriminalstatistik') return crimeDataYears;
     if (selectedIndicator === 'blaulicht') return []; // No year selection for blaulicht
-    return [DEUTSCHLANDATLAS_YEAR];
+    return [deutschlandatlasYear];
   };
 
   // Indicator year playback animation
@@ -213,6 +225,7 @@ export function ChoroplethMap() {
             onClickCity={setSelectedCity}
             currentZoom={currentZoom}
             selectedCity={selectedCity}
+            cityCrimeData={cityCrimeData}
           />
         )}
 
@@ -228,6 +241,8 @@ export function ChoroplethMap() {
             onClickKreis={setSelectedKreis}
             selectedKreis={selectedKreis}
             currentZoom={currentZoom}
+            auslaenderData={ausData}
+            deutschlandatlasData={datlasData}
           />
         )}
 
@@ -301,13 +316,13 @@ export function ChoroplethMap() {
             // Set appropriate defaults based on indicator type
             if (indicator === 'auslaender') {
               setSelectedSubMetric('total');
-              setSelectedIndicatorYear(AUSLAENDER_YEARS[AUSLAENDER_YEARS.length - 1]);
+              setSelectedIndicatorYear(auslaenderYears[auslaenderYears.length - 1]);
             } else if (indicator === 'deutschlandatlas') {
               setSelectedSubMetric('kinder_bg'); // Default to child poverty
-              setSelectedIndicatorYear(DEUTSCHLANDATLAS_YEAR);
+              setSelectedIndicatorYear(deutschlandatlasYear);
             } else if (indicator === 'kriminalstatistik') {
               setSelectedSubMetric('total');
-              setSelectedIndicatorYear(CRIME_DATA_YEARS[CRIME_DATA_YEARS.length - 1]);
+              setSelectedIndicatorYear(crimeDataYears[crimeDataYears.length - 1]);
             } else if (indicator === 'blaulicht') {
               // Blaulicht has no sub-metrics or year selection
               setSelectedSubMetric('all');
@@ -336,9 +351,13 @@ export function ChoroplethMap() {
           cityCrimeMetric={cityCrimeMetric}
           onCityCrimeMetricChange={setCityCrimeMetric}
           // Blaulicht stats and category filter
-          blaulichtStats={blaulichtStats}
+          blaulichtStats={stats}
           selectedBlaulichtCategory={selectedBlaulichtCategory}
           onBlaulichtCategoryChange={setSelectedBlaulichtCategory}
+          // Data props for legends
+          auslaenderData={ausData}
+          deutschlandatlasData={datlasData}
+          cityCrimeData={cityCrimeData}
         />
       </div>
 
@@ -353,6 +372,8 @@ export function ChoroplethMap() {
             indicatorKey={selectedIndicator}
             selectedSubMetric={selectedSubMetric}
             selectedYear={selectedIndicatorYear}
+            auslaenderData={ausData}
+            deutschlandatlasData={datlasData}
           />
         )}
       </div>
@@ -369,6 +390,9 @@ export function ChoroplethMap() {
           onSelectAgs={setSelectedKreis}
           isMobileOpen={isMobileRankingOpen}
           onMobileToggle={() => setIsMobileRankingOpen(!isMobileRankingOpen)}
+          auslaenderData={ausData}
+          deutschlandatlasData={datlasData}
+          deutschlandatlasYear={deutschlandatlasYear}
         />
       )}
 

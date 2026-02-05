@@ -99,6 +99,10 @@ PKS_NAMES_TO_CODES = {v: k for k, v in PKS_CATEGORIES.items()}
 EXTRACTION_PROMPT = """
 Analysiere diesen deutschen Polizeibericht und extrahiere strukturierte Daten.
 
+WICHTIG: Manche Artikel beschreiben MEHRERE separate Vorfälle (z.B. mehrere
+Pressemitteilungen in einem Artikel). Extrahiere JEDEN Vorfall als separates
+Objekt im "crimes" Array.
+
 ARTIKEL:
 {article_body}
 
@@ -106,21 +110,10 @@ VERÖFFENTLICHUNGSDATUM: {publish_date}
 
 Extrahiere folgende Informationen im JSON-Format:
 
-1. STANDORT (location):
-   - street: Straßenname (ohne Hausnummer), z.B. "Siemensstraße" oder "Frankfurter Straße"
-   - house_number: Hausnummer falls vorhanden, z.B. "12" oder "12a"
-   - district: Stadtteil/Ortsteil falls genannt
-   - city: Stadt/Gemeinde
-   - confidence: 0.0-1.0 wie sicher du bist
+1. DELIKTE (crimes) - ARRAY von Vorfällen:
+   Für JEDEN separaten Vorfall im Artikel, extrahiere:
 
-2. TATZEIT (incident_time):
-   - date: YYYY-MM-DD (berechne aus Artikel-Datum und relativen Angaben wie "gestern", "am Dienstag", "in der Nacht von Samstag auf Sonntag")
-   - time: HH:MM (24h Format) oder null wenn unbekannt
-   - precision: "exact" | "approximate" | "range" | "unknown"
-   - original_text: Original-Formulierung aus dem Text
-
-3. DELIKT nach PKS (crime):
-   Wähle aus diesen PKS-Kategorien:
+   PKS-Kategorie (wähle aus):
    - 0100: Mord
    - 0200: Totschlag
    - 1100: Vergewaltigung
@@ -147,36 +140,70 @@ Extrahiere folgende Informationen im JSON-Format:
    - 8910: Allgemeine Verstöße BtMG (Drogen)
    - 8920: Illegaler Handel BtMG
 
-   Extrahiere:
+   Für jeden Vorfall extrahiere:
    - pks_code: 4-stelliger PKS-Schlüssel
    - pks_category: Kategorie-Name
    - sub_type: Genauere Beschreibung des Vorfalls
    - confidence: 0.0-1.0
    - keywords_matched: Liste der Schlüsselwörter aus dem Text
+   - location: Standort für DIESEN spezifischen Vorfall
+     - street: Straßenname (ohne Hausnummer)
+     - house_number: Hausnummer falls vorhanden
+     - district: Stadtteil/Ortsteil falls genannt
+     - city: Stadt/Gemeinde
+     - confidence: 0.0-1.0
+   - incident_time: Tatzeit für DIESEN spezifischen Vorfall
+     - date: YYYY-MM-DD (berechne aus Artikel-Datum und relativen Angaben)
+     - time: HH:MM (24h Format) oder null wenn unbekannt
+     - precision: "exact" | "approximate" | "range" | "unknown"
+     - original_text: Original-Formulierung aus dem Text
+
+2. WAFFE (weapon) - falls eine Waffe erwähnt wird (für den gesamten Artikel):
+   Wähle aus diesen Waffentypen:
+   - messer: Messer, Küchenmesser, Klappmesser, Stichwaffe
+   - schusswaffe: Pistole, Revolver, Gewehr, Schusswaffe
+   - machete: Machete
+   - axt: Axt, Beil
+   - schlagwaffe: Baseballschläger, Schlagstock, Knüppel, Hammer
+   - reizgas: Pfefferspray, Reizgas, CS-Gas
+   - other: Sonstige Waffen
+
+   Extrahiere:
+   - type: Waffentyp (einer der obigen oder null)
+   - mentioned_text: Original-Formulierung aus dem Text (oder null)
 
 Antworte NUR mit validem JSON, keine Erklärungen. Format:
 {{
-  "location": {{
-    "street": "...",
-    "house_number": null,
-    "district": null,
-    "city": "...",
-    "confidence": 0.8
-  }},
-  "incident_time": {{
-    "date": "YYYY-MM-DD",
-    "time": "HH:MM",
-    "precision": "exact",
-    "original_text": "..."
-  }},
-  "crime": {{
-    "pks_code": "XXXX",
-    "pks_category": "...",
-    "sub_type": "...",
-    "confidence": 0.9,
-    "keywords_matched": ["..."]
+  "crimes": [
+    {{
+      "pks_code": "2200",
+      "pks_category": "Körperverletzung",
+      "sub_type": "Schlägerei vor Diskothek",
+      "confidence": 0.9,
+      "keywords_matched": ["geschlagen", "verletzt"],
+      "location": {{
+        "street": "Hauptstraße",
+        "house_number": "12",
+        "district": "Altstadt",
+        "city": "Frankfurt",
+        "confidence": 0.8
+      }},
+      "incident_time": {{
+        "date": "2024-01-15",
+        "time": "02:30",
+        "precision": "exact",
+        "original_text": "am Sonntag gegen 02:30 Uhr"
+      }}
+    }}
+  ],
+  "weapon": {{
+    "type": "messer",
+    "mentioned_text": "mit einem Messer"
   }}
 }}
+
+Wenn es nur einen Vorfall gibt, enthält das Array nur ein Element.
+Wenn keine Waffe erwähnt wird, setze weapon auf null.
 """
 
 
@@ -502,6 +529,9 @@ class ArticleEnricher:
         """
         Enrich a single article with LLM-extracted data.
         Returns the enriched article dict.
+
+        The new format supports multiple crimes per article via the "crimes" array.
+        Each crime has its own location and incident_time.
         """
         url = article.get("url", "")
         body = article.get("body", "")
@@ -534,71 +564,109 @@ class ArticleEnricher:
             # Return article with empty enrichment
             return article
 
-        # Extract location data
-        loc_data = parsed.get("location", {})
-        street = loc_data.get("street")
-        house_number = loc_data.get("house_number")
-        district = loc_data.get("district")
-        city = loc_data.get("city") or article.get("city")
+        # Handle new multi-crime format
+        crimes_data = parsed.get("crimes", [])
+
+        # Fallback: if old single-crime format, convert to array
+        if not crimes_data and parsed.get("crime"):
+            # Old format had separate location, incident_time, crime objects
+            old_crime = parsed.get("crime", {})
+            old_location = parsed.get("location", {})
+            old_time = parsed.get("incident_time", {})
+            crimes_data = [{
+                **old_crime,
+                "location": old_location,
+                "incident_time": old_time,
+            }]
+
+        # Process each crime with geocoding
+        enriched_crimes = []
         bundesland = article.get("bundesland")
-        loc_confidence = loc_data.get("confidence", 0.0)
 
-        # Geocode the extracted address
-        lat, lon, precision = self._geocode_address(
-            street=street,
-            house_number=house_number,
-            city=city,
-            bundesland=bundesland,
-        )
+        for crime_data in crimes_data:
+            # Extract location for this crime
+            loc_data = crime_data.get("location", {})
+            street = loc_data.get("street")
+            house_number = loc_data.get("house_number")
+            district = loc_data.get("district")
+            city = loc_data.get("city") or article.get("city")
+            loc_confidence = loc_data.get("confidence", 0.0)
 
-        location = {
-            "street": street,
-            "house_number": house_number,
-            "district": district,
-            "city": city,
-            "bundesland": bundesland,
-            "lat": lat,
-            "lon": lon,
-            "precision": precision,
-            "confidence": loc_confidence,
-        }
+            # Geocode the extracted address
+            lat, lon, precision = self._geocode_address(
+                street=street,
+                house_number=house_number,
+                city=city,
+                bundesland=bundesland,
+            )
 
-        # Extract incident time
-        time_data = parsed.get("incident_time", {})
-        incident_time = {
-            "date": time_data.get("date"),
-            "time": time_data.get("time"),
-            "precision": time_data.get("precision", "unknown"),
-            "original_text": time_data.get("original_text"),
-        }
+            location = {
+                "street": street,
+                "house_number": house_number,
+                "district": district,
+                "city": city,
+                "bundesland": bundesland,
+                "lat": lat,
+                "lon": lon,
+                "precision": precision,
+                "confidence": loc_confidence,
+            }
 
-        # Extract crime classification
-        crime_data = parsed.get("crime", {})
-        pks_code = crime_data.get("pks_code")
-        pks_category = crime_data.get("pks_category")
+            # Extract incident time for this crime
+            time_data = crime_data.get("incident_time", {})
+            incident_time = {
+                "date": time_data.get("date"),
+                "time": time_data.get("time"),
+                "precision": time_data.get("precision", "unknown"),
+                "original_text": time_data.get("original_text"),
+            }
 
-        # Validate PKS code
-        if pks_code and pks_code not in PKS_CATEGORIES:
-            if self.verbose:
-                print(f"    Warning: Unknown PKS code {pks_code}")
-            # Try to look up by category name
-            if pks_category and pks_category in PKS_NAMES_TO_CODES:
-                pks_code = PKS_NAMES_TO_CODES[pks_category]
+            # Extract crime classification
+            pks_code = crime_data.get("pks_code")
+            pks_category = crime_data.get("pks_category")
 
-        crime = {
-            "pks_code": pks_code,
-            "pks_category": pks_category or PKS_CATEGORIES.get(pks_code),
-            "sub_type": crime_data.get("sub_type"),
-            "confidence": crime_data.get("confidence", 0.0),
-            "keywords_matched": crime_data.get("keywords_matched", []),
-        }
+            # Validate PKS code
+            if pks_code and pks_code not in PKS_CATEGORIES:
+                if self.verbose:
+                    print(f"    Warning: Unknown PKS code {pks_code}")
+                # Try to look up by category name
+                if pks_category and pks_category in PKS_NAMES_TO_CODES:
+                    pks_code = PKS_NAMES_TO_CODES[pks_category]
 
-        # Build enriched result
+            enriched_crime = {
+                "pks_code": pks_code,
+                "pks_category": pks_category or PKS_CATEGORIES.get(pks_code),
+                "sub_type": crime_data.get("sub_type"),
+                "confidence": crime_data.get("confidence", 0.0),
+                "keywords_matched": crime_data.get("keywords_matched", []),
+                "location": location,
+                "incident_time": incident_time,
+            }
+            enriched_crimes.append(enriched_crime)
+
+        # If no crimes extracted, add a default empty one
+        if not enriched_crimes:
+            enriched_crimes = [{}]
+
+        # Build enriched result with new format
         enrichment = {
-            "location": location,
-            "incident_time": incident_time,
-            "crime": crime,
+            "crimes": enriched_crimes,
+            "weapon": parsed.get("weapon"),
         }
+
+        # For backwards compatibility, also include top-level location/crime/incident_time
+        # from the first crime (used by older code that expects single crime)
+        if enriched_crimes and enriched_crimes[0]:
+            first = enriched_crimes[0]
+            enrichment["location"] = first.get("location", {})
+            enrichment["incident_time"] = first.get("incident_time", {})
+            enrichment["crime"] = {
+                "pks_code": first.get("pks_code"),
+                "pks_category": first.get("pks_category"),
+                "sub_type": first.get("sub_type"),
+                "confidence": first.get("confidence", 0.0),
+                "keywords_matched": first.get("keywords_matched", []),
+            }
 
         # Cache the result
         self.enrichment_cache.set(url, body, enrichment)
