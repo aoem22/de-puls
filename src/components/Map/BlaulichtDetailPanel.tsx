@@ -1,7 +1,64 @@
 'use client';
 
+import { useRef, useCallback, type TouchEvent } from 'react';
 import type { CrimeRecord, CrimeCategory } from '@/lib/types/crime';
 import { CRIME_CATEGORIES } from '@/lib/types/crime';
+import { useTranslation, translations, tNested } from '@/lib/i18n';
+
+// Draggable bottom sheet hook
+function useDraggableSheet(onClose: () => void, threshold = 100) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef<number>(0);
+  const currentTranslateY = useRef<number>(0);
+  const isDragging = useRef<boolean>(false);
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.sheet-drag-area')) return;
+
+    isDragging.current = true;
+    dragStartY.current = e.touches[0].clientY;
+    currentTranslateY.current = 0;
+
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = 'none';
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!isDragging.current || !sheetRef.current) return;
+
+    const deltaY = e.touches[0].clientY - dragStartY.current;
+    if (deltaY > 0) {
+      currentTranslateY.current = deltaY;
+      sheetRef.current.style.transform = `translateY(${deltaY}px)`;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!isDragging.current || !sheetRef.current) return;
+
+    isDragging.current = false;
+    sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
+
+    if (currentTranslateY.current > threshold) {
+      sheetRef.current.style.transform = 'translateY(100%)';
+      setTimeout(onClose, 300);
+    } else {
+      sheetRef.current.style.transform = 'translateY(0)';
+    }
+    currentTranslateY.current = 0;
+  }, [onClose, threshold]);
+
+  return {
+    sheetRef,
+    handlers: {
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
+    },
+  };
+}
 
 interface BlaulichtDetailPanelProps {
   crime: CrimeRecord;
@@ -82,8 +139,17 @@ const Icons = {
 };
 
 export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: BlaulichtDetailPanelProps) {
+  const { sheetRef, handlers } = useDraggableSheet(onClose);
+  const { lang } = useTranslation();
+  const t = translations;
   const primaryCategory = crime.categories[0] ?? 'other';
   const categoryInfo = getCategoryInfo(primaryCategory);
+
+  // Get translated category label
+  const getCategoryLabel = (cat: CrimeCategory) => {
+    const translated = tNested('crimeCategories', cat, lang);
+    return translated !== cat ? translated : categoryMeta.get(cat)?.label ?? cat;
+  };
 
   // Extract domain from URL for display
   const sourceDomain = (() => {
@@ -107,8 +173,8 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: Blau
         />
       )}
 
-      {/* Right-side panel */}
-      <div className={`fixed top-4 right-4 z-[1002] w-[380px] max-w-[calc(100vw-2rem)] pointer-events-none ${isPreview ? 'bottom-auto max-h-[70vh]' : 'bottom-4'}`}>
+      {/* Desktop: Right-side panel */}
+      <div className={`hidden md:block fixed top-4 right-4 z-[1002] w-[380px] max-w-[calc(100vw-2rem)] pointer-events-none ${isPreview ? 'bottom-auto max-h-[70vh]' : 'bottom-4'}`}>
         <div className={`bg-[#0c0c0c] rounded-xl border shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200 ${isPreview ? 'border-[#252525]' : 'border-[#1a1a1a] h-full'}`}>
 
           {/* Header */}
@@ -116,13 +182,13 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: Blau
             <div className="flex items-center gap-2.5">
               <span className="text-zinc-400">{Icons.alert}</span>
               <span className="text-xs font-medium tracking-wide text-zinc-400 uppercase">
-                Pressemitteilung
+                {t.pressRelease[lang]}
               </span>
             </div>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-[#1a1a1a] transition-colors"
-              aria-label="Schließen"
+              aria-label={t.close[lang]}
             >
               {Icons.close}
             </button>
@@ -178,13 +244,13 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: Blau
                             color: info.color,
                           }}
                         >
-                          {info.label}
+                          {getCategoryLabel(cat)}
                         </span>
                       );
                     })
                   ) : (
                     <span className="px-2.5 py-1 text-xs rounded-md bg-zinc-900 border border-zinc-800 text-zinc-500">
-                      Sonstiges
+                      {t.other[lang]}
                     </span>
                   )}
                 </div>
@@ -194,7 +260,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: Blau
               <div className="flex items-center gap-3">
                 <span className="text-zinc-500 w-5 flex justify-center">{Icons.target}</span>
                 <span className="text-xs text-zinc-500">
-                  Genauigkeit: <span className="text-zinc-400 ml-1">{crime.precision}</span>
+                  {t.accuracy[lang]}: <span className="text-zinc-400 ml-1">{tNested('precisionLevels', crime.precision, lang)}</span>
                 </span>
               </div>
             </div>
@@ -204,7 +270,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: Blau
               <div className="px-5 py-5">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="text-[10px] font-semibold tracking-widest text-zinc-600 uppercase">
-                    Meldung
+                    {t.report[lang]}
                   </span>
                   <div className="flex-1 h-px bg-[#1a1a1a]" />
                 </div>
@@ -226,10 +292,117 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false }: Blau
               <span className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">
                 {Icons.externalLink}
               </span>
-              <span>Quelle öffnen</span>
+              <span>{t.openSource[lang]}</span>
               <span className="text-zinc-600 text-xs ml-auto">{sourceDomain}</span>
             </a>
           </div>
+        </div>
+      </div>
+
+      {/* Mobile: Bottom sheet */}
+      <div
+        ref={sheetRef}
+        className="md:hidden fixed inset-x-0 bottom-0 z-[1002] max-h-[80vh] mobile-bottom-sheet flex flex-col bg-[#0c0c0c] rounded-t-2xl border-t border-[#1a1a1a] shadow-2xl shadow-black/60 overflow-hidden animate-slide-up-spring"
+        {...handlers}
+      >
+        {/* Drag handle */}
+        <div className="sheet-drag-area flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+          <div className="drag-handle w-10 h-1 bg-zinc-600 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="sheet-drag-area px-4 pb-3 border-b border-[#1a1a1a] flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-zinc-400">{Icons.alert}</span>
+            <span className="text-xs font-medium tracking-wide text-zinc-400 uppercase no-select">
+              {t.report[lang]}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 touch-feedback active:bg-[#1a1a1a]"
+            aria-label={t.close[lang]}
+          >
+            {Icons.close}
+          </button>
+        </div>
+
+        {/* Content area - scrollable */}
+        <div className="flex-1 overflow-y-auto scroll-touch">
+          {/* Title section */}
+          <div className="px-4 py-4 border-b border-[#151515]">
+            <h2 className="text-base font-semibold text-zinc-100 leading-relaxed">
+              {crime.title}
+            </h2>
+          </div>
+
+          {/* Metadata section */}
+          <div className="px-4 py-3 space-y-2.5 border-b border-[#151515] bg-[#0a0a0a]">
+            {/* Date */}
+            <div className="flex items-center gap-3">
+              <span className="text-zinc-500 w-5 flex justify-center">{Icons.calendar}</span>
+              <span className="text-sm text-zinc-300">{formatDate(crime.publishedAt)}</span>
+            </div>
+
+            {/* Location */}
+            {crime.locationText && (
+              <div className="flex items-center gap-3">
+                <span className="text-zinc-500 w-5 flex justify-center">{Icons.location}</span>
+                <span className="text-sm text-zinc-300">{crime.locationText}</span>
+              </div>
+            )}
+
+            {/* Category badges */}
+            <div className="flex items-start gap-3">
+              <span className="text-zinc-500 w-5 flex justify-center mt-0.5">{Icons.tag}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {crime.categories.length > 0 ? (
+                  crime.categories.map((cat) => {
+                    const info = getCategoryInfo(cat);
+                    return (
+                      <span
+                        key={cat}
+                        className="px-2 py-0.5 text-xs rounded-md border font-medium"
+                        style={{
+                          backgroundColor: `${info.color}10`,
+                          borderColor: `${info.color}30`,
+                          color: info.color,
+                        }}
+                      >
+                        {getCategoryLabel(cat)}
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="px-2 py-0.5 text-xs rounded-md bg-zinc-900 border border-zinc-800 text-zinc-500">
+                    {t.other[lang]}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Body text section */}
+          {bodyText && (
+            <div className="px-4 py-4">
+              <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap line-clamp-6">
+                {bodyText}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer - Source link */}
+        <div className="px-4 py-3 border-t border-[#1a1a1a] bg-[#080808] flex-shrink-0 safe-area-pb">
+          <a
+            href={crime.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-2.5 text-sm text-zinc-100 bg-[#1a1a1a] rounded-lg touch-feedback active:bg-[#252525] transition-colors"
+          >
+            {Icons.externalLink}
+            <span className="no-select">{t.openSource[lang]}</span>
+          </a>
         </div>
       </div>
     </>

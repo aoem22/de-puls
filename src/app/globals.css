@@ -251,3 +251,245 @@ select option {
 .duration-200 {
   animation-duration: 0.2s;
 }
+
+/* Mobile bottom sheet slide-up animation */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Backdrop overlay for mobile bottom sheets */
+.backdrop-overlay {
+  background: rgba(0, 0, 0, 0.5);
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+/* Safe area padding for iOS devices */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Hide mobile ranking button when a Kreis is selected */
+.kreis-selected .mobile-ranking-toggle {
+  display: none;
+}
+
+/* ============================================
+   ENHANCED MOBILE STYLES
+   ============================================ */
+
+/* PWA Standalone mode - account for no browser chrome */
+@media (display-mode: standalone) {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left, 0);
+  }
+
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right, 0);
+  }
+}
+
+/* Landscape phone orientation */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Reduce panel heights in landscape */
+  .mobile-bottom-sheet {
+    max-height: 60vh !important;
+  }
+
+  /* Side-by-side layout for controls */
+  .landscape-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  /* Smaller touch targets acceptable in landscape */
+  button, select {
+    min-height: 40px;
+  }
+}
+
+/* Enhanced range slider for touch */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 24px;
+  touch-action: pan-x;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  background: #333;
+  height: 6px;
+  border-radius: 3px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: 2px solid #0a0a0a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  margin-top: -9px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Firefox range slider */
+input[type="range"]::-moz-range-track {
+  background: #333;
+  height: 6px;
+  border-radius: 3px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: 2px solid #0a0a0a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Better touch feedback for interactive elements */
+@media (pointer: coarse) {
+  .touch-feedback {
+    transition: transform 0.1s ease, background-color 0.1s ease;
+  }
+
+  .touch-feedback:active {
+    transform: scale(0.97);
+  }
+
+  /* Larger hit areas for small buttons */
+  .touch-target-lg {
+    position: relative;
+  }
+
+  .touch-target-lg::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+}
+
+/* Bottom sheet drag indicator animation */
+@keyframes pulse-drag {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.drag-handle {
+  animation: pulse-drag 2s ease-in-out infinite;
+}
+
+.drag-handle:active {
+  animation: none;
+  opacity: 1;
+  background: #71717a !important;
+}
+
+/* Smooth backdrop transitions */
+.backdrop-enter {
+  animation: backdrop-fade-in 0.2s ease-out forwards;
+}
+
+.backdrop-exit {
+  animation: backdrop-fade-out 0.15s ease-in forwards;
+}
+
+@keyframes backdrop-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes backdrop-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Improved slide animations with spring-like easing */
+@keyframes slide-up-spring {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-3%);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-up-spring {
+  animation: slide-up-spring 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+.animate-slide-down {
+  animation: slide-down 0.25s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Prevent content jump when keyboard appears */
+@media (max-width: 768px) {
+  input:focus, textarea:focus, select:focus {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* iOS momentum scrolling */
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+}
+
+/* Prevent text selection on interactive elements */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}

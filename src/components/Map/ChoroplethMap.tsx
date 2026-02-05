@@ -92,6 +92,7 @@ function MapInitializer({ germanyBounds }: { germanyBounds: [[number, number], [
 
 export function ChoroplethMap() {
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
+  const [isMobileRankingOpen, setIsMobileRankingOpen] = useState(false);
 
   // Unified indicator state (Ausländer, Deutschlandatlas, or Kriminalstatistik)
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorKey>('auslaender');
@@ -244,10 +245,18 @@ export function ChoroplethMap() {
         )}
       </MapContainer>
 
+      {/* Mobile controls backdrop */}
+      {isControlsExpanded && (
+        <div
+          className="md:hidden fixed inset-0 z-[999] bg-black/30 backdrop-enter"
+          onClick={() => setIsControlsExpanded(false)}
+        />
+      )}
+
       {/* Mobile toggle button */}
       <button
         onClick={() => setIsControlsExpanded(!isControlsExpanded)}
-        className="md:hidden absolute top-3 right-3 z-[1001] bg-[#141414]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[#262626] p-3 text-zinc-200"
+        className="md:hidden absolute top-3 right-3 z-[1001] bg-[#141414]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[#262626] p-3 text-zinc-200 touch-feedback active:scale-95 transition-transform"
         aria-label="Toggle controls"
       >
         <svg
@@ -260,6 +269,7 @@ export function ChoroplethMap() {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
+          className={`transition-transform duration-200 ${isControlsExpanded ? 'rotate-90' : ''}`}
         >
           <line x1="4" x2="4" y1="21" y2="14" />
           <line x1="4" x2="4" y1="10" y2="3" />
@@ -310,6 +320,7 @@ export function ChoroplethMap() {
             setHoveredCrime(null);
             setSelectedBlaulichtCategory(null);
             setIsControlsExpanded(false);
+            setIsMobileRankingOpen(false);
           }}
           selectedSubMetric={selectedSubMetric}
           onSubMetricChange={setSelectedSubMetric}
@@ -331,18 +342,20 @@ export function ChoroplethMap() {
         />
       </div>
 
-      {/* Kreis hover card (custom positioned tooltip) */}
-      {kreisHoverInfo && !selectedKreis && showKreisLayer && (
-        <KreisHoverCard
-          mouseX={kreisHoverInfo.mouseX}
-          mouseY={kreisHoverInfo.mouseY}
-          kreisName={kreisHoverInfo.name}
-          ags={kreisHoverInfo.ags}
-          indicatorKey={selectedIndicator}
-          selectedSubMetric={selectedSubMetric}
-          selectedYear={selectedIndicatorYear}
-        />
-      )}
+      {/* Kreis hover card (custom positioned tooltip) - desktop only */}
+      <div className="hidden md:block">
+        {kreisHoverInfo && !selectedKreis && showKreisLayer && (
+          <KreisHoverCard
+            mouseX={kreisHoverInfo.mouseX}
+            mouseY={kreisHoverInfo.mouseY}
+            kreisName={kreisHoverInfo.name}
+            ags={kreisHoverInfo.ags}
+            indicatorKey={selectedIndicator}
+            selectedSubMetric={selectedSubMetric}
+            selectedYear={selectedIndicatorYear}
+          />
+        )}
+      </div>
 
       {/* Unified ranking/detail panel (right side) - shown for Kreis-level indicators */}
       {showKreisLayer && (
@@ -354,6 +367,8 @@ export function ChoroplethMap() {
           selectedAgs={selectedKreis}
           onHoverAgs={setHoveredKreis}
           onSelectAgs={setSelectedKreis}
+          isMobileOpen={isMobileRankingOpen}
+          onMobileToggle={() => setIsMobileRankingOpen(!isMobileRankingOpen)}
         />
       )}
 

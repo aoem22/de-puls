@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useEffect, useCallback, useState } from 'react';
+import { useMemo, useRef, useEffect, useCallback, useState, type TouchEvent } from 'react';
 import type { IndicatorKey, SubMetricKey, AuslaenderRegionKey, DeutschlandatlasKey } from '../../../lib/indicators/types';
 import {
   INDICATORS,
@@ -10,6 +10,7 @@ import {
 } from '../../../lib/indicators/types';
 import { formatNumber, formatDetailValue, calcPercent } from '../../../lib/utils/formatters';
 import { auslaender, deutschlandatlas } from './KreisLayer';
+import { useTranslation, translations, tNested, type Language } from '@/lib/i18n';
 
 interface RankingItem {
   ags: string;
@@ -27,6 +28,68 @@ interface RankingPanelProps {
   selectedAgs: string | null;
   onHoverAgs: (ags: string | null) => void;
   onSelectAgs: (ags: string | null) => void;
+  isMobileOpen?: boolean;
+  onMobileToggle?: () => void;
+}
+
+// ============ Draggable Bottom Sheet Hook ============
+
+function useDraggableSheet(onClose: () => void, threshold = 100) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef<number>(0);
+  const currentTranslateY = useRef<number>(0);
+  const isDragging = useRef<boolean>(false);
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    const target = e.target as HTMLElement;
+    // Only start drag from the header area or drag handle
+    if (!target.closest('.sheet-drag-area')) return;
+
+    isDragging.current = true;
+    dragStartY.current = e.touches[0].clientY;
+    currentTranslateY.current = 0;
+
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = 'none';
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!isDragging.current || !sheetRef.current) return;
+
+    const deltaY = e.touches[0].clientY - dragStartY.current;
+    // Only allow dragging down
+    if (deltaY > 0) {
+      currentTranslateY.current = deltaY;
+      sheetRef.current.style.transform = `translateY(${deltaY}px)`;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!isDragging.current || !sheetRef.current) return;
+
+    isDragging.current = false;
+    sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
+
+    if (currentTranslateY.current > threshold) {
+      // Close the sheet
+      sheetRef.current.style.transform = 'translateY(100%)';
+      setTimeout(onClose, 300);
+    } else {
+      // Snap back
+      sheetRef.current.style.transform = 'translateY(0)';
+    }
+    currentTranslateY.current = 0;
+  }, [onClose, threshold]);
+
+  return {
+    sheetRef,
+    handlers: {
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
+    },
+  };
 }
 
 // ============ Utility Functions ============
@@ -55,14 +118,21 @@ function getUnit(indicatorKey: IndicatorKey, subMetric: SubMetricKey): string {
   return '';
 }
 
-function getIndicatorLabel(indicatorKey: IndicatorKey, subMetric: SubMetricKey): string {
+function getIndicatorLabel(indicatorKey: IndicatorKey, subMetric: SubMetricKey, lang: Language): string {
   if (indicatorKey === 'auslaender') {
-    return AUSLAENDER_REGION_META[subMetric as AuslaenderRegionKey]?.labelDe ?? 'Ausländer';
+    const regionLabel = tNested('regions', subMetric, lang);
+    return regionLabel !== subMetric ? regionLabel : (AUSLAENDER_REGION_META[subMetric as AuslaenderRegionKey]?.labelDe ?? 'Ausländer');
   }
   if (indicatorKey === 'deutschlandatlas' && isDeutschlandatlasKey(subMetric)) {
-    return DEUTSCHLANDATLAS_META[subMetric].labelDe;
+    const atlasLabel = tNested('atlasIndicators', subMetric, lang);
+    return atlasLabel !== subMetric ? atlasLabel : DEUTSCHLANDATLAS_META[subMetric].labelDe;
   }
-  return INDICATORS[indicatorKey].labelDe;
+  return tNested('indicators', indicatorKey, lang);
+}
+
+function getRegionLabel(region: AuslaenderRegionKey, lang: Language): string {
+  const translated = tNested('regions', region, lang);
+  return translated !== region ? translated : (AUSLAENDER_REGION_META[region]?.labelDe ?? region);
 }
 
 // ============ Detail View Components ============
@@ -70,30 +140,33 @@ function getIndicatorLabel(indicatorKey: IndicatorKey, subMetric: SubMetricKey):
 function AuslaenderDetailContent({
   record,
   selectedRegion,
+  lang,
 }: {
   record: { name: string; ags: string; regions: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }> };
   selectedRegion: AuslaenderRegionKey;
+  lang: Language;
 }) {
   const total = record.regions.total?.total;
-  const selectedMeta = AUSLAENDER_REGION_META[selectedRegion];
   const selectedValue = record.regions[selectedRegion]?.total;
   const selectedData = record.regions[selectedRegion];
 
   const continents = ['europa', 'asien', 'afrika', 'amerika', 'ozeanien'] as const;
   const specialRegions = ['eu27', 'drittstaaten', 'gastarbeiter', 'exjugoslawien', 'exsowjetunion'] as const;
 
+  const t = translations;
+
   return (
     <>
       {/* Total */}
       <div className="flex items-baseline justify-between">
-        <span className="text-zinc-500 text-xs uppercase tracking-wide">Gesamt Ausländer</span>
+        <span className="text-zinc-500 text-xs uppercase tracking-wide">{t.totalForeigners[lang]}</span>
         <span className="text-2xl font-bold text-amber-400">{formatNumber(total)}</span>
       </div>
 
       {/* Selected region highlight */}
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-amber-400 text-xs font-medium">Aktuell: {selectedMeta.labelDe}</span>
+          <span className="text-amber-400 text-xs font-medium">{t.current[lang]}: {getRegionLabel(selectedRegion, lang)}</span>
           <span className="text-zinc-500 text-xs">{calcPercent(selectedValue, total)}</span>
         </div>
         <div className="text-white text-xl font-semibold">{formatNumber(selectedValue)}</div>
@@ -113,11 +186,10 @@ function AuslaenderDetailContent({
 
       {/* Continent breakdown */}
       <div>
-        <h4 className="text-zinc-500 text-[10px] uppercase tracking-wider mb-2">Nach Kontinent</h4>
+        <h4 className="text-zinc-500 text-[10px] uppercase tracking-wider mb-2">{t.byContinent[lang]}</h4>
         <div className="space-y-1">
           {continents.map((continent) => {
             const val = record.regions[continent]?.total;
-            const meta = AUSLAENDER_REGION_META[continent];
             const isSelected = selectedRegion === continent;
             const pct = calcPercent(val, total);
 
@@ -127,7 +199,7 @@ function AuslaenderDetailContent({
                 className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-amber-500/15' : ''}`}
               >
                 <span className={`text-xs ${isSelected ? 'text-amber-400' : 'text-zinc-400'}`}>
-                  {meta.labelDe}
+                  {getRegionLabel(continent, lang)}
                 </span>
                 <span className={`text-xs ${isSelected ? 'text-amber-400 font-medium' : 'text-white'}`}>
                   {formatNumber(val)}
@@ -141,12 +213,11 @@ function AuslaenderDetailContent({
 
       {/* Special groups */}
       <div>
-        <h4 className="text-zinc-500 text-[10px] uppercase tracking-wider mb-2">Weitere Gruppen</h4>
+        <h4 className="text-zinc-500 text-[10px] uppercase tracking-wider mb-2">{t.otherGroups[lang]}</h4>
         <div className="space-y-1">
           {specialRegions.map((region) => {
             const val = record.regions[region]?.total;
             if (val === null || val === undefined) return null;
-            const meta = AUSLAENDER_REGION_META[region];
             const isSelected = selectedRegion === region;
             const pct = calcPercent(val, total);
 
@@ -156,7 +227,7 @@ function AuslaenderDetailContent({
                 className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-amber-500/15' : ''}`}
               >
                 <span className={`text-[11px] ${isSelected ? 'text-amber-400' : 'text-zinc-400'}`}>
-                  {meta.labelDe}
+                  {getRegionLabel(region, lang)}
                 </span>
                 <span className={`text-[11px] ${isSelected ? 'text-amber-400 font-medium' : 'text-zinc-300'}`}>
                   {formatNumber(val)}
@@ -174,12 +245,20 @@ function AuslaenderDetailContent({
 function DeutschlandatlasDetailContent({
   record,
   selectedIndicator,
+  lang,
 }: {
   record: { name: string; ags: string; indicators: Record<string, number | null> };
   selectedIndicator: DeutschlandatlasKey;
+  lang: Language;
 }) {
   const meta = DEUTSCHLANDATLAS_META[selectedIndicator];
   const value = record.indicators[selectedIndicator];
+  const t = translations;
+
+  const getAtlasLabel = (key: DeutschlandatlasKey) => {
+    const translated = tNested('atlasIndicators', key, lang);
+    return translated !== key ? translated : DEUTSCHLANDATLAS_META[key].labelDe;
+  };
 
   const indicatorsByCategory = useMemo(() => {
     const grouped = new Map<string, { key: DeutschlandatlasKey; value: number | null; meta: typeof meta }[]>();
@@ -207,7 +286,7 @@ function DeutschlandatlasDetailContent({
       {/* Selected indicator highlight */}
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-amber-400 text-xs font-medium">{meta.labelDe}</span>
+          <span className="text-amber-400 text-xs font-medium">{getAtlasLabel(selectedIndicator)}</span>
           <span className="text-zinc-500 text-[10px]">{meta.categoryDe}</span>
         </div>
         <div className="text-white text-xl font-semibold">
@@ -217,14 +296,14 @@ function DeutschlandatlasDetailContent({
         <p className="text-zinc-500 text-[10px] mt-1">{meta.descriptionDe}</p>
         {meta.higherIsBetter !== undefined && (
           <div className={`text-[10px] mt-1 ${meta.higherIsBetter ? 'text-green-400' : 'text-orange-400'}`}>
-            {meta.higherIsBetter ? '↑ Höher ist besser' : '↓ Niedriger ist besser'}
+            {meta.higherIsBetter ? `↑ ${t.higherIsBetter[lang]}` : `↓ ${t.lowerIsBetter[lang]}`}
           </div>
         )}
       </div>
 
       {/* Priority indicators overview */}
       <div>
-        <h4 className="text-zinc-500 text-[10px] uppercase tracking-wider mb-2">Wichtige Indikatoren</h4>
+        <h4 className="text-zinc-500 text-[10px] uppercase tracking-wider mb-2">{t.importantIndicators[lang]}</h4>
         <div className="space-y-1">
           {priorityIndicators.map((key) => {
             const val = record.indicators[key];
@@ -237,7 +316,7 @@ function DeutschlandatlasDetailContent({
                 className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-amber-500/15' : ''}`}
               >
                 <span className={`text-xs ${isSelected ? 'text-amber-400' : 'text-zinc-400'}`}>
-                  {indMeta.labelDe}
+                  {getAtlasLabel(key)}
                 </span>
                 <span className={`text-xs ${isSelected ? 'text-amber-400 font-medium' : 'text-white'}`}>
                   {formatDetailValue(val)}
@@ -253,7 +332,7 @@ function DeutschlandatlasDetailContent({
       <details className="group">
         <summary className="text-zinc-500 text-[10px] uppercase tracking-wider cursor-pointer hover:text-zinc-300 list-none flex items-center gap-1">
           <span className="group-open:rotate-90 transition-transform">▶</span>
-          Alle Indikatoren ({Object.keys(record.indicators).length})
+          {t.allIndicators[lang]} ({Object.keys(record.indicators).length})
         </summary>
         <div className="mt-2 space-y-3 max-h-60 overflow-y-auto">
           {Array.from(indicatorsByCategory.entries()).map(([category, indicators]) => (
@@ -268,7 +347,7 @@ function DeutschlandatlasDetailContent({
                       className={`flex justify-between py-1 px-1.5 rounded text-[10px] ${isSelected ? 'bg-amber-500/15' : ''}`}
                     >
                       <span className={isSelected ? 'text-amber-400' : 'text-zinc-500'}>
-                        {indMeta.labelDe}
+                        {getAtlasLabel(key)}
                       </span>
                       <span className={isSelected ? 'text-amber-400' : 'text-zinc-300'}>
                         {formatDetailValue(val)}
@@ -286,6 +365,239 @@ function DeutschlandatlasDetailContent({
   );
 }
 
+// ============ Mobile Sheet Components ============
+
+function MobileDetailSheet({
+  selectedRecord,
+  selectedRank,
+  indicatorKey,
+  subMetric,
+  selectedYear,
+  onClose,
+  lang,
+}: {
+  selectedRecord: { name: string; ags: string; regions?: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }>; indicators?: Record<string, number | null> };
+  selectedRank: number | null;
+  indicatorKey: IndicatorKey;
+  subMetric: SubMetricKey;
+  selectedYear: string;
+  onClose: () => void;
+  lang: Language;
+}) {
+  const { sheetRef, handlers } = useDraggableSheet(onClose);
+  const t = translations;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="md:hidden fixed inset-0 z-[1000] bg-black/40 backdrop-enter"
+        onClick={onClose}
+      />
+
+      {/* Sheet */}
+      <div
+        ref={sheetRef}
+        className="md:hidden fixed inset-x-0 bottom-0 z-[1001] bg-[#141414]/98 backdrop-blur-sm rounded-t-2xl shadow-2xl border-t border-[#262626] max-h-[70vh] mobile-bottom-sheet flex flex-col overflow-hidden animate-slide-up-spring"
+        {...handlers}
+      >
+        {/* Drag handle */}
+        <div className="sheet-drag-area flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+          <div className="drag-handle w-10 h-1 bg-zinc-600 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="sheet-drag-area flex items-start justify-between px-4 pb-3 border-b border-[#262626] shrink-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              {selectedRank && (
+                <span className="text-amber-400 text-xs font-mono bg-amber-500/10 px-1.5 py-0.5 rounded">
+                  #{selectedRank}
+                </span>
+              )}
+              <h3 className="text-white font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
+            </div>
+            <span className="text-zinc-500 text-xs">
+              {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-zinc-400 p-2 -mr-2 touch-feedback active:bg-white/10 rounded-lg"
+            aria-label={t.close[lang]}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="overflow-y-auto scroll-touch flex-1 p-4 space-y-4">
+          {indicatorKey === 'auslaender' ? (
+            <AuslaenderDetailContent
+              record={selectedRecord as { name: string; ags: string; regions: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }> }}
+              selectedRegion={subMetric as AuslaenderRegionKey}
+              lang={lang}
+            />
+          ) : (
+            <DeutschlandatlasDetailContent
+              record={selectedRecord as { name: string; ags: string; indicators: Record<string, number | null> }}
+              selectedIndicator={subMetric as DeutschlandatlasKey}
+              lang={lang}
+            />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MobileRankingSheet({
+  indicatorLabel,
+  rankings,
+  filteredRankings,
+  indicatorKey,
+  subMetric,
+  selectedYear,
+  searchQuery,
+  onSearchChange,
+  onSelectAgs,
+  onClose,
+  lang,
+}: {
+  indicatorLabel: string;
+  rankings: RankingItem[];
+  filteredRankings: RankingItem[];
+  indicatorKey: IndicatorKey;
+  subMetric: SubMetricKey;
+  selectedYear: string;
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+  onSelectAgs: (ags: string | null) => void;
+  onClose: () => void;
+  lang: Language;
+}) {
+  const { sheetRef, handlers } = useDraggableSheet(onClose);
+  const t = translations;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="md:hidden fixed inset-0 z-[1000] bg-black/40 backdrop-enter"
+        onClick={onClose}
+      />
+
+      {/* Sheet */}
+      <div
+        ref={sheetRef}
+        className="md:hidden fixed inset-x-0 bottom-0 z-[1001] bg-[#141414]/98 backdrop-blur-sm rounded-t-2xl shadow-2xl border-t border-[#262626] max-h-[70vh] mobile-bottom-sheet flex flex-col overflow-hidden animate-slide-up-spring"
+        {...handlers}
+      >
+        {/* Drag handle */}
+        <div className="sheet-drag-area flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
+          <div className="drag-handle w-10 h-1 bg-zinc-600 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="sheet-drag-area flex items-center justify-between px-4 pb-3 border-b border-[#262626] shrink-0">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-amber-400 text-sm">📊</span>
+              <h3 className="text-white font-semibold text-sm truncate">
+                {indicatorLabel}
+              </h3>
+            </div>
+            <div className="text-zinc-500 text-[10px]">
+              {rankings.length} {t.districts[lang]} · {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-zinc-400 p-2 -mr-2 touch-feedback active:bg-white/10 rounded-lg"
+            aria-label={t.close[lang]}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="shrink-0 px-4 py-2 border-b border-[#262626]/50">
+          <div className="relative">
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              placeholder={t.searchKreis[lang]}
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Scrollable list */}
+        <div className="flex-1 overflow-y-auto scroll-touch">
+          {filteredRankings.length === 0 ? (
+            <div className="p-4 text-center text-zinc-500 text-sm">
+              {searchQuery ? t.noResults[lang] : t.noDataAvailable[lang]}
+            </div>
+          ) : (
+            <div className="py-1">
+              {filteredRankings.map((item) => (
+                <div
+                  key={item.ags}
+                  className="px-4 py-3 touch-feedback active:bg-amber-500/15 transition-colors border-b border-[#262626]/30"
+                  onClick={() => {
+                    onSelectAgs(item.ags);
+                    onClose();
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 text-right text-sm font-mono text-zinc-500">
+                      {item.rank}.
+                    </span>
+                    <span className="flex-1 text-sm text-white truncate">
+                      {item.name}
+                    </span>
+                    <span className="text-sm font-mono text-zinc-400">
+                      {formatRankingValue(item.value, indicatorKey, subMetric)}
+                    </span>
+                  </div>
+                  <div className="mt-2 ml-11 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-yellow-600/70 to-red-600/70"
+                      style={{ width: `${item.percentage}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer with count */}
+        {searchQuery && filteredRankings.length !== rankings.length && (
+          <div className="shrink-0 px-4 py-2 border-t border-[#262626]/50 text-zinc-500 text-xs text-center safe-area-pb">
+            {filteredRankings.length} {t.of[lang]} {rankings.length} {t.shown[lang]}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ============ Main Component ============
 
 export function RankingPanel({
@@ -296,11 +608,15 @@ export function RankingPanel({
   selectedAgs,
   onHoverAgs,
   onSelectAgs,
+  isMobileOpen = false,
+  onMobileToggle,
 }: RankingPanelProps) {
+  const { lang } = useTranslation();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const miniRankingRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const lastManualScrollRef = useRef<number>(0);
+  const t = translations;
 
   // Compute rankings from indicator data
   const rankings = useMemo((): RankingItem[] => {
@@ -427,7 +743,7 @@ export function RankingPanel({
     }
   }, [hoveredAgs, selectedAgs]);
 
-  const indicatorLabel = getIndicatorLabel(indicatorKey, subMetric);
+  const indicatorLabel = getIndicatorLabel(indicatorKey, subMetric, lang);
   const unit = getUnit(indicatorKey, subMetric);
 
   // Get items around the selected item for mini ranking display
@@ -447,224 +763,279 @@ export function RankingPanel({
     const miniRankingItems = getMiniRankingItems();
 
     return (
-      <div className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[#262626] w-80 max-h-[80vh] flex-col overflow-hidden transition-all duration-200">
-        {/* Header with back button */}
-        <div className="flex items-start justify-between p-4 border-b border-[#262626] shrink-0">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              {selectedRank && (
-                <span className="text-amber-400 text-xs font-mono bg-amber-500/10 px-1.5 py-0.5 rounded">
-                  #{selectedRank}
-                </span>
-              )}
-              <h3 className="text-white font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
+      <>
+        {/* Desktop detail view */}
+        <div className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[#262626] w-80 max-h-[80vh] flex-col overflow-hidden transition-all duration-200">
+          {/* Header with back button */}
+          <div className="flex items-start justify-between p-4 border-b border-[#262626] shrink-0">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                {selectedRank && (
+                  <span className="text-amber-400 text-xs font-mono bg-amber-500/10 px-1.5 py-0.5 rounded">
+                    #{selectedRank}
+                  </span>
+                )}
+                <h3 className="text-white font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
+              </div>
+              <span className="text-zinc-500 text-xs">
+                AGS: {selectedRecord.ags} · {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
+              </span>
             </div>
-            <span className="text-zinc-500 text-xs">
-              AGS: {selectedRecord.ags} · {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
-            </span>
-          </div>
-          <button
-            onClick={() => onSelectAgs(null)}
-            className="text-zinc-500 hover:text-zinc-300 transition-colors ml-2 mt-0.5 p-1 hover:bg-white/5 rounded"
-            aria-label="Zurück zur Liste"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Mini ranking list - shows hover highlights */}
-        <div className="shrink-0 border-b border-[#262626]/50">
-          <div className="px-3 py-1.5 flex items-center justify-between">
-            <span className="text-zinc-600 text-[10px] uppercase tracking-wider">Rangliste</span>
             <button
               onClick={() => onSelectAgs(null)}
-              className="text-zinc-500 hover:text-amber-400 text-[10px] transition-colors"
+              className="text-zinc-500 hover:text-zinc-300 transition-colors ml-2 mt-0.5 p-1 hover:bg-white/5 rounded"
+              aria-label="Zurück zur Liste"
             >
-              Alle anzeigen →
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
             </button>
           </div>
-          <div ref={miniRankingRef} className="max-h-32 overflow-y-auto scrollbar-thin">
-            {miniRankingItems.map((item) => {
-              const isHovered = hoveredAgs === item.ags;
-              const isSelected = item.ags === selectedAgs;
 
-              return (
-                <div
-                  key={item.ags}
-                  className={`px-3 py-1.5 cursor-pointer transition-colors flex items-center gap-2 ${
-                    isSelected
-                      ? 'bg-amber-500/20'
-                      : isHovered
-                        ? 'bg-amber-500/10'
-                        : 'hover:bg-white/5'
-                  }`}
-                  onMouseEnter={() => onHoverAgs(item.ags)}
-                  onMouseLeave={() => onHoverAgs(null)}
-                  onClick={() => onSelectAgs(item.ags)}
-                >
-                  <span className={`w-6 text-right text-[10px] font-mono ${
-                    isSelected ? 'text-amber-400' : isHovered ? 'text-amber-400' : 'text-zinc-600'
-                  }`}>
-                    {item.rank}.
-                  </span>
-                  <span className={`flex-1 text-xs truncate ${
-                    isSelected ? 'text-amber-400 font-medium' : isHovered ? 'text-amber-400' : 'text-zinc-300'
-                  }`}>
-                    {item.name}
-                  </span>
-                  <span className={`text-[10px] font-mono ${
-                    isSelected ? 'text-amber-400' : isHovered ? 'text-amber-400' : 'text-zinc-500'
-                  }`}>
-                    {formatRankingValue(item.value, indicatorKey, subMetric)}
-                  </span>
-                </div>
-              );
-            })}
+          {/* Mini ranking list - shows hover highlights */}
+          <div className="shrink-0 border-b border-[#262626]/50">
+            <div className="px-3 py-1.5 flex items-center justify-between">
+              <span className="text-zinc-600 text-[10px] uppercase tracking-wider">{t.ranking[lang]}</span>
+              <button
+                onClick={() => onSelectAgs(null)}
+                className="text-zinc-500 hover:text-amber-400 text-[10px] transition-colors"
+              >
+                {t.showAll[lang]} →
+              </button>
+            </div>
+            <div ref={miniRankingRef} className="max-h-32 overflow-y-auto scrollbar-thin">
+              {miniRankingItems.map((item) => {
+                const isHovered = hoveredAgs === item.ags;
+                const isSelected = item.ags === selectedAgs;
+
+                return (
+                  <div
+                    key={item.ags}
+                    className={`px-3 py-1.5 cursor-pointer transition-colors flex items-center gap-2 ${
+                      isSelected
+                        ? 'bg-amber-500/20'
+                        : isHovered
+                          ? 'bg-amber-500/10'
+                          : 'hover:bg-white/5'
+                    }`}
+                    onMouseEnter={() => onHoverAgs(item.ags)}
+                    onMouseLeave={() => onHoverAgs(null)}
+                    onClick={() => onSelectAgs(item.ags)}
+                  >
+                    <span className={`w-6 text-right text-[10px] font-mono ${
+                      isSelected ? 'text-amber-400' : isHovered ? 'text-amber-400' : 'text-zinc-600'
+                    }`}>
+                      {item.rank}.
+                    </span>
+                    <span className={`flex-1 text-xs truncate ${
+                      isSelected ? 'text-amber-400 font-medium' : isHovered ? 'text-amber-400' : 'text-zinc-300'
+                    }`}>
+                      {item.name}
+                    </span>
+                    <span className={`text-[10px] font-mono ${
+                      isSelected ? 'text-amber-400' : isHovered ? 'text-amber-400' : 'text-zinc-500'
+                    }`}>
+                      {formatRankingValue(item.value, indicatorKey, subMetric)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Scrollable detail content */}
+          <div className="overflow-y-auto flex-1 p-4 space-y-4 scrollbar-thin">
+            {indicatorKey === 'auslaender' ? (
+              <AuslaenderDetailContent
+                record={selectedRecord as { name: string; ags: string; regions: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }> }}
+                selectedRegion={subMetric as AuslaenderRegionKey}
+                lang={lang}
+              />
+            ) : (
+              <DeutschlandatlasDetailContent
+                record={selectedRecord as { name: string; ags: string; indicators: Record<string, number | null> }}
+                selectedIndicator={subMetric as DeutschlandatlasKey}
+                lang={lang}
+              />
+            )}
+          </div>
+
+          {/* Footer - back to ranking */}
+          <div className="shrink-0 px-4 py-3 border-t border-[#262626]/50">
+            <button
+              onClick={() => onSelectAgs(null)}
+              className="w-full flex items-center justify-center gap-2 text-zinc-400 hover:text-white text-xs transition-colors py-1.5 rounded hover:bg-white/5"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+              {t.backToList[lang]}
+            </button>
           </div>
         </div>
 
-        {/* Scrollable detail content */}
-        <div className="overflow-y-auto flex-1 p-4 space-y-4 scrollbar-thin">
-          {indicatorKey === 'auslaender' ? (
-            <AuslaenderDetailContent
-              record={selectedRecord as { name: string; ags: string; regions: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }> }}
-              selectedRegion={subMetric as AuslaenderRegionKey}
-            />
-          ) : (
-            <DeutschlandatlasDetailContent
-              record={selectedRecord as { name: string; ags: string; indicators: Record<string, number | null> }}
-              selectedIndicator={subMetric as DeutschlandatlasKey}
-            />
-          )}
-        </div>
-
-        {/* Footer - back to ranking */}
-        <div className="shrink-0 px-4 py-3 border-t border-[#262626]/50">
-          <button
-            onClick={() => onSelectAgs(null)}
-            className="w-full flex items-center justify-center gap-2 text-zinc-400 hover:text-white text-xs transition-colors py-1.5 rounded hover:bg-white/5"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            Zurück zur Rangliste
-          </button>
-        </div>
-      </div>
+        {/* Mobile detail bottom sheet */}
+        <MobileDetailSheet
+          selectedRecord={selectedRecord}
+          selectedRank={selectedRank}
+          indicatorKey={indicatorKey}
+          subMetric={subMetric}
+          selectedYear={selectedYear}
+          onClose={() => onSelectAgs(null)}
+          lang={lang}
+        />
+      </>
     );
   }
 
   // ============ Render Ranking View ============
   return (
-    <div className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[#262626] w-72 max-h-[70vh] flex-col overflow-hidden transition-all duration-200">
-      {/* Header */}
-      <div className="shrink-0 p-3 border-b border-[#262626]">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-amber-400 text-xs">📊</span>
-          <h3 className="text-white font-semibold text-sm truncate">
-            {indicatorLabel}
-          </h3>
-        </div>
-        <div className="text-zinc-500 text-[10px]">
-          {rankings.length} Kreise · {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
-          {unit && <span className="ml-1">· {unit}</span>}
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="shrink-0 px-3 py-2 border-b border-[#262626]/50">
-        <div className="relative">
-          <svg
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500 w-3.5 h-3.5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Suchen..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#1a1a1a] border border-[#333] rounded-md pl-7 pr-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* Scrollable list */}
-      <div
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto scrollbar-thin"
+    <>
+      {/* Mobile ranking toggle button */}
+      <button
+        onClick={onMobileToggle}
+        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-full shadow-xl border border-[#262626] px-4 py-2.5 flex items-center gap-2 touch-feedback active:scale-95 transition-all safe-area-pb"
+        aria-label={t.openRanking[lang]}
       >
-        {filteredRankings.length === 0 ? (
-          <div className="p-4 text-center text-zinc-500 text-xs">
-            {searchQuery ? 'Keine Ergebnisse' : 'Keine Daten verfügbar'}
+        <span className="text-amber-400 text-sm">📊</span>
+        <span className="text-zinc-200 text-sm font-medium no-select">{t.ranking[lang]}</span>
+        <svg
+          className="w-4 h-4 text-zinc-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M5 15l7-7 7 7" />
+        </svg>
+      </button>
+
+      {/* Mobile bottom sheet */}
+      {isMobileOpen && onMobileToggle && (
+        <MobileRankingSheet
+          indicatorLabel={indicatorLabel}
+          rankings={rankings}
+          filteredRankings={filteredRankings}
+          indicatorKey={indicatorKey}
+          subMetric={subMetric}
+          selectedYear={selectedYear}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSelectAgs={onSelectAgs}
+          onClose={onMobileToggle}
+          lang={lang}
+        />
+      )}
+
+      {/* Desktop panel */}
+      <div className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[#262626] w-72 max-h-[70vh] flex-col overflow-hidden transition-all duration-200">
+        {/* Header */}
+        <div className="shrink-0 p-3 border-b border-[#262626]">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-amber-400 text-xs">📊</span>
+            <h3 className="text-white font-semibold text-sm truncate">
+              {indicatorLabel}
+            </h3>
           </div>
-        ) : (
-          <div className="py-1">
-            {filteredRankings.map((item) => {
-              const isHovered = hoveredAgs === item.ags;
+          <div className="text-zinc-500 text-[10px]">
+            {rankings.length} {t.districts[lang]} · {indicatorKey === 'deutschlandatlas' ? deutschlandatlas.meta.year : selectedYear}
+            {unit && <span className="ml-1">· {unit}</span>}
+          </div>
+        </div>
 
-              return (
-                <div
-                  key={item.ags}
-                  data-ags={item.ags}
-                  className={`px-3 py-2 cursor-pointer transition-colors ${
-                    isHovered ? 'bg-amber-500/15' : 'hover:bg-white/5'
-                  }`}
-                  onMouseEnter={() => onHoverAgs(item.ags)}
-                  onMouseLeave={() => onHoverAgs(null)}
-                  onClick={() => onSelectAgs(item.ags)}
-                >
-                  {/* Row content */}
-                  <div className="flex items-center gap-2">
-                    <span className={`w-7 text-right text-xs font-mono ${
-                      isHovered ? 'text-amber-400' : 'text-zinc-600'
-                    }`}>
-                      {item.rank}.
-                    </span>
-                    <span className={`flex-1 text-sm truncate ${
-                      isHovered ? 'text-amber-400' : 'text-white'
-                    }`}>
-                      {item.name}
-                    </span>
-                    <span className={`text-xs font-mono ${
-                      isHovered ? 'text-amber-400' : 'text-zinc-400'
-                    }`}>
-                      {formatRankingValue(item.value, indicatorKey, subMetric)}
-                    </span>
-                  </div>
+        {/* Search */}
+        <div className="shrink-0 px-3 py-2 border-b border-[#262626]/50">
+          <div className="relative">
+            <svg
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500 w-3.5 h-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              placeholder={t.search[lang]}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-[#333] rounded-md pl-7 pr-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+            />
+          </div>
+        </div>
 
-                  {/* Percentage bar */}
-                  <div className="mt-1.5 ml-9 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        isHovered
-                          ? 'bg-gradient-to-r from-amber-500 to-orange-500'
-                          : 'bg-gradient-to-r from-yellow-600/70 to-red-600/70'
-                      }`}
-                      style={{ width: `${item.percentage}%` }}
-                    />
+        {/* Scrollable list */}
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto scrollbar-thin"
+        >
+          {filteredRankings.length === 0 ? (
+            <div className="p-4 text-center text-zinc-500 text-xs">
+              {searchQuery ? t.noResults[lang] : t.noDataAvailable[lang]}
+            </div>
+          ) : (
+            <div className="py-1">
+              {filteredRankings.map((item) => {
+                const isHovered = hoveredAgs === item.ags;
+
+                return (
+                  <div
+                    key={item.ags}
+                    data-ags={item.ags}
+                    className={`px-3 py-2 cursor-pointer transition-colors ${
+                      isHovered ? 'bg-amber-500/15' : 'hover:bg-white/5'
+                    }`}
+                    onMouseEnter={() => onHoverAgs(item.ags)}
+                    onMouseLeave={() => onHoverAgs(null)}
+                    onClick={() => onSelectAgs(item.ags)}
+                  >
+                    {/* Row content */}
+                    <div className="flex items-center gap-2">
+                      <span className={`w-7 text-right text-xs font-mono ${
+                        isHovered ? 'text-amber-400' : 'text-zinc-600'
+                      }`}>
+                        {item.rank}.
+                      </span>
+                      <span className={`flex-1 text-sm truncate ${
+                        isHovered ? 'text-amber-400' : 'text-white'
+                      }`}>
+                        {item.name}
+                      </span>
+                      <span className={`text-xs font-mono ${
+                        isHovered ? 'text-amber-400' : 'text-zinc-400'
+                      }`}>
+                        {formatRankingValue(item.value, indicatorKey, subMetric)}
+                      </span>
+                    </div>
+
+                    {/* Percentage bar */}
+                    <div className="mt-1.5 ml-9 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          isHovered
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+                            : 'bg-gradient-to-r from-yellow-600/70 to-red-600/70'
+                        }`}
+                        style={{ width: `${item.percentage}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer with count */}
+        {searchQuery && filteredRankings.length !== rankings.length && (
+          <div className="shrink-0 px-3 py-2 border-t border-[#262626]/50 text-zinc-500 text-[10px] text-center">
+            {filteredRankings.length} von {rankings.length} angezeigt
           </div>
         )}
       </div>
-
-      {/* Footer with count */}
-      {searchQuery && filteredRankings.length !== rankings.length && (
-        <div className="shrink-0 px-3 py-2 border-t border-[#262626]/50 text-zinc-500 text-[10px] text-center">
-          {filteredRankings.length} von {rankings.length} angezeigt
-        </div>
-      )}
-    </div>
+    </>
   );
 }
