@@ -685,7 +685,6 @@ function MobileRankingSheet({
         <div className="sheet-drag-area flex items-center justify-between px-4 pb-3 border-b border-[#262626] shrink-0">
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <span className={`text-sm ${isAuslaenderAccent ? 'text-red-400' : 'text-amber-400'}`}>📊</span>
               <h3 className="text-white font-semibold text-sm truncate">
                 {indicatorLabel}
               </h3>
@@ -1092,17 +1091,27 @@ export function RankingPanel({
       {/* Mobile ranking toggle button */}
       <button
         onClick={onMobileToggle}
-        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-full shadow-xl border border-[#262626] px-4 py-2.5 flex items-center gap-2 touch-feedback active:scale-95 transition-all safe-area-pb"
+        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-full shadow-xl border border-[#262626] px-4 py-2.5 flex items-center gap-1.5 touch-feedback active:scale-95 transition-all safe-area-pb"
         aria-label={t.openRanking[lang]}
       >
-        <span className={`text-sm ${isAuslaenderAccent ? 'text-red-400' : 'text-amber-400'}`}>📊</span>
+        <svg
+          className={`w-4 h-4 ${isAuslaenderAccent ? 'text-red-400' : 'text-amber-400'}`}
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <rect x="3" y="14" width="4" height="7" rx="0.5" />
+          <rect x="10" y="8" width="4" height="13" rx="0.5" />
+          <rect x="17" y="3" width="4" height="18" rx="0.5" />
+        </svg>
         <span className="text-zinc-200 text-sm font-medium no-select">{t.ranking[lang]}</span>
         <svg
           className="w-4 h-4 text-zinc-400"
-          fill="none"
           viewBox="0 0 24 24"
+          fill="none"
           stroke="currentColor"
           strokeWidth={2}
+          aria-hidden="true"
         >
           <path d="M5 15l7-7 7 7" />
         </svg>
@@ -1137,7 +1146,6 @@ export function RankingPanel({
         {/* Header */}
         <div className="shrink-0 p-3 border-b border-[#262626]">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-sm ${isAuslaenderAccent ? 'text-red-400' : 'text-amber-400'}`}>📊</span>
             <h3 className="text-white font-semibold text-base truncate">
               {indicatorLabel}
             </h3>

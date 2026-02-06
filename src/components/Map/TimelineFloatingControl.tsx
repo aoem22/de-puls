@@ -88,7 +88,7 @@ export function TimelineFloatingControl({
 
   return (
     <div
-      className={`absolute left-1/2 -translate-x-1/2 z-[1000] transition-all duration-200 ease-out ${hasTemporalData ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-6 opacity-0 pointer-events-none'} ${className}`}
+      className={`absolute left-1/2 -translate-x-1/2 z-[1000] transition-all duration-200 ease-out safe-area-pb ${hasTemporalData ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-6 opacity-0 pointer-events-none'} ${className}`}
       role="group"
       aria-label={translations.timeSeries[lang]}
     >
@@ -136,7 +136,7 @@ export function TimelineFloatingControl({
             onWheel={handleRailWheel}
           >
             {displayYears.length > 1 && (
-              <div className="pointer-events-none absolute inset-x-[7px] top-1/2 -translate-y-1/2 h-3 z-10">
+              <div className="pointer-events-none absolute inset-x-[7px] top-1/2 -translate-y-1/2 h-3 z-10 hidden md:block">
                 {displayYears.map((year, index) => {
                   const positionPercent = (index / (displayYears.length - 1)) * 100;
                   const isActiveDot = index === activeIndex;

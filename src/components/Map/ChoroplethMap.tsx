@@ -92,7 +92,12 @@ function KreisSelectionResetter({
     const leftSelectionMode = hadSelection && !selectedKreis;
 
     if (enabled && leftSelectionMode) {
-      map.fitBounds(germanyBounds, { padding: [80, 80], maxZoom: GERMANY_ZOOM });
+      const isMobile = map.getContainer().clientWidth < 768;
+      map.fitBounds(germanyBounds, {
+        paddingTopLeft: [80, 80],
+        paddingBottomRight: [80, 80 + (isMobile ? 100 : 0)],
+        maxZoom: GERMANY_ZOOM,
+      });
     }
 
     previousSelectedRef.current = selectedKreis;
@@ -110,12 +115,15 @@ function MapInitializer({ germanyBounds }: { germanyBounds: [[number, number], [
     const container = map.getContainer();
     const width = container.clientWidth;
     const height = container.clientHeight;
-    const paddingRatio = width < 768 ? 0.05 : 0.1;
+    const isMobile = width < 768;
+    const paddingRatio = isMobile ? 0.05 : 0.1;
     const padding: L.PointTuple = [height * paddingRatio, width * paddingRatio];
+    // On mobile, add extra bottom padding to account for timeline + ranking button overlay
+    const bottomExtra = isMobile ? 100 : 0;
 
     map.fitBounds(germanyBounds, {
       paddingTopLeft: [padding[1], padding[0]],
-      paddingBottomRight: [padding[1], padding[0]],
+      paddingBottomRight: [padding[1], padding[0] + bottomExtra],
     });
 
     // Expand maxBounds slightly so user can pan a bit but not lose Germany
@@ -659,7 +667,7 @@ export function ChoroplethMap() {
           onTogglePlay={handleToggleBlaulichtPlayback}
           onIndexChange={handleBlaulichtScrub}
           currentTimestamp={playbackCurrentCrime?.publishedAt}
-          className="bottom-4"
+          className="bottom-20 md:bottom-4"
         />
       )}
 
