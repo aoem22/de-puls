@@ -183,13 +183,13 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
           <div className="px-5 py-4 border-b border-[#1a1a1a] flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2.5">
               <span className="text-zinc-400">{Icons.alert}</span>
-              <span className="text-xs font-medium tracking-wide text-zinc-400 uppercase">
+              <span className="text-[11px] font-medium tracking-wide text-zinc-300 uppercase">
                 {t.pressRelease[lang]}
               </span>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-[#1a1a1a] transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1a1a] transition-colors"
               aria-label={t.close[lang]}
             >
               {Icons.close}
@@ -209,14 +209,14 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
             <div className="px-5 py-4 space-y-3 border-b border-[#151515] bg-[#0a0a0a]">
               {/* Date */}
               <div className="flex items-center gap-3">
-                <span className="text-zinc-500 w-5 flex justify-center">{Icons.calendar}</span>
+                <span className="text-zinc-400 w-5 flex justify-center">{Icons.calendar}</span>
                 <span className="text-sm text-zinc-300">{formatDate(crime.publishedAt)}</span>
               </div>
 
               {/* Location */}
               {crime.locationText && (
                 <div className="flex items-center gap-3">
-                  <span className="text-zinc-500 w-5 flex justify-center">{Icons.location}</span>
+                  <span className="text-zinc-400 w-5 flex justify-center">{Icons.location}</span>
                   <span className="text-sm text-zinc-300">{crime.locationText}</span>
                 </div>
               )}
@@ -224,14 +224,14 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
               {/* Agency */}
               {crime.sourceAgency && (
                 <div className="flex items-center gap-3">
-                  <span className="text-zinc-500 w-5 flex justify-center">{Icons.agency}</span>
-                  <span className="text-sm text-zinc-400">{crime.sourceAgency}</span>
+                  <span className="text-zinc-400 w-5 flex justify-center">{Icons.agency}</span>
+                  <span className="text-sm text-zinc-300">{crime.sourceAgency}</span>
                 </div>
               )}
 
               {/* Category badges */}
               <div className="flex items-start gap-3">
-                <span className="text-zinc-500 w-5 flex justify-center mt-0.5">{Icons.tag}</span>
+                <span className="text-zinc-400 w-5 flex justify-center mt-0.5">{Icons.tag}</span>
                 <div className="flex flex-wrap gap-1.5">
                   {crime.categories.length > 0 ? (
                     crime.categories.map((cat) => {
@@ -251,7 +251,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
                       );
                     })
                   ) : (
-                    <span className="px-2.5 py-1 text-xs rounded-md bg-zinc-900 border border-zinc-800 text-zinc-500">
+                    <span className="px-2.5 py-1 text-xs rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400">
                       {t.other[lang]}
                     </span>
                   )}
@@ -260,9 +260,9 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
 
               {/* Precision indicator */}
               <div className="flex items-center gap-3">
-                <span className="text-zinc-500 w-5 flex justify-center">{Icons.target}</span>
-                <span className="text-xs text-zinc-500">
-                  {t.accuracy[lang]}: <span className="text-zinc-400 ml-1">{tNested('precisionLevels', crime.precision, lang)}</span>
+                <span className="text-zinc-400 w-5 flex justify-center">{Icons.target}</span>
+                <span className="text-sm text-zinc-400">
+                  {t.accuracy[lang]}: <span className="text-zinc-300 ml-1">{tNested('precisionLevels', crime.precision, lang)}</span>
                 </span>
               </div>
             </div>
@@ -271,7 +271,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
             {bodyText && (
               <div className="px-5 py-5">
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="text-[10px] font-semibold tracking-widest text-zinc-600 uppercase">
+                  <span className="text-xs font-semibold tracking-widest text-zinc-400 uppercase">
                     {t.report[lang]}
                   </span>
                   <div className="flex-1 h-px bg-[#1a1a1a]" />
@@ -295,7 +295,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
                 {Icons.externalLink}
               </span>
               <span>{t.openSource[lang]}</span>
-              <span className="text-zinc-600 text-xs ml-auto">{sourceDomain}</span>
+              <span className="text-zinc-400 text-xs ml-auto">{sourceDomain}</span>
             </a>
           </div>
         </div>
@@ -316,7 +316,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
         <div className="sheet-drag-area px-4 pb-3 border-b border-[#1a1a1a] flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-zinc-400">{Icons.alert}</span>
-            <span className="text-xs font-medium tracking-wide text-zinc-400 uppercase no-select">
+            <span className="text-[11px] font-medium tracking-wide text-zinc-300 uppercase no-select">
               {t.report[lang]}
             </span>
           </div>
@@ -342,21 +342,21 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
           <div className="px-4 py-3 space-y-2.5 border-b border-[#151515] bg-[#0a0a0a]">
             {/* Date */}
             <div className="flex items-center gap-3">
-              <span className="text-zinc-500 w-5 flex justify-center">{Icons.calendar}</span>
+              <span className="text-zinc-400 w-5 flex justify-center">{Icons.calendar}</span>
               <span className="text-sm text-zinc-300">{formatDate(crime.publishedAt)}</span>
             </div>
 
             {/* Location */}
             {crime.locationText && (
               <div className="flex items-center gap-3">
-                <span className="text-zinc-500 w-5 flex justify-center">{Icons.location}</span>
+                <span className="text-zinc-400 w-5 flex justify-center">{Icons.location}</span>
                 <span className="text-sm text-zinc-300">{crime.locationText}</span>
               </div>
             )}
 
             {/* Category badges */}
             <div className="flex items-start gap-3">
-              <span className="text-zinc-500 w-5 flex justify-center mt-0.5">{Icons.tag}</span>
+              <span className="text-zinc-400 w-5 flex justify-center mt-0.5">{Icons.tag}</span>
               <div className="flex flex-wrap gap-1.5">
                 {crime.categories.length > 0 ? (
                   crime.categories.map((cat) => {
@@ -376,7 +376,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
                     );
                   })
                 ) : (
-                  <span className="px-2 py-0.5 text-xs rounded-md bg-zinc-900 border border-zinc-800 text-zinc-500">
+                  <span className="px-2 py-0.5 text-xs rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400">
                     {t.other[lang]}
                   </span>
                 )}

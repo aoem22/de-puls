@@ -81,9 +81,12 @@ GERMAN_TO_CATEGORY: dict[str, str] = {
 }
 
 
-def make_id(url: str, published_at: str) -> str:
-    """Generate a deterministic ID from URL + timestamp."""
-    raw = f"{url}:{published_at}"
+def make_id(url: str, published_at: str, location_text: str = "") -> str:
+    """Generate a deterministic ID from URL + timestamp + location.
+
+    The location_text disambiguates multiple incidents from the same article.
+    """
+    raw = f"{url}:{published_at}:{location_text}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -151,6 +154,7 @@ def transform_article(article: dict) -> dict | None:
     """Transform enriched article to Supabase crime_records row."""
     loc = article.get("location", {})
     crime = article.get("crime", {})
+    details = article.get("details", {})
 
     # Skip articles without coordinates
     lat = loc.get("lat")
@@ -161,20 +165,28 @@ def transform_article(article: dict) -> dict | None:
     url = article.get("url", "")
     published_at = sanitize_timestamp(article.get("date", ""))
 
+    # Extract weapon_type from details, validate against known values
+    weapon_type = details.get("weapon_type")
+    valid_weapons = {"knife", "gun", "blunt", "explosive", "vehicle", "none", "unknown"}
+    if weapon_type not in valid_weapons:
+        weapon_type = None
+
+    location_text = build_location_text(article)
+
     return {
-        "id": make_id(url, published_at),
+        "id": make_id(url, published_at, location_text or ""),
         "title": article.get("title", ""),
         "summary": None,
         "body": article.get("body"),
         "published_at": published_at,
         "source_url": url,
         "source_agency": article.get("source"),
-        "location_text": build_location_text(article),
+        "location_text": location_text,
         "latitude": lat,
         "longitude": lon,
         "precision": map_precision(article),
         "categories": map_category(crime),
-        "weapon_type": None,
+        "weapon_type": weapon_type,
         "confidence": loc.get("confidence", 0.5),
     }
 

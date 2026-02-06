@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -38,6 +38,18 @@ function formatCategories(categories: CrimeCategory[]): string {
     .join(', ');
 }
 
+function getBaseMarkerRadius(zoomLevel: number): number {
+  // Keep overview readable at low zoom, then scale markers up as users zoom in.
+  if (zoomLevel <= 5) return 2.3;
+  if (zoomLevel <= 6) return 2.6;
+  if (zoomLevel <= 7) return 3.0;
+  if (zoomLevel <= 8) return 3.4;
+  if (zoomLevel <= 9) return 3.8;
+  if (zoomLevel <= 10) return 4.3;
+  if (zoomLevel <= 11) return 4.9;
+  return 5.6;
+}
+
 // Canvas-based CircleMarker style calculation
 function getCircleMarkerStyle(
   crime: CrimeRecord,
@@ -46,7 +58,8 @@ function getCircleMarkerStyle(
   isHovered: boolean,
   filterCategory: CrimeCategory | null,
   isVisible: boolean,
-  isFlashing: boolean
+  isFlashing: boolean,
+  zoomLevel: number
 ): L.CircleMarkerOptions {
   if (!isVisible) {
     return {
@@ -61,8 +74,12 @@ function getCircleMarkerStyle(
   const matchesFilter = filterCategory === null || crime.categories.includes(filterCategory);
   const categoryColor = categoryColorMap.get(category) ?? '#94a3b8';
 
-  // Simple radius: slightly larger for selected/hovered
-  const radius = isSelected ? 8 : isHovered ? 7 : isFlashing ? 7 : 4;
+  const baseRadius = getBaseMarkerRadius(zoomLevel);
+  const radius = isSelected
+    ? baseRadius + 2
+    : isHovered || isFlashing
+      ? baseRadius + 1.2
+      : baseRadius;
 
   if (monochrome) {
     if (filterCategory !== null) {
@@ -124,6 +141,7 @@ export function CrimeLayer({
   flashingCrimeIds = null,
 }: CrimeLayerProps) {
   const map = useMap();
+  const [zoomLevel, setZoomLevel] = useState<number>(map.getZoom());
   const layerRef = useRef<L.FeatureGroup | null>(null);
   const markersMapRef = useRef<Map<string, L.CircleMarker>>(new Map());
   const crimesMapRef = useRef<Map<L.CircleMarker, CrimeRecord>>(new Map());
@@ -136,6 +154,17 @@ export function CrimeLayer({
     onClickRef.current = onCrimeClick;
     onHoverRef.current = onCrimeHover;
   }, [onCrimeClick, onCrimeHover]);
+
+  useEffect(() => {
+    const handleZoomEnd = () => {
+      setZoomLevel(map.getZoom());
+    };
+
+    map.on('zoomend', handleZoomEnd);
+    return () => {
+      map.off('zoomend', handleZoomEnd);
+    };
+  }, [map]);
 
   // Initialize feature group once
   useEffect(() => {
@@ -174,7 +203,16 @@ export function CrimeLayer({
       // Skip non-matching crimes entirely when a filter is active
       if (filterCategory !== null && !crime.categories.includes(filterCategory)) continue;
 
-      const style = getCircleMarkerStyle(crime, monochrome, false, false, filterCategory, true, false);
+      const style = getCircleMarkerStyle(
+        crime,
+        monochrome,
+        false,
+        false,
+        filterCategory,
+        true,
+        false,
+        map.getZoom()
+      );
       const marker = L.circleMarker([crime.latitude, crime.longitude], style);
 
       // Store crime reference for lookups
@@ -225,7 +263,7 @@ export function CrimeLayer({
 
     // Add all markers to feature group
     markers.forEach(m => layer.addLayer(m));
-  }, [crimes, monochrome, filterCategory]);
+  }, [crimes, monochrome, filterCategory, map]);
 
   // Update styles for selected/hovered markers (without recreating)
   useEffect(() => {
@@ -236,7 +274,16 @@ export function CrimeLayer({
       const isHovered = crime.id === hoveredCrimeId;
       const isVisible = visibleCrimeIds === null || visibleCrimeIds.has(crime.id);
       const isFlashing = flashingCrimeIds?.has(crime.id) ?? false;
-      const style = getCircleMarkerStyle(crime, monochrome, isSelected, isHovered, filterCategory, isVisible, isFlashing);
+      const style = getCircleMarkerStyle(
+        crime,
+        monochrome,
+        isSelected,
+        isHovered,
+        filterCategory,
+        isVisible,
+        isFlashing,
+        zoomLevel
+      );
       marker.setStyle(style);
       marker.setRadius(style.radius ?? 4);
 
@@ -245,7 +292,7 @@ export function CrimeLayer({
         marker.bringToFront();
       }
     }
-  }, [selectedCrimeId, hoveredCrimeId, monochrome, filterCategory, visibleCrimeIds, flashingCrimeIds]);
+  }, [selectedCrimeId, hoveredCrimeId, monochrome, filterCategory, visibleCrimeIds, flashingCrimeIds, zoomLevel]);
 
   return null;
 }

@@ -44,6 +44,7 @@ export const translations = {
   ranking: { de: 'Rangliste', en: 'Ranking' },
   openRanking: { de: 'Rangliste öffnen', en: 'Open ranking' },
   districts: { de: 'Kreise', en: 'Districts' },
+  cities: { de: 'Städte', en: 'Cities' },
 
   // Detail Panel - Ausländer
   totalForeigners: { de: 'Gesamt Ausländer', en: 'Total Foreigners' },
@@ -66,7 +67,7 @@ export const translations = {
 
   // Indicators (main categories)
   indicators: {
-    auslaender: { de: 'Ausländer nach Herkunft', en: 'Foreigners by Origin' },
+    auslaender: { de: 'Ausländer', en: 'Foreigners' },
     deutschlandatlas: { de: 'Deutschlandatlas', en: 'Germany Atlas' },
     kriminalstatistik: { de: 'Kriminalstatistik', en: 'Crime Statistics' },
     blaulicht: { de: 'Polizei-Meldungen', en: 'Police Reports' },
@@ -74,8 +75,8 @@ export const translations = {
 
   indicatorDescriptions: {
     auslaender: {
-      de: 'Ausländische Bevölkerung nach Herkunftsregion auf Kreisebene',
-      en: 'Foreign population by region of origin at district level'
+      de: 'Ausländische Bevölkerung auf Kreisebene',
+      en: 'Foreign population at district level'
     },
     deutschlandatlas: {
       de: 'Sozioökonomische Indikatoren aus dem Deutschlandatlas der Bundesregierung',

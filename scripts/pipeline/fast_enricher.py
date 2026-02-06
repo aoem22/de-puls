@@ -32,7 +32,7 @@ os.environ['SSL_CERT_FILE'] = certifi.where()
 # Settings
 BATCH_SIZE = 10  # Articles per LLM call
 API_DELAY = 0.2  # Seconds between batches
-MODEL = "google/gemini-3-flash-preview"
+MODEL = "x-ai/grok-4-fast"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
@@ -40,28 +40,41 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 BATCH_PROMPT = """
 Analysiere diese {count} deutschen Polizeiberichte und extrahiere strukturierte Daten.
 
-Für JEDEN Artikel, extrahiere:
+WICHTIG: Viele Pressemeldungen enthalten MEHRERE separate Vorfälle. Erstelle für JEDEN einzelnen Vorfall ein eigenes JSON-Objekt. Verwende den gleichen article_index für alle Vorfälle aus demselben Artikel.
+
+Für JEDEN Vorfall, extrahiere:
 1. STANDORT: street, house_number, district, city, confidence (0-1)
 2. TATZEIT: date (YYYY-MM-DD), time (HH:MM), precision (exact/approximate/unknown)
 3. DELIKT (PKS): pks_code (4-stellig), pks_category, sub_type, confidence (0-1)
+4. DETAILS: weapon_type, drug_type, victim_count, suspect_count, victim_age, suspect_age, severity, motive
 
 PKS-Kategorien:
+- 0100: Mord/Totschlag, 0200: Tötungsdelikt
+- 1100: Vergewaltigung/sexuelle Nötigung, 1300: Sexueller Missbrauch
 - 2100: Raub, 2200: Körperverletzung, 2340: Bedrohung
 - 3000/4000: Diebstahl, 4350: Wohnungseinbruch, 4780: Kfz-Diebstahl
 - 5100: Betrug, 6740: Brandstiftung, 6750: Sachbeschädigung
 - 7100: Verkehrsunfall, 7200: Fahrerflucht, 7300: Trunkenheit
 - 8910: Drogen
 
+Feldwerte (nur diese verwenden):
+- weapon_type: knife|gun|blunt|explosive|vehicle|none|unknown
+- drug_type: cannabis|cocaine|amphetamine|heroin|ecstasy|meth|other|null
+- severity: minor|serious|critical|fatal|property_only|unknown
+- motive: domestic|robbery|hate|drugs|road_rage|dispute|unknown|null
+- victim_age/suspect_age: Alter als String oder null wenn unbekannt
+
 ARTIKEL:
 {articles_json}
 
-Antworte mit JSON-Array, ein Objekt pro Artikel (gleiche Reihenfolge):
+Antworte NUR mit JSON-Array. Ein Objekt pro VORFALL (nicht pro Artikel — ein Artikel kann mehrere Vorfälle haben):
 [
   {{
     "article_index": 0,
     "location": {{"street": "...", "house_number": null, "district": null, "city": "...", "confidence": 0.8}},
     "incident_time": {{"date": "YYYY-MM-DD", "time": "HH:MM", "precision": "exact"}},
-    "crime": {{"pks_code": "XXXX", "pks_category": "...", "sub_type": "...", "confidence": 0.9}}
+    "crime": {{"pks_code": "XXXX", "pks_category": "...", "sub_type": "...", "confidence": 0.9}},
+    "details": {{"weapon_type": "knife", "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "severity": "serious", "motive": "dispute"}}
   }},
   ...
 ]
@@ -128,7 +141,7 @@ class FastEnricher:
                 model=MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=4000,
+                max_tokens=5000,
             )
             text = response.choices[0].message.content
 
@@ -220,82 +233,111 @@ class FastEnricher:
             return None, None, "none"
 
     def enrich_batch(self, articles: list[dict]) -> list[dict]:
-        """Enrich a batch of articles."""
+        """Enrich a batch of articles. Returns a flat list of enriched records.
+
+        One article may produce multiple records if it contains multiple incidents.
+        """
         # Split into cached and uncached
         uncached = []
         uncached_indices = []
-        results = [None] * len(articles)
+        # Use dict of lists: orig_idx -> list of enriched records
+        results_by_idx: dict[int, list[dict]] = {}
 
         for i, art in enumerate(articles):
             key = self._cache_key(art.get("url", ""), art.get("body", ""))
             if key in self.cache:
-                results[i] = {**art, **self.cache[key]}
+                cached = self.cache[key]
+                # Support both old format (single dict) and new format (list)
+                if isinstance(cached, list):
+                    results_by_idx[i] = [{**art, **e} for e in cached]
+                else:
+                    results_by_idx[i] = [{**art, **cached}]
             else:
                 uncached.append(art)
                 uncached_indices.append(i)
 
-        if not uncached:
-            return results
+        if uncached:
+            # Call LLM for uncached articles
+            llm_results = self._call_llm_batch(uncached)
 
-        # Call LLM for uncached articles
-        llm_results = self._call_llm_batch(uncached)
+            # Group LLM results by article_index (multiple incidents per article)
+            incidents_by_idx: dict[int, list[dict]] = {}
+            for llm_result in llm_results:
+                idx = llm_result.get("article_index", -1)
+                if 0 <= idx < len(uncached):
+                    incidents_by_idx.setdefault(idx, []).append(llm_result)
 
-        # Match results back to articles
-        for llm_result in llm_results:
-            idx = llm_result.get("article_index", -1)
-            if 0 <= idx < len(uncached):
+            # Process each article's incidents
+            for idx, incidents in incidents_by_idx.items():
                 art = uncached[idx]
                 orig_idx = uncached_indices[idx]
+                enrichments = []
 
-                # Extract enrichment data
-                loc = llm_result.get("location", {})
-                enrichment = {
-                    "location": loc,
-                    "incident_time": llm_result.get("incident_time", {}),
-                    "crime": llm_result.get("crime", {}),
-                }
+                for llm_result in incidents:
+                    loc = llm_result.get("location") or {}
+                    enrichment = {
+                        "location": loc,
+                        "incident_time": llm_result.get("incident_time") or {},
+                        "crime": llm_result.get("crime") or {},
+                        "details": llm_result.get("details") or {},
+                    }
 
-                # Geocode if we have location data
-                if loc.get("street") or loc.get("city") or loc.get("district"):
-                    lat, lon, precision = self._geocode(
-                        street=loc.get("street"),
-                        city=loc.get("city") or art.get("city"),
-                        district=loc.get("district"),
-                        bundesland=art.get("bundesland"),
-                    )
-                    enrichment["location"]["lat"] = lat
-                    enrichment["location"]["lon"] = lon
-                    enrichment["location"]["precision"] = precision
-                    enrichment["location"]["bundesland"] = art.get("bundesland")
+                    # Geocode if we have location data
+                    if loc.get("street") or loc.get("city") or loc.get("district"):
+                        lat, lon, precision = self._geocode(
+                            street=loc.get("street"),
+                            city=loc.get("city") or art.get("city"),
+                            district=loc.get("district"),
+                            bundesland=art.get("bundesland"),
+                        )
+                        enrichment["location"]["lat"] = lat
+                        enrichment["location"]["lon"] = lon
+                        enrichment["location"]["precision"] = precision
+                        enrichment["location"]["bundesland"] = art.get("bundesland")
 
-                # Cache and store
+                    enrichments.append(enrichment)
+
+                # Cache all incidents for this article (new list format)
                 key = self._cache_key(art.get("url", ""), art.get("body", ""))
-                self.cache[key] = enrichment
-                results[orig_idx] = {**art, **enrichment}
+                self.cache[key] = enrichments
+                results_by_idx[orig_idx] = [{**art, **e} for e in enrichments]
 
-        # Fill any missing results with original articles
-        for i, r in enumerate(results):
-            if r is None:
-                results[i] = articles[i]
+        # Build flat output list, preserving article order
+        results = []
+        for i in range(len(articles)):
+            if i in results_by_idx:
+                results.extend(results_by_idx[i])
+            else:
+                # No enrichment found — keep original article
+                results.append(articles[i])
 
         return results
 
     def enrich_all(self, articles: list[dict]) -> list[dict]:
-        """Enrich all articles with batching and progress."""
+        """Enrich all articles with batching and progress.
+
+        Returns a flat list of enriched records. May be longer than input
+        if articles contain multiple incidents.
+        """
         total = len(articles)
         results = []
         batches = [articles[i:i + BATCH_SIZE] for i in range(0, total, BATCH_SIZE)]
 
         print(f"Processing {total} articles in {len(batches)} batches...", flush=True)
 
+        articles_done = 0
         for batch_num, batch in enumerate(batches, 1):
             batch_results = self.enrich_batch(batch)
             results.extend(batch_results)
 
-            # Progress
-            done = min(batch_num * BATCH_SIZE, total)
+            articles_done += len(batch)
             geocoded = sum(1 for r in results if r.get("location", {}).get("lat"))
-            print(f"  Batch {batch_num}/{len(batches)}: {done}/{total} articles, {geocoded} geocoded", flush=True)
+            print(
+                f"  Batch {batch_num}/{len(batches)}: "
+                f"{articles_done}/{total} articles → {len(results)} records, "
+                f"{geocoded} geocoded",
+                flush=True,
+            )
 
             # Small delay between batches
             if batch_num < len(batches):

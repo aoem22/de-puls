@@ -9,6 +9,7 @@ interface TimelineFloatingControlProps {
   isPlaying: boolean;
   onTogglePlay: () => void;
   onYearChange: (year: string) => void;
+  accent?: 'amber' | 'red';
   className?: string;
 }
 
@@ -18,6 +19,7 @@ export function TimelineFloatingControl({
   isPlaying,
   onTogglePlay,
   onYearChange,
+  accent = 'amber',
   className = '',
 }: TimelineFloatingControlProps) {
   const { lang } = useTranslation();
@@ -34,6 +36,7 @@ export function TimelineFloatingControl({
     return displayYears.length - 1;
   }, [displayYears, displayYear]);
   const activeYear = displayYears[activeIndex] ?? displayYear;
+  const isRedAccent = accent === 'red';
   const thumbPercent = useMemo(() => {
     if (displayYears.length <= 1) return 0;
     return (activeIndex / (displayYears.length - 1)) * 100;
@@ -45,6 +48,11 @@ export function TimelineFloatingControl({
     if (nextIndex < 0 || nextIndex >= displayYears.length) return;
     const nextYear = displayYears[nextIndex];
     if (nextYear) onYearChange(nextYear);
+  };
+
+  const handleYearDotClick = (index: number) => {
+    stepTo(index);
+    flashYearBubble();
   };
 
   const flashYearBubble = () => {
@@ -90,22 +98,31 @@ export function TimelineFloatingControl({
             type="button"
             onClick={onTogglePlay}
             aria-label={isPlaying ? (lang === 'de' ? 'Pause' : 'Pause') : (lang === 'de' ? 'Abspielen' : 'Play')}
-            className={`w-7 h-7 flex items-center justify-center rounded-md border transition-colors ${
+            className={`w-7 h-7 flex items-center justify-center rounded-md border transition-all duration-200 ${
               isPlaying
-                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                : 'bg-[#0a0a0a]/70 border-[#333] text-zinc-200 hover:border-amber-500/60'
+                ? (isRedAccent ? 'bg-red-500/20 border-red-500 text-red-300' : 'bg-amber-500/20 border-amber-500 text-amber-300')
+                : (isRedAccent ? 'bg-[#0a0a0a]/70 border-[#333] text-zinc-200 hover:border-red-500/60' : 'bg-[#0a0a0a]/70 border-[#333] text-zinc-200 hover:border-amber-500/60')
             }`}
           >
-            {isPlaying ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <span className="relative block w-3 h-3">
+              <svg
+                className={`absolute inset-0 w-3 h-3 transition-opacity duration-200 ${isPlaying ? 'opacity-0' : 'opacity-100'}`}
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              <svg
+                className={`absolute inset-0 w-3 h-3 transition-opacity duration-200 ${isPlaying ? 'opacity-100' : 'opacity-0'}`}
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
                 <rect x="6" y="4" width="4" height="16" rx="1" />
                 <rect x="14" y="4" width="4" height="16" rx="1" />
               </svg>
-            ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            )}
+            </span>
           </button>
 
           <span className="inline-flex items-center justify-center h-7 text-[11px] text-zinc-100 font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-md px-1.5 shadow-sm">
@@ -118,13 +135,39 @@ export function TimelineFloatingControl({
             onMouseLeave={() => setShowYearBubble(false)}
             onWheel={handleRailWheel}
           >
+            {displayYears.length > 1 && (
+              <div className="pointer-events-none absolute inset-x-[7px] top-1/2 -translate-y-1/2 h-3 z-10">
+                {displayYears.map((year, index) => {
+                  const positionPercent = (index / (displayYears.length - 1)) * 100;
+                  const isActiveDot = index === activeIndex;
+
+                  return (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => handleYearDotClick(index)}
+                      className={`pointer-events-auto absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border transition-all duration-150 ${
+                        isActiveDot
+                          ? (isRedAccent
+                            ? 'w-2.5 h-2.5 bg-red-300 border-red-200 shadow-[0_0_0_2px_rgba(10,10,10,0.65)]'
+                            : 'w-2.5 h-2.5 bg-amber-300 border-amber-200 shadow-[0_0_0_2px_rgba(10,10,10,0.65)]')
+                          : 'w-1.5 h-1.5 bg-zinc-300/85 border-zinc-200/65 hover:w-2 hover:h-2 hover:bg-zinc-200'
+                      }`}
+                      style={{ left: `${positionPercent}%` }}
+                      aria-label={`${lang === 'de' ? 'Zu Jahr wechseln' : 'Jump to year'} ${year}`}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
             <div
               className={`pointer-events-none absolute -top-7 z-10 -translate-x-1/2 transition-all duration-150 ${
                 showYearBubble || isPlaying ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
               }`}
               style={{ left: `clamp(7px, ${thumbPercent}%, calc(100% - 7px))` }}
             >
-              <span className="block text-[10px] font-semibold text-amber-200 tabular-nums bg-[#0f0f10]/90 border border-amber-500/30 rounded px-1 py-0.5 shadow-md">
+              <span className={`block text-[10px] font-semibold tabular-nums bg-[#0f0f10]/90 rounded px-1 py-0.5 shadow-md ${isRedAccent ? 'text-red-200 border border-red-500/30' : 'text-amber-200 border border-amber-500/30'}`}>
                 {activeYear}
               </span>
             </div>
@@ -141,7 +184,7 @@ export function TimelineFloatingControl({
               onPointerDown={() => setShowYearBubble(true)}
               onPointerUp={() => setShowYearBubble(false)}
               onPointerCancel={() => setShowYearBubble(false)}
-              className="timeline-slider w-full h-7"
+              className={`timeline-slider w-full h-7 ${isRedAccent ? 'timeline-slider-red' : ''}`}
               aria-label={translations.timeSeries[lang]}
             />
           </div>

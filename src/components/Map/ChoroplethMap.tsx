@@ -133,6 +133,8 @@ function MapInitializer({ germanyBounds }: { germanyBounds: [[number, number], [
 export function ChoroplethMap() {
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
   const [isMobileRankingOpen, setIsMobileRankingOpen] = useState(false);
+  const [shouldRenderRankingPanel, setShouldRenderRankingPanel] = useState(true);
+  const [isRankingPanelVisible, setIsRankingPanelVisible] = useState(true);
 
   // Fetch dataset metadata (available years) from Supabase
   const { data: datasetMeta } = useAllDatasetMeta();
@@ -198,6 +200,7 @@ export function ChoroplethMap() {
   const showCityCrimeLayer = selectedIndicator === 'kriminalstatistik';
   const showBlaulichtLayer = selectedIndicator === 'blaulicht';
   const showKreisLayer = !showCityCrimeLayer && !showBlaulichtLayer;
+  const shouldShowRankingPanel = !showBlaulichtLayer;
 
   // Fetch Blaulicht crime data from Supabase
   const { data: blaulichtCrimes = [] } = useCrimes();
@@ -380,6 +383,35 @@ export function ChoroplethMap() {
     setSelectedCrime(activeCrime ?? null);
   }, [orderedBlaulichtCrimes]);
 
+  // Keep ranking panel mounted long enough to animate out when switching to Blaulicht.
+  useEffect(() => {
+    let rafId: number | null = null;
+    let nestedRafId: number | null = null;
+    let timeoutId: number | null = null;
+
+    if (shouldShowRankingPanel) {
+      rafId = window.requestAnimationFrame(() => {
+        setShouldRenderRankingPanel(true);
+        nestedRafId = window.requestAnimationFrame(() => {
+          setIsRankingPanelVisible(true);
+        });
+      });
+    } else {
+      rafId = window.requestAnimationFrame(() => {
+        setIsRankingPanelVisible(false);
+        timeoutId = window.setTimeout(() => {
+          setShouldRenderRankingPanel(false);
+        }, 260);
+      });
+    }
+
+    return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      if (nestedRafId !== null) window.cancelAnimationFrame(nestedRafId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [shouldShowRankingPanel]);
+
   return (
     <div className="relative w-full h-full">
       <MapContainer
@@ -530,7 +562,7 @@ export function ChoroplethMap() {
       <div
         className={`
           absolute z-[1000] transition-all duration-300 ease-in-out
-          md:top-4 md:right-4 md:flex md:flex-col md:gap-3 md:max-w-[220px] md:opacity-100 md:translate-x-0
+          md:top-4 md:right-4 md:flex md:flex-col md:gap-3 md:w-[264px] md:max-w-[264px] md:opacity-100 md:translate-x-0
           ${isControlsExpanded
             ? 'top-16 right-3 left-3 opacity-100 translate-y-0'
             : 'top-16 right-3 left-3 opacity-0 -translate-y-4 pointer-events-none md:pointer-events-auto md:opacity-100 md:translate-y-0'
@@ -597,6 +629,7 @@ export function ChoroplethMap() {
             setSelectedIndicatorYear(year);
             setIsIndicatorPlaying(false);
           }}
+          accent={selectedIndicator === 'auslaender' ? 'red' : 'amber'}
           className={showKreisLayer ? 'bottom-20 md:bottom-4' : 'bottom-4'}
         />
       )}
@@ -629,21 +662,24 @@ export function ChoroplethMap() {
         )}
       </div>
 
-      {/* Unified ranking/detail panel (right side) - shown for Kreis-level indicators */}
-      {showKreisLayer && (
+      {/* Unified ranking/detail panel (right side) - shown for all non-blaulicht indicators */}
+      {shouldRenderRankingPanel && (
         <RankingPanel
           indicatorKey={selectedIndicator}
           subMetric={selectedSubMetric}
           selectedYear={effectiveIndicatorYear}
-          hoveredAgs={hoveredKreis}
-          selectedAgs={selectedKreis}
-          onHoverAgs={setHoveredKreis}
-          onSelectAgs={setSelectedKreis}
+          hoveredAgs={showCityCrimeLayer ? hoveredCity : hoveredKreis}
+          selectedAgs={showCityCrimeLayer ? selectedCity : selectedKreis}
+          onHoverAgs={showCityCrimeLayer ? setHoveredCity : setHoveredKreis}
+          onSelectAgs={showCityCrimeLayer ? setSelectedCity : setSelectedKreis}
           isMobileOpen={isMobileRankingOpen}
           onMobileToggle={() => setIsMobileRankingOpen(!isMobileRankingOpen)}
           auslaenderData={ausData}
           deutschlandatlasData={datlasData}
+          cityCrimeData={cityCrimeData}
+          cityCrimeMetric={cityCrimeMetric}
           deutschlandatlasYear={deutschlandatlasYear}
+          isVisible={isRankingPanelVisible}
         />
       )}
 

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Space_Grotesk, Jolly_Lodger } from 'next/font/google';
+import { Space_Grotesk } from 'next/font/google';
 import { LanguageProvider } from '@/lib/i18n';
 import './globals.css';
 
@@ -7,13 +7,6 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-space-grotesk',
-});
-
-const jollyLodger = Jolly_Lodger({
-  weight: '400',
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-jolly-lodger',
 });
 
 export const viewport: Viewport = {
@@ -45,7 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de" className="dark">
-      <body className={`${spaceGrotesk.variable} ${jollyLodger.variable} font-sans antialiased`}>
+      <body className={`${spaceGrotesk.variable} font-sans antialiased`}>
         <LanguageProvider>
           {children}
         </LanguageProvider>

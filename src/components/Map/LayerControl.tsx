@@ -44,6 +44,58 @@ interface LayerControlProps {
   cityCrimeData?: Record<string, Record<string, CityCrimeRow>>;
 }
 
+const PRIMARY_INDICATOR_STACK_ORDER: IndicatorKey[] = [
+  'auslaender',
+  'deutschlandatlas',
+  'kriminalstatistik',
+  'blaulicht',
+];
+
+const PRIMARY_INDICATOR_STACK_META: Record<
+  IndicatorKey,
+  { symbol: string; badgeClassName: string; activeClassName: string }
+> = {
+  auslaender: {
+    symbol: '◉',
+    badgeClassName: 'bg-red-500/15 text-red-300 border border-red-500/35',
+    activeClassName: 'border-red-500/55 bg-red-500/10',
+  },
+  deutschlandatlas: {
+    symbol: '▣',
+    badgeClassName: 'bg-violet-500/15 text-violet-300 border border-violet-500/35',
+    activeClassName: 'border-violet-500/55 bg-violet-500/10',
+  },
+  kriminalstatistik: {
+    symbol: '▲',
+    badgeClassName: 'bg-orange-500/15 text-orange-300 border border-orange-500/35',
+    activeClassName: 'border-orange-500/55 bg-orange-500/10',
+  },
+  blaulicht: {
+    symbol: '✶',
+    badgeClassName: 'bg-blue-500/15 text-blue-300 border border-blue-500/35',
+    activeClassName: 'border-blue-500/55 bg-blue-500/10',
+  },
+};
+
+const PRIMARY_INDICATOR_STACK_DESCRIPTION: Record<IndicatorKey, { de: string; en: string }> = {
+  auslaender: {
+    de: 'Ausländische Bevölkerung im Vergleich',
+    en: 'Foreign population compared',
+  },
+  deutschlandatlas: {
+    de: 'Sozialdaten auf Kreisebene',
+    en: 'District-level social metrics',
+  },
+  kriminalstatistik: {
+    de: 'Delikte in Großstädten',
+    en: 'Offenses in major cities',
+  },
+  blaulicht: {
+    de: 'Aktuelle Polizeimeldungen',
+    en: 'Live police reports',
+  },
+};
+
 export function LayerControl({
   selectedIndicator,
   onIndicatorChange,
@@ -60,8 +112,6 @@ export function LayerControl({
   cityCrimeData,
 }: LayerControlProps) {
   const { lang } = useTranslation();
-  const indicators = Object.values(INDICATORS);
-
   const crimeTypesByCategory = getCrimeTypesByCategory();
 
   // Get current indicator config
@@ -80,10 +130,6 @@ export function LayerControl({
     return tNested('indicators', key, lang);
   };
 
-  const getIndicatorDescription = (key: IndicatorKey) => {
-    return tNested('indicatorDescriptions', key, lang);
-  };
-
   const getSubMetricLabel = () => {
     if (selectedIndicator === 'auslaender') return t('originRegion');
     if (selectedIndicator === 'kriminalstatistik') return t('crimeType');
@@ -94,31 +140,41 @@ export function LayerControl({
     <div className="bg-[#141414]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[#262626] p-3 space-y-3">
       {/* Primary indicator selector */}
       <div>
-        <label
-          htmlFor="metric-select"
-          className="block text-xs md:text-sm font-semibold text-zinc-200 mb-1.5"
-        >
-          {t('primaryIndicator')}
-        </label>
-        <select
-          id="metric-select"
-          value={selectedIndicator}
-          onChange={(e) => {
-            onIndicatorChange(e.target.value as IndicatorKey);
-          }}
-          className="w-full px-3 py-2.5 md:py-2 text-sm bg-[#0a0a0a] border border-[#333] rounded-md shadow-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 appearance-none cursor-pointer"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'right 12px center',
-          }}
-        >
-          {indicators.map((ind) => (
-            <option key={ind.key} value={ind.key}>
-              {getIndicatorLabel(ind.key)}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-1.5">
+          {PRIMARY_INDICATOR_STACK_ORDER.map((indicatorKey) => {
+            const isSelected = selectedIndicator === indicatorKey;
+            const stackMeta = PRIMARY_INDICATOR_STACK_META[indicatorKey];
+            const shortDescription = PRIMARY_INDICATOR_STACK_DESCRIPTION[indicatorKey][lang];
+
+            return (
+              <button
+                key={indicatorKey}
+                type="button"
+                onClick={() => onIndicatorChange(indicatorKey)}
+                aria-pressed={isSelected}
+                className={`w-full flex items-start gap-2.5 rounded-md border px-2.5 py-2 text-left transition-colors touch-feedback ${
+                  isSelected
+                    ? stackMeta.activeClassName
+                    : 'border-[#333] bg-[#0a0a0a] hover:bg-[#151515] active:bg-[#151515]'
+                }`}
+              >
+                <span
+                  className={`mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${stackMeta.badgeClassName}`}
+                >
+                  {stackMeta.symbol}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-sm font-medium leading-snug ${isSelected ? 'text-zinc-100' : 'text-zinc-300'}`}>
+                    {getIndicatorLabel(indicatorKey)}
+                  </span>
+                  <span className="block text-xs text-zinc-400 leading-snug mt-0.5">
+                    {shortDescription}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Indicator sub-metric selector - changes based on indicator type (hidden for blaulicht) */}
@@ -126,7 +182,7 @@ export function LayerControl({
       <div>
         <label
           htmlFor="submetric-select"
-          className="block text-[10px] text-zinc-500 mb-1"
+          className="block text-xs text-zinc-400 mb-1.5"
         >
           {getSubMetricLabel()}
         </label>
@@ -134,7 +190,7 @@ export function LayerControl({
           id="submetric-select"
           value={selectedSubMetric}
           onChange={(e) => onSubMetricChange(e.target.value)}
-          className="w-full px-2 py-1.5 text-xs bg-[#0a0a0a] border border-[#333] rounded-md shadow-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 appearance-none cursor-pointer"
+          className="w-full px-2 py-2 text-sm bg-[#0a0a0a] border border-[#333] rounded-md shadow-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 appearance-none cursor-pointer"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'no-repeat',
@@ -185,7 +241,7 @@ export function LayerControl({
           <button
             type="button"
             onClick={() => onCityCrimeMetricChange('hz')}
-            className={`flex-1 px-2 py-2.5 md:py-1.5 text-xs md:text-[10px] rounded-md border transition-colors touch-feedback ${
+            className={`flex-1 px-2 py-2.5 md:py-2 text-sm md:text-xs rounded-md border transition-colors touch-feedback ${
               cityCrimeMetric === 'hz'
                 ? 'bg-orange-500/20 border-orange-500 text-orange-300'
                 : 'bg-transparent border-[#333] text-zinc-400 hover:text-zinc-200 active:bg-orange-500/10'
@@ -196,7 +252,7 @@ export function LayerControl({
           <button
             type="button"
             onClick={() => onCityCrimeMetricChange('aq')}
-            className={`flex-1 px-2 py-2.5 md:py-1.5 text-xs md:text-[10px] rounded-md border transition-colors touch-feedback ${
+            className={`flex-1 px-2 py-2.5 md:py-2 text-sm md:text-xs rounded-md border transition-colors touch-feedback ${
               cityCrimeMetric === 'aq'
                 ? 'bg-green-500/20 border-green-500 text-green-300'
                 : 'bg-transparent border-[#333] text-zinc-400 hover:text-zinc-200 active:bg-green-500/10'
@@ -235,8 +291,8 @@ export function LayerControl({
       {selectedIndicator === 'blaulicht' && blaulichtStats && onBlaulichtCategoryChange && (
         <div className="pt-2 border-t border-[#333]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wide">{t('categories')}</span>
-            <span className="text-[10px] text-zinc-600">{blaulichtStats.geocoded}/{blaulichtStats.total} {t('located')}</span>
+            <span className="text-xs text-zinc-400 uppercase tracking-wide">{t('categories')}</span>
+            <span className="text-xs text-zinc-400">{blaulichtStats.geocoded}/{blaulichtStats.total} {t('located')}</span>
           </div>
           <div className="space-y-1">
             {/* All categories button */}
@@ -244,7 +300,7 @@ export function LayerControl({
               onClick={() => onBlaulichtCategoryChange(null)}
               className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
                 selectedBlaulichtCategory === null
-                  ? 'bg-blue-500/20 border border-blue-500/50'
+                  ? 'bg-[#1a1a1a] border border-white/80'
                   : 'hover:bg-[#1a1a1a] active:bg-[#1a1a1a] border border-transparent'
               }`}
             >
@@ -252,13 +308,13 @@ export function LayerControl({
                 className="w-3 h-3 md:w-2.5 md:h-2.5 rounded-full flex-shrink-0"
                 style={{
                   backgroundColor: '#3b82f6',
-                  boxShadow: selectedBlaulichtCategory === null ? '0 0 6px #3b82f6' : 'none',
+                  boxShadow: 'none',
                 }}
               />
-              <span className={`text-xs md:text-[11px] flex-1 text-left no-select ${selectedBlaulichtCategory === null ? 'text-zinc-200' : 'text-zinc-400'}`}>
+              <span className={`text-sm md:text-xs flex-1 text-left no-select ${selectedBlaulichtCategory === null ? 'text-zinc-200' : 'text-zinc-400'}`}>
                 {t('showAll')}
               </span>
-              <span className="text-[10px] text-zinc-500 tabular-nums">{blaulichtStats.total}</span>
+              <span className="text-xs text-zinc-400 tabular-nums">{blaulichtStats.total}</span>
             </button>
 
             {/* Individual category buttons */}
@@ -274,25 +330,21 @@ export function LayerControl({
                     onClick={() => onBlaulichtCategoryChange(isSelected ? null : cat.key)}
                     className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
                       isSelected
-                        ? 'border'
+                        ? 'bg-[#1a1a1a] border border-white/80'
                         : 'hover:bg-[#1a1a1a] active:bg-[#1a1a1a] border border-transparent'
                     }`}
-                    style={isSelected ? {
-                      backgroundColor: `${cat.color}20`,
-                      borderColor: `${cat.color}50`,
-                    } : {}}
                   >
                     <div
                       className="w-3 h-3 md:w-2.5 md:h-2.5 rounded-full flex-shrink-0"
                       style={{
                         backgroundColor: cat.color,
-                        boxShadow: isSelected ? `0 0 6px ${cat.color}` : 'none',
+                        boxShadow: 'none',
                       }}
                     />
-                    <span className={`text-xs md:text-[11px] flex-1 text-left no-select ${isSelected ? 'text-zinc-200' : 'text-zinc-400'}`}>
+                    <span className={`text-sm md:text-xs flex-1 text-left no-select ${isSelected ? 'text-zinc-200' : 'text-zinc-400'}`}>
                       {catLabel}
                     </span>
-                    <span className="text-[10px] text-zinc-500 tabular-nums">{count}</span>
+                    <span className="text-xs text-zinc-400 tabular-nums">{count}</span>
                   </button>
                 );
               })}
@@ -301,16 +353,14 @@ export function LayerControl({
       )}
 
       {/* Info text */}
-      <p className="text-[10px] text-zinc-500 leading-tight hidden md:block">
-        {getIndicatorDescription(selectedIndicator)}
-        <br />
-        <span className="text-zinc-600">{lang === 'de' ? 'Quelle' : 'Source'}: {currentIndicator.source}</span>
+      <p className="text-xs text-zinc-400 leading-tight hidden md:block">
+        <span className="text-zinc-400">{lang === 'de' ? 'Quelle' : 'Source'}: {currentIndicator.source}</span>
       </p>
 
       {/* Settings section with language toggle */}
       <div className="pt-2 border-t border-[#333]">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wide">
+          <span className="text-xs text-zinc-400 uppercase tracking-wide">
             {lang === 'de' ? 'Sprache' : 'Language'}
           </span>
           <LanguageToggleInline />
@@ -327,7 +377,7 @@ function LanguageToggleInline() {
   return (
     <button
       onClick={toggleLanguage}
-      className="flex items-center gap-1 px-2 py-1 bg-[#0a0a0a] rounded-md border border-[#333] text-[11px] font-medium transition-all touch-feedback active:scale-95 hover:border-[#404040]"
+      className="flex items-center gap-1 px-2 py-1 bg-[#0a0a0a] rounded-md border border-[#333] text-xs font-medium transition-all touch-feedback active:scale-95 hover:border-[#404040]"
       aria-label={lang === 'de' ? 'Switch to English' : 'Auf Deutsch wechseln'}
     >
       <span className={`transition-colors ${lang === 'de' ? 'text-amber-400' : 'text-zinc-500'}`}>
@@ -377,7 +427,7 @@ function KreisIndicatorLegend({
 
   return (
     <div className="space-y-1">
-      <div className="text-[10px] text-zinc-500">
+      <div className="text-xs text-zinc-400">
         {displayUnit || t.value[lang]}
       </div>
       <div className="flex md:flex-col gap-1 md:gap-0.5">
@@ -390,18 +440,18 @@ function KreisIndicatorLegend({
               className="w-full md:w-5 h-2.5 md:h-3 rounded-sm border border-[#444]"
               style={{ backgroundColor: stop.color }}
             />
-            <span className="text-[8px] md:text-[10px] text-zinc-300 font-mono hidden md:inline">
+            <span className="text-[11px] md:text-xs text-zinc-300 font-mono hidden md:inline">
               {stop.label}
             </span>
           </div>
         ))}
       </div>
       {/* Mobile labels - just min and max */}
-      <div className="flex md:hidden justify-between text-[8px] text-zinc-400 font-mono">
+      <div className="flex md:hidden justify-between text-[10px] text-zinc-400 font-mono">
         <span>{stops[0]?.label}</span>
         <span>{stops[stops.length - 1]?.label}</span>
       </div>
-      <p className="text-[8px] text-zinc-500 mt-1">
+      <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
         {usesSemanticColor ? (
           higherIsBetter ? (
             <>
@@ -445,7 +495,7 @@ function CityCrimeLegend({
 
   return (
     <div className="space-y-1">
-      <div className="text-[10px] text-zinc-500">
+      <div className="text-xs text-zinc-400">
         {metric === 'hz' ? t.casesPerPopulation[lang] : t.clearanceRatePercent[lang]}
       </div>
       <div className="flex md:flex-col gap-1 md:gap-0.5">
@@ -458,18 +508,18 @@ function CityCrimeLegend({
               className="w-full md:w-5 h-2.5 md:h-3 rounded-sm border border-[#444]"
               style={{ backgroundColor: stop.color }}
             />
-            <span className="text-[8px] md:text-[10px] text-zinc-300 font-mono hidden md:inline">
+            <span className="text-[11px] md:text-xs text-zinc-300 font-mono hidden md:inline">
               {stop.label}
             </span>
           </div>
         ))}
       </div>
       {/* Mobile labels - just min and max */}
-      <div className="flex md:hidden justify-between text-[8px] text-zinc-400 font-mono">
+      <div className="flex md:hidden justify-between text-[10px] text-zinc-400 font-mono">
         <span>{stops[0]?.label}</span>
         <span>{stops[stops.length - 1]?.label}</span>
       </div>
-      <p className="text-[8px] text-zinc-500 mt-1">
+      <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
         {metric === 'hz' ? (
           <>
             <span className="text-yellow-400">{t.yellowLow[lang]}</span> = {t.low[lang]} ·{' '}
