@@ -6,6 +6,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { LayerControl } from './LayerControl';
+import { MobileCategoryBar } from './MobileCategoryBar';
 import { CityCrimeLayer } from './CityCrimeLayer';
 import { KreisLayer } from './KreisLayer';
 import type { KreisHoverInfo } from './KreisLayer';
@@ -94,8 +95,8 @@ function KreisSelectionResetter({
     if (enabled && leftSelectionMode) {
       const isMobile = map.getContainer().clientWidth < 768;
       map.fitBounds(germanyBounds, {
-        paddingTopLeft: [80, 80],
-        paddingBottomRight: [80, 80 + (isMobile ? 100 : 0)],
+        paddingTopLeft: [80, 80 + (isMobile ? 60 : 0)],
+        paddingBottomRight: [80, 80 + (isMobile ? 140 : 0)],
         maxZoom: GERMANY_ZOOM,
       });
     }
@@ -106,23 +107,56 @@ function KreisSelectionResetter({
   return null;
 }
 
+// Zoom map back out when closing the mobile ranking panel.
+function RankingCloseResetter({
+  isMobileRankingOpen,
+  germanyBounds,
+}: {
+  isMobileRankingOpen: boolean;
+  germanyBounds: [[number, number], [number, number]];
+}) {
+  const map = useMap();
+  const previousOpenRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    const wasOpen = previousOpenRef.current;
+    const justClosed = wasOpen && !isMobileRankingOpen;
+
+    if (justClosed) {
+      const isMobile = map.getContainer().clientWidth < 768;
+      if (isMobile) {
+        map.fitBounds(germanyBounds, {
+          paddingTopLeft: [80, 80 + 60],
+          paddingBottomRight: [80, 80 + 140],
+          maxZoom: GERMANY_ZOOM,
+        });
+      }
+    }
+
+    previousOpenRef.current = isMobileRankingOpen;
+  }, [isMobileRankingOpen, germanyBounds, map]);
+
+  return null;
+}
+
 // Component to set initial map bounds
 function MapInitializer({ germanyBounds }: { germanyBounds: [[number, number], [number, number]] }) {
   const map = useMap();
 
   useEffect(() => {
-    // Calculate padding: 5% on mobile, 10% on desktop
+    // Calculate padding: 8% on mobile, 10% on desktop
     const container = map.getContainer();
     const width = container.clientWidth;
     const height = container.clientHeight;
     const isMobile = width < 768;
-    const paddingRatio = isMobile ? 0.05 : 0.1;
+    const paddingRatio = isMobile ? 0.08 : 0.1;
     const padding: L.PointTuple = [height * paddingRatio, width * paddingRatio];
-    // On mobile, add extra bottom padding to account for timeline + ranking button overlay
-    const bottomExtra = isMobile ? 100 : 0;
+    // On mobile, add extra top padding for category bar and bottom for timeline + ranking
+    const topExtra = isMobile ? 60 : 0;
+    const bottomExtra = isMobile ? 140 : 0;
 
     map.fitBounds(germanyBounds, {
-      paddingTopLeft: [padding[1], padding[0]],
+      paddingTopLeft: [padding[1], padding[0] + topExtra],
       paddingBottomRight: [padding[1], padding[0] + bottomExtra],
     });
 
@@ -456,6 +490,12 @@ export function ChoroplethMap() {
           germanyBounds={GERMANY_BOUNDS}
         />
 
+        {/* Reset view when closing mobile ranking panel */}
+        <RankingCloseResetter
+          isMobileRankingOpen={isMobileRankingOpen}
+          germanyBounds={GERMANY_BOUNDS}
+        />
+
         {/* Initial map bounds setup */}
         <MapInitializer germanyBounds={GERMANY_BOUNDS} />
 
@@ -529,6 +569,38 @@ export function ChoroplethMap() {
         })}
       </MapContainer>
 
+      {/* Mobile category bar — horizontal pills to switch indicator */}
+      <MobileCategoryBar
+        selectedIndicator={selectedIndicator}
+        onIndicatorChange={(indicator) => {
+          setSelectedIndicator(indicator);
+          setIsIndicatorPlaying(false);
+          setIsBlaulichtPlaying(false);
+          if (indicator === 'auslaender') {
+            setSelectedSubMetric('total');
+            setSelectedIndicatorYear(auslaenderYears[auslaenderYears.length - 1] ?? '2024');
+          } else if (indicator === 'deutschlandatlas') {
+            setSelectedSubMetric('kinder_bg');
+            setSelectedIndicatorYear(deutschlandatlasYear);
+          } else if (indicator === 'kriminalstatistik') {
+            setSelectedSubMetric('total');
+            setSelectedIndicatorYear(crimeDataYears[crimeDataYears.length - 1] ?? '2024');
+          } else if (indicator === 'blaulicht') {
+            setSelectedSubMetric('all');
+            setSelectedIndicatorYear('');
+          }
+          setSelectedKreis(null);
+          setSelectedCity(null);
+          setSelectedCrime(null);
+          setHoveredCrime(null);
+          setSelectedBlaulichtCategory(null);
+          setBlaulichtPlaybackIndex(null);
+          setFlashingCrimeIds(new Set());
+          setIsMobileRankingOpen(false);
+        }}
+        onOpenSettings={() => setIsControlsExpanded(true)}
+      />
+
       {/* Mobile controls backdrop */}
       {isControlsExpanded && (
         <div
@@ -536,52 +608,6 @@ export function ChoroplethMap() {
           onClick={() => setIsControlsExpanded(false)}
         />
       )}
-
-      {/* Mobile toggle button */}
-      <button
-        onClick={() => setIsControlsExpanded(!isControlsExpanded)}
-        className="md:hidden absolute top-3 right-3 z-[1001] bg-[#141414]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[#262626] p-3 text-zinc-200 touch-feedback active:scale-95 transition-transform"
-        aria-label="Toggle controls"
-      >
-        {isControlsExpanded ? (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="18" x2="6" y1="6" y2="18" />
-            <line x1="6" x2="18" y1="6" y2="18" />
-          </svg>
-        ) : (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="4" x2="4" y1="21" y2="14" />
-            <line x1="4" x2="4" y1="10" y2="3" />
-            <line x1="12" x2="12" y1="21" y2="12" />
-            <line x1="12" x2="12" y1="8" y2="3" />
-            <line x1="20" x2="20" y1="21" y2="16" />
-            <line x1="20" x2="20" y1="12" y2="3" />
-            <line x1="2" x2="6" y1="14" y2="14" />
-            <line x1="10" x2="14" y1="8" y2="8" />
-            <line x1="18" x2="22" y1="16" y2="16" />
-          </svg>
-        )}
-      </button>
 
       {/* Controls overlay */}
       <div

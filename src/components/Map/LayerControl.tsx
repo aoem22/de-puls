@@ -44,14 +44,14 @@ interface LayerControlProps {
   cityCrimeData?: Record<string, Record<string, CityCrimeRow>>;
 }
 
-const PRIMARY_INDICATOR_STACK_ORDER: IndicatorKey[] = [
+export const PRIMARY_INDICATOR_STACK_ORDER: IndicatorKey[] = [
   'auslaender',
-  'deutschlandatlas',
   'kriminalstatistik',
   'blaulicht',
+  // 'deutschlandatlas', // hidden from UI for now
 ];
 
-const PRIMARY_INDICATOR_STACK_META: Record<
+export const PRIMARY_INDICATOR_STACK_META: Record<
   IndicatorKey,
   { symbol: string; badgeClassName: string; activeClassName: string }
 > = {

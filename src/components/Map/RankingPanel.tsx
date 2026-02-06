@@ -1091,11 +1091,11 @@ export function RankingPanel({
       {/* Mobile ranking toggle button */}
       <button
         onClick={onMobileToggle}
-        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-full shadow-xl border border-[#262626] px-4 py-2.5 flex items-center gap-1.5 touch-feedback active:scale-95 transition-all safe-area-pb"
+        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-full shadow-xl border border-[#262626] px-5 py-3 flex items-center justify-center gap-2 touch-feedback active:scale-95 transition-all safe-area-pb"
         aria-label={t.openRanking[lang]}
       >
         <svg
-          className={`w-4 h-4 ${isAuslaenderAccent ? 'text-red-400' : 'text-amber-400'}`}
+          className={`w-[18px] h-[18px] shrink-0 ${isAuslaenderAccent ? 'text-red-400' : 'text-amber-400'}`}
           viewBox="0 0 24 24"
           fill="currentColor"
           aria-hidden="true"
@@ -1104,9 +1104,9 @@ export function RankingPanel({
           <rect x="10" y="8" width="4" height="13" rx="0.5" />
           <rect x="17" y="3" width="4" height="18" rx="0.5" />
         </svg>
-        <span className="text-zinc-200 text-sm font-medium no-select">{t.ranking[lang]}</span>
+        <span className="text-zinc-200 text-[15px] font-medium leading-none no-select">{t.ranking[lang]}</span>
         <svg
-          className="w-4 h-4 text-zinc-400"
+          className="w-[18px] h-[18px] shrink-0 text-zinc-400"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
