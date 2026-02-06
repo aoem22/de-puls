@@ -70,7 +70,7 @@ export function BlaulichtPlaybackControl({
       aria-label={lang === 'de' ? 'Blaulicht-Zeitachse' : 'Blaulicht timeline'}
     >
       <div className="w-[min(90vw,540px)] bg-[#141414]/68 backdrop-blur-sm border border-[#2a2a2a]/70 rounded-xl shadow-xl px-3 py-2">
-        <div className="grid grid-cols-[28px_56px_minmax(0,1fr)_164px] items-center gap-2">
+        <div className="grid grid-cols-[28px_56px_minmax(0,1fr)] md:grid-cols-[28px_56px_minmax(0,1fr)_164px] items-center gap-2">
           <button
             type="button"
             onClick={onTogglePlay}
@@ -119,7 +119,7 @@ export function BlaulichtPlaybackControl({
             />
           </div>
 
-          <span className="inline-flex items-center justify-center h-7 whitespace-nowrap text-[10px] text-zinc-100 font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-md px-1.5 shadow-sm">
+          <span className="col-span-3 md:col-span-1 inline-flex items-center justify-center h-7 whitespace-nowrap text-[10px] text-zinc-100 font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-md px-1.5 shadow-sm">
             {currentLabel}
           </span>
         </div>

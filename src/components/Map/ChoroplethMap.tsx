@@ -106,11 +106,12 @@ function MapInitializer({ germanyBounds }: { germanyBounds: [[number, number], [
   const map = useMap();
 
   useEffect(() => {
-    // Calculate padding: 10% of viewport on each side
+    // Calculate padding: 5% on mobile, 10% on desktop
     const container = map.getContainer();
     const width = container.clientWidth;
     const height = container.clientHeight;
-    const padding: L.PointTuple = [height * 0.1, width * 0.1];
+    const paddingRatio = width < 768 ? 0.05 : 0.1;
+    const padding: L.PointTuple = [height * paddingRatio, width * paddingRatio];
 
     map.fitBounds(germanyBounds, {
       paddingTopLeft: [padding[1], padding[0]],
@@ -534,28 +535,44 @@ export function ChoroplethMap() {
         className="md:hidden absolute top-3 right-3 z-[1001] bg-[#141414]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[#262626] p-3 text-zinc-200 touch-feedback active:scale-95 transition-transform"
         aria-label="Toggle controls"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`transition-transform duration-200 ${isControlsExpanded ? 'rotate-90' : ''}`}
-        >
-          <line x1="4" x2="4" y1="21" y2="14" />
-          <line x1="4" x2="4" y1="10" y2="3" />
-          <line x1="12" x2="12" y1="21" y2="12" />
-          <line x1="12" x2="12" y1="8" y2="3" />
-          <line x1="20" x2="20" y1="21" y2="16" />
-          <line x1="20" x2="20" y1="12" y2="3" />
-          <line x1="2" x2="6" y1="14" y2="14" />
-          <line x1="10" x2="14" y1="8" y2="8" />
-          <line x1="18" x2="22" y1="16" y2="16" />
-        </svg>
+        {isControlsExpanded ? (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="18" x2="6" y1="6" y2="18" />
+            <line x1="6" x2="18" y1="6" y2="18" />
+          </svg>
+        ) : (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="4" x2="4" y1="21" y2="14" />
+            <line x1="4" x2="4" y1="10" y2="3" />
+            <line x1="12" x2="12" y1="21" y2="12" />
+            <line x1="12" x2="12" y1="8" y2="3" />
+            <line x1="20" x2="20" y1="21" y2="16" />
+            <line x1="20" x2="20" y1="12" y2="3" />
+            <line x1="2" x2="6" y1="14" y2="14" />
+            <line x1="10" x2="14" y1="8" y2="8" />
+            <line x1="18" x2="22" y1="16" y2="16" />
+          </svg>
+        )}
       </button>
 
       {/* Controls overlay */}
@@ -564,7 +581,7 @@ export function ChoroplethMap() {
           absolute z-[1000] transition-all duration-300 ease-in-out
           md:top-4 md:right-4 md:flex md:flex-col md:gap-3 md:w-[264px] md:max-w-[264px] md:opacity-100 md:translate-x-0
           ${isControlsExpanded
-            ? 'top-16 right-3 left-3 opacity-100 translate-y-0'
+            ? 'top-16 right-3 left-3 opacity-100 translate-y-0 max-h-[calc(100vh-5rem)] overflow-y-auto md:max-h-none md:overflow-y-visible'
             : 'top-16 right-3 left-3 opacity-0 -translate-y-4 pointer-events-none md:pointer-events-auto md:opacity-100 md:translate-y-0'
           }
         `}
@@ -630,7 +647,7 @@ export function ChoroplethMap() {
             setIsIndicatorPlaying(false);
           }}
           accent={selectedIndicator === 'auslaender' ? 'red' : 'amber'}
-          className={showKreisLayer ? 'bottom-20 md:bottom-4' : 'bottom-4'}
+          className="bottom-20 md:bottom-4"
         />
       )}
 
