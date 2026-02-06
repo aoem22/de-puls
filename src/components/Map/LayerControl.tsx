@@ -15,7 +15,7 @@ import {
   DEUTSCHLANDATLAS_META,
   isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
-import { CRIME_CATEGORIES, type CrimeCategory } from '@/lib/types/crime';
+import { CRIME_CATEGORIES, WEAPON_LABELS, type CrimeCategory } from '@/lib/types/crime';
 import { useTranslation, translations, tNested } from '@/lib/i18n';
 import type { AuslaenderRow, DeutschlandatlasRow, CityCrimeRow } from '@/lib/supabase';
 
@@ -38,6 +38,10 @@ interface LayerControlProps {
   // Blaulicht category filter
   selectedBlaulichtCategory?: CrimeCategory | null;
   onBlaulichtCategoryChange?: (category: CrimeCategory | null) => void;
+  // Blaulicht weapon filter
+  weaponCounts?: Record<string, number>;
+  selectedWeaponType?: string | null;
+  onWeaponTypeChange?: (weaponType: string | null) => void;
   // Data props for legend computation
   auslaenderData?: Record<string, AuslaenderRow>;
   deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
@@ -107,6 +111,9 @@ export function LayerControl({
   blaulichtStats,
   selectedBlaulichtCategory,
   onBlaulichtCategoryChange,
+  weaponCounts,
+  selectedWeaponType,
+  onWeaponTypeChange,
   auslaenderData: ausData,
   deutschlandatlasData: datlasData,
   cityCrimeData,
@@ -343,6 +350,41 @@ export function LayerControl({
                     />
                     <span className={`text-sm md:text-xs flex-1 text-left no-select ${isSelected ? 'text-zinc-200' : 'text-zinc-400'}`}>
                       {catLabel}
+                    </span>
+                    <span className="text-xs text-zinc-400 tabular-nums">{count}</span>
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Weapon type sub-filters */}
+      {selectedIndicator === 'blaulicht' && weaponCounts && onWeaponTypeChange && Object.keys(weaponCounts).length > 0 && (
+        <div className="pt-2 border-t border-[#333]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-zinc-400 uppercase tracking-wide">{lang === 'de' ? 'Tatmittel' : 'Weapons'}</span>
+          </div>
+          <div className="space-y-1">
+            {Object.entries(weaponCounts)
+              .sort(([, a], [, b]) => b - a)
+              .map(([wt, count]) => {
+                const label = WEAPON_LABELS[wt];
+                if (!label) return null;
+                const isSelected = selectedWeaponType === wt;
+                return (
+                  <button
+                    key={wt}
+                    onClick={() => onWeaponTypeChange(isSelected ? null : wt)}
+                    className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
+                      isSelected
+                        ? 'bg-[#1a1a1a] border border-white/80'
+                        : 'hover:bg-[#1a1a1a] active:bg-[#1a1a1a] border border-transparent'
+                    }`}
+                  >
+                    <span className="w-3 md:w-2.5 text-center text-xs flex-shrink-0">{label.icon}</span>
+                    <span className={`text-sm md:text-xs flex-1 text-left no-select ${isSelected ? 'text-zinc-200' : 'text-zinc-400'}`}>
+                      {label[lang]}
                     </span>
                     <span className="text-xs text-zinc-400 tabular-nums">{count}</span>
                   </button>

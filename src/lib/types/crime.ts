@@ -15,14 +15,23 @@ export type CrimeCategory =
   | 'other';
 
 export type WeaponType =
-  | 'messer'
-  | 'schusswaffe'
-  | 'machete'
-  | 'axt'
-  | 'schlagwaffe'
-  | 'reizgas'
+  | 'knife'
+  | 'gun'
+  | 'blunt'
+  | 'explosive'
+  | 'vehicle'
+  | 'none'
+  | 'unknown'
   | 'other'
   | null;
+
+export const WEAPON_LABELS: Record<string, { de: string; en: string; icon: string }> = {
+  knife:     { de: 'Messer',        en: 'Knife',      icon: '\u{1F52A}' },
+  gun:       { de: 'Schusswaffe',   en: 'Firearm',    icon: '\u{1F52B}' },
+  blunt:     { de: 'Schlagwaffe',   en: 'Blunt weapon', icon: '\u{1F528}' },
+  explosive: { de: 'Sprengstoff',   en: 'Explosive',  icon: '\u{1F4A3}' },
+  vehicle:   { de: 'Fahrzeug',      en: 'Vehicle',    icon: '\u{1F697}' },
+};
 
 export type LocationPrecision = 'street' | 'neighborhood' | 'city' | 'region' | 'unknown';
 

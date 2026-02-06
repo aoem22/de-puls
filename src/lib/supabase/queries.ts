@@ -39,24 +39,38 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
  * @returns Array of crime records
  */
 export async function fetchCrimes(category?: CrimeCategory): Promise<CrimeRecord[]> {
-  let query = supabase
-    .from('crime_records')
-    .select('*')
-    .order('published_at', { ascending: false });
+  const PAGE_SIZE = 1000;
+  let allData: CrimeRecordRow[] = [];
+  let from = 0;
 
-  // Filter by category if provided (categories is an array, use contains)
-  if (category) {
-    query = query.contains('categories', [category]);
+  // Paginate to avoid Supabase's default 1000-row limit
+  while (true) {
+    let query = supabase
+      .from('crime_records')
+      .select('*')
+      .eq('hidden', false)
+      .order('published_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (category) {
+      query = query.contains('categories', [category]);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching crimes:', error);
+      throw new Error(`Failed to fetch crimes: ${error.message}`);
+    }
+
+    const rows = (data ?? []) as CrimeRecordRow[];
+    allData = allData.concat(rows);
+
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
 
-  const { data, error } = await query;
-
-  if (error) {
-    console.error('Error fetching crimes:', error);
-    throw new Error(`Failed to fetch crimes: ${error.message}`);
-  }
-
-  return (data ?? []).map(rowToCrimeRecord);
+  return allData.map(rowToCrimeRecord);
 }
 
 /**
@@ -65,19 +79,29 @@ export async function fetchCrimes(category?: CrimeCategory): Promise<CrimeRecord
  * @returns Statistics including total count, geocoded count, and counts by category
  */
 export async function fetchCrimeStats(): Promise<BlaulichtStats> {
-  // Fetch all records to compute stats
-  // In production with large datasets, this should use database aggregations
-  const { data, error } = await supabase
-    .from('crime_records')
-    .select('latitude, categories');
+  // Fetch all records to compute stats, paginating past 1000-row limit
+  const PAGE_SIZE = 1000;
+  const records: Array<{ latitude: number | null; categories: CrimeCategory[] }> = [];
+  let from = 0;
 
-  if (error) {
-    console.error('Error fetching crime stats:', error);
-    throw new Error(`Failed to fetch crime stats: ${error.message}`);
+  while (true) {
+    const { data, error } = await supabase
+      .from('crime_records')
+      .select('latitude, categories')
+      .eq('hidden', false)
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error('Error fetching crime stats:', error);
+      throw new Error(`Failed to fetch crime stats: ${error.message}`);
+    }
+
+    const rows = (data ?? []) as Array<{ latitude: number | null; categories: CrimeCategory[] }>;
+    records.push(...rows);
+
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
-
-  // Type the records properly for the partial select
-  const records = (data ?? []) as Array<{ latitude: number | null; categories: CrimeCategory[] }>;
 
   const byCategory: Partial<Record<CrimeCategory, number>> = {};
   let geocoded = 0;

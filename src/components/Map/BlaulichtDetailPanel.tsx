@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, type TouchEvent } from 'react';
 import type { CrimeRecord, CrimeCategory } from '@/lib/types/crime';
-import { CRIME_CATEGORIES } from '@/lib/types/crime';
+import { CRIME_CATEGORIES, WEAPON_LABELS } from '@/lib/types/crime';
 import { useTranslation, translations, tNested } from '@/lib/i18n';
 
 // Draggable bottom sheet hook
@@ -258,6 +258,16 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
                 </div>
               </div>
 
+              {/* Weapon type */}
+              {crime.weaponType && crime.weaponType !== 'none' && crime.weaponType !== 'unknown' && WEAPON_LABELS[crime.weaponType] && (
+                <div className="flex items-center gap-3">
+                  <span className="text-zinc-400 w-5 flex justify-center text-sm">{WEAPON_LABELS[crime.weaponType].icon}</span>
+                  <span className="px-2.5 py-1 text-xs rounded-md border font-medium bg-red-950/30 border-red-900/40 text-red-400">
+                    {WEAPON_LABELS[crime.weaponType][lang]}
+                  </span>
+                </div>
+              )}
+
               {/* Precision indicator */}
               <div className="flex items-center gap-3">
                 <span className="text-zinc-400 w-5 flex justify-center">{Icons.target}</span>
@@ -382,6 +392,16 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
                 )}
               </div>
             </div>
+
+            {/* Weapon type */}
+            {crime.weaponType && crime.weaponType !== 'none' && crime.weaponType !== 'unknown' && WEAPON_LABELS[crime.weaponType] && (
+              <div className="flex items-center gap-3">
+                <span className="text-zinc-400 w-5 flex justify-center text-sm">{WEAPON_LABELS[crime.weaponType].icon}</span>
+                <span className="px-2 py-0.5 text-xs rounded-md border font-medium bg-red-950/30 border-red-900/40 text-red-400">
+                  {WEAPON_LABELS[crime.weaponType][lang]}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Body text section */}

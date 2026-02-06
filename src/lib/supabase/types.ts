@@ -23,6 +23,7 @@ export interface CrimeRecordRow {
   categories: CrimeCategory[];
   weapon_type: WeaponType | null;
   confidence: number;
+  hidden: boolean;
   created_at: string;
   updated_at: string;
 }

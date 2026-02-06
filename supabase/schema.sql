@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS crime_records (
   categories TEXT[] NOT NULL,
   weapon_type TEXT,
   confidence DOUBLE PRECISION,
+  hidden BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -25,6 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_crime_records_published_at ON crime_records(publi
 CREATE INDEX IF NOT EXISTS idx_crime_records_categories ON crime_records USING GIN(categories);
 CREATE INDEX IF NOT EXISTS idx_crime_records_location ON crime_records(latitude, longitude) WHERE latitude IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_crime_records_precision ON crime_records(precision);
+CREATE INDEX IF NOT EXISTS idx_crime_records_hidden ON crime_records(hidden) WHERE hidden = false;
 
 -- Enable Row Level Security
 ALTER TABLE crime_records ENABLE ROW LEVEL SECURITY;

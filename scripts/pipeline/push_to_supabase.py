@@ -81,12 +81,12 @@ GERMAN_TO_CATEGORY: dict[str, str] = {
 }
 
 
-def make_id(url: str, published_at: str, location_text: str = "") -> str:
-    """Generate a deterministic ID from URL + timestamp + location.
+def make_id(url: str, published_at: str, location_text: str = "", pks_code: str = "") -> str:
+    """Generate a deterministic ID from URL + timestamp + location + crime type.
 
-    The location_text disambiguates multiple incidents from the same article.
+    The location_text and pks_code disambiguate multiple incidents from the same article.
     """
-    raw = f"{url}:{published_at}:{location_text}"
+    raw = f"{url}:{published_at}:{location_text}:{pks_code}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -173,8 +173,10 @@ def transform_article(article: dict) -> dict | None:
 
     location_text = build_location_text(article)
 
+    pks_code = crime.get("pks_code", "")
+
     return {
-        "id": make_id(url, published_at, location_text or ""),
+        "id": make_id(url, published_at, location_text or "", pks_code),
         "title": article.get("title", ""),
         "summary": None,
         "body": article.get("body"),
@@ -213,17 +215,23 @@ def main():
     articles = json.load(open(input_path, encoding="utf-8"))
     print(f"Loaded {len(articles)} articles from {input_path}")
 
-    # Transform
+    # Transform and deduplicate by ID (multi-incident articles can produce dupes)
     rows = []
+    seen_ids: set[str] = set()
     skipped = 0
+    dupes = 0
     for art in articles:
         row = transform_article(art)
         if row:
+            if row["id"] in seen_ids:
+                dupes += 1
+                continue
+            seen_ids.add(row["id"])
             rows.append(row)
         else:
             skipped += 1
 
-    print(f"Transformed {len(rows)} records ({skipped} skipped - no coordinates)")
+    print(f"Transformed {len(rows)} records ({skipped} skipped - no coords, {dupes} deduped)")
 
     # Category distribution
     from collections import Counter
