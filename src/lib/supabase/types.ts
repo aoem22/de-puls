@@ -3,7 +3,7 @@
  * These types match the crime_records table schema
  */
 
-import type { CrimeCategory, LocationPrecision, WeaponType } from '../types/crime';
+import type { CrimeCategory, LocationPrecision, WeaponType, Gender, Severity, Motive, DrugType, IncidentTimePrecision } from '../types/crime';
 
 /**
  * Database row type (snake_case as stored in PostgreSQL)
@@ -11,6 +11,7 @@ import type { CrimeCategory, LocationPrecision, WeaponType } from '../types/crim
 export interface CrimeRecordRow {
   id: string;
   title: string;
+  clean_title: string | null;
   summary: string | null;
   body: string | null;
   published_at: string;
@@ -24,6 +25,25 @@ export interface CrimeRecordRow {
   weapon_type: WeaponType | null;
   confidence: number;
   hidden: boolean;
+  incident_date: string | null;
+  incident_time: string | null;
+  incident_time_precision: IncidentTimePrecision | null;
+  crime_sub_type: string | null;
+  crime_confidence: number | null;
+  drug_type: DrugType | null;
+  victim_count: number | null;
+  suspect_count: number | null;
+  victim_age: string | null;
+  suspect_age: string | null;
+  victim_gender: Gender | null;
+  suspect_gender: Gender | null;
+  victim_herkunft: string | null;
+  suspect_herkunft: string | null;
+  severity: Severity | null;
+  motive: Motive | null;
+  incident_group_id: string | null;
+  group_role: string | null;
+  pipeline_run: string;
   created_at: string;
   updated_at: string;
 }

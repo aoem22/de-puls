@@ -4,6 +4,8 @@ export const translations = {
   // General
   close: { de: 'Schließen', en: 'Close' },
   search: { de: 'Suchen...', en: 'Search...' },
+  searchAddress: { de: 'Adresse suchen...', en: 'Search address...' },
+  searchNoResults: { de: 'Keine Ergebnisse gefunden', en: 'No results found' },
   searchKreis: { de: 'Kreis suchen...', en: 'Search district...' },
   noResults: { de: 'Keine Ergebnisse', en: 'No results' },
   noDataAvailable: { de: 'Keine Daten verfügbar', en: 'No data available' },
@@ -21,6 +23,8 @@ export const translations = {
   legend: { de: 'Legende', en: 'Legend' },
   categories: { de: 'Kategorien', en: 'Categories' },
   located: { de: 'verortet', en: 'located' },
+  pipelineRun: { de: 'Pipeline-Lauf', en: 'Pipeline Run' },
+  notePlaceholder: { de: 'Anmerkung...', en: 'Note...' },
 
   // Crime metrics
   frequencyHz: { de: 'Häufigkeit (HZ)', en: 'Frequency (HZ)' },
@@ -64,6 +68,17 @@ export const translations = {
   openSource: { de: 'Quelle öffnen', en: 'Open source' },
   accuracy: { de: 'Genauigkeit', en: 'Accuracy' },
   other: { de: 'Sonstiges', en: 'Other' },
+  details: { de: 'Details', en: 'Details' },
+  victim: { de: 'Opfer', en: 'Victim' },
+  suspect: { de: 'Tatverdächtiger', en: 'Suspect' },
+  incidentTime: { de: 'Tatzeit', en: 'Incident Time' },
+  motiveLabel: { de: 'Motiv', en: 'Motive' },
+  nationalityLabel: { de: 'Herkunft', en: 'Nationality' },
+  age: { de: 'J.', en: 'y/o' },
+  timeline: { de: 'Verlauf', en: 'Timeline' },
+  messages: { de: 'Meldungen', en: 'Reports' },
+  crimeLocation: { de: 'Tatort', en: 'Crime Location' },
+  crimeTime: { de: 'Tatzeit', en: 'Crime Time' },
 
   // Indicators (main categories)
   indicators: {
@@ -192,6 +207,52 @@ export const translations = {
     region: { de: 'Region', en: 'Region' },
     unknown: { de: 'Unbekannt', en: 'Unknown' },
     none: { de: 'Keine', en: 'None' },
+  },
+
+  // Severity levels
+  severityLevels: {
+    fatal: { de: 'Tödlich', en: 'Fatal' },
+    critical: { de: 'Kritisch', en: 'Critical' },
+    serious: { de: 'Schwer', en: 'Serious' },
+    minor: { de: 'Leicht', en: 'Minor' },
+    property_only: { de: 'Sachschaden', en: 'Property Only' },
+    unknown: { de: 'Unbekannt', en: 'Unknown' },
+  },
+
+  // Motive labels
+  motiveLabels: {
+    domestic: { de: 'Häusliche Gewalt', en: 'Domestic' },
+    robbery: { de: 'Raub', en: 'Robbery' },
+    hate: { de: 'Hasskriminalität', en: 'Hate Crime' },
+    drugs: { de: 'Drogen', en: 'Drugs' },
+    road_rage: { de: 'Verkehrsstreit', en: 'Road Rage' },
+    dispute: { de: 'Streit', en: 'Dispute' },
+    unknown: { de: 'Unbekannt', en: 'Unknown' },
+  },
+
+  // Gender labels
+  genderLabels: {
+    male: { de: 'männlich', en: 'male' },
+    female: { de: 'weiblich', en: 'female' },
+    unknown: { de: 'unbekannt', en: 'unknown' },
+  },
+
+  // Drug type labels
+  drugLabels: {
+    cannabis: { de: 'Cannabis', en: 'Cannabis' },
+    cocaine: { de: 'Kokain', en: 'Cocaine' },
+    amphetamine: { de: 'Amphetamin', en: 'Amphetamine' },
+    heroin: { de: 'Heroin', en: 'Heroin' },
+    ecstasy: { de: 'Ecstasy', en: 'Ecstasy' },
+    meth: { de: 'Methamphetamin', en: 'Meth' },
+    other: { de: 'Sonstige', en: 'Other' },
+  },
+
+  // Incident time precision
+  timePrecisionLabels: {
+    exact: { de: 'exakt', en: 'exact' },
+    approximate: { de: 'ca.', en: 'approx.' },
+    unknown: { de: 'unbekannt', en: 'unknown' },
   },
 } as const;
 

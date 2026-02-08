@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { fetchCrimes, fetchCrimeStats, fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchAllDatasetMeta } from './queries';
+import { fetchCrimes, fetchCrimeStats, fetchPipelineRuns, fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchAllDatasetMeta } from './queries';
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
 import type { BlaulichtStats, AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow } from './types';
 
@@ -7,16 +7,31 @@ import type { BlaulichtStats, AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, 
  * SWR hook for fetching crime records with automatic caching and revalidation
  *
  * @param category - Optional category filter
+ * @param pipelineRun - Optional pipeline run filter
  * @returns SWR response with crimes data, loading state, and error
  */
-export function useCrimes(category?: CrimeCategory) {
+export function useCrimes(category?: CrimeCategory, pipelineRun?: string) {
   return useSWR<CrimeRecord[], Error>(
-    ['crimes', category ?? 'all'],
-    () => fetchCrimes(category),
+    ['crimes', category ?? 'all', pipelineRun ?? 'all'],
+    () => fetchCrimes(category, pipelineRun),
     {
       // Keep data fresh for 5 minutes before revalidating
       revalidateOnFocus: false,
       dedupingInterval: 60000, // Dedupe requests within 1 minute
+    }
+  );
+}
+
+/**
+ * SWR hook for fetching available pipeline runs with record counts
+ */
+export function usePipelineRuns() {
+  return useSWR<Array<{ run: string; count: number }>, Error>(
+    'pipeline-runs',
+    fetchPipelineRuns,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000,
     }
   );
 }

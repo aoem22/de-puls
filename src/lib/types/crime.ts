@@ -25,6 +25,51 @@ export type WeaponType =
   | 'other'
   | null;
 
+export type Gender = 'male' | 'female' | 'unknown';
+
+export type Severity = 'minor' | 'serious' | 'critical' | 'fatal' | 'property_only' | 'unknown';
+
+export type Motive = 'domestic' | 'robbery' | 'hate' | 'drugs' | 'road_rage' | 'dispute' | 'unknown';
+
+export type DrugType = 'cannabis' | 'cocaine' | 'amphetamine' | 'heroin' | 'ecstasy' | 'meth' | 'other';
+
+export type IncidentTimePrecision = 'exact' | 'approximate' | 'unknown';
+
+export const GENDER_LABELS: Record<Gender, { de: string; en: string }> = {
+  male:    { de: 'männlich', en: 'male' },
+  female:  { de: 'weiblich', en: 'female' },
+  unknown: { de: 'unbekannt', en: 'unknown' },
+};
+
+export const SEVERITY_LABELS: Record<Severity, { de: string; en: string; color: string }> = {
+  fatal:         { de: 'Tödlich',     en: 'Fatal',         color: '#dc2626' },
+  critical:      { de: 'Kritisch',    en: 'Critical',      color: '#f97316' },
+  serious:       { de: 'Schwer',      en: 'Serious',       color: '#eab308' },
+  minor:         { de: 'Leicht',      en: 'Minor',         color: '#6b7280' },
+  property_only: { de: 'Sachschaden', en: 'Property Only', color: '#64748b' },
+  unknown:       { de: 'Unbekannt',   en: 'Unknown',       color: '#4b5563' },
+};
+
+export const MOTIVE_LABELS: Record<Motive, { de: string; en: string }> = {
+  domestic:  { de: 'Häusliche Gewalt', en: 'Domestic' },
+  robbery:   { de: 'Raub',            en: 'Robbery' },
+  hate:      { de: 'Hasskriminalität', en: 'Hate Crime' },
+  drugs:     { de: 'Drogen',          en: 'Drugs' },
+  road_rage: { de: 'Verkehrsstreit',  en: 'Road Rage' },
+  dispute:   { de: 'Streit',          en: 'Dispute' },
+  unknown:   { de: 'Unbekannt',       en: 'Unknown' },
+};
+
+export const DRUG_LABELS: Record<DrugType, { de: string; en: string }> = {
+  cannabis:     { de: 'Cannabis',      en: 'Cannabis' },
+  cocaine:      { de: 'Kokain',        en: 'Cocaine' },
+  amphetamine:  { de: 'Amphetamin',    en: 'Amphetamine' },
+  heroin:       { de: 'Heroin',        en: 'Heroin' },
+  ecstasy:      { de: 'Ecstasy',       en: 'Ecstasy' },
+  meth:         { de: 'Methamphetamin', en: 'Meth' },
+  other:        { de: 'Sonstige',      en: 'Other' },
+};
+
 export const WEAPON_LABELS: Record<string, { de: string; en: string; icon: string }> = {
   knife:     { de: 'Messer',        en: 'Knife',      icon: '\u{1F52A}' },
   gun:       { de: 'Schusswaffe',   en: 'Firearm',    icon: '\u{1F52B}' },
@@ -38,6 +83,7 @@ export type LocationPrecision = 'street' | 'neighborhood' | 'city' | 'region' | 
 export interface CrimeRecord {
   id: string;
   title: string;
+  cleanTitle?: string | null;
   summary?: string | null;
   body?: string | null; // Full press release text
   publishedAt: string;
@@ -50,6 +96,25 @@ export interface CrimeRecord {
   categories: CrimeCategory[];
   weaponType?: WeaponType;
   confidence: number;
+  incidentDate?: string | null;
+  incidentTime?: string | null;
+  incidentTimePrecision?: IncidentTimePrecision | null;
+  crimeSubType?: string | null;
+  crimeConfidence?: number | null;
+  drugType?: DrugType | null;
+  victimCount?: number | null;
+  suspectCount?: number | null;
+  victimAge?: string | null;
+  suspectAge?: string | null;
+  victimGender?: Gender | null;
+  suspectGender?: Gender | null;
+  victimHerkunft?: string | null;
+  suspectHerkunft?: string | null;
+  severity?: Severity | null;
+  motive?: Motive | null;
+  incidentGroupId?: string | null;
+  groupRole?: string | null;
+  pipelineRun?: string | null;
 }
 
 export const CRIME_CATEGORIES: Array<{

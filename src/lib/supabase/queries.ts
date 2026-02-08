@@ -17,6 +17,7 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
   return {
     id: row.id,
     title: row.title,
+    cleanTitle: row.clean_title,
     summary: row.summary,
     body: row.body,
     publishedAt: row.published_at,
@@ -29,6 +30,25 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
     categories: row.categories,
     weaponType: row.weapon_type,
     confidence: row.confidence,
+    incidentDate: row.incident_date,
+    incidentTime: row.incident_time,
+    incidentTimePrecision: row.incident_time_precision,
+    crimeSubType: row.crime_sub_type,
+    crimeConfidence: row.crime_confidence,
+    drugType: row.drug_type,
+    victimCount: row.victim_count,
+    suspectCount: row.suspect_count,
+    victimAge: row.victim_age,
+    suspectAge: row.suspect_age,
+    victimGender: row.victim_gender,
+    suspectGender: row.suspect_gender,
+    victimHerkunft: row.victim_herkunft,
+    suspectHerkunft: row.suspect_herkunft,
+    severity: row.severity,
+    motive: row.motive,
+    incidentGroupId: row.incident_group_id,
+    groupRole: row.group_role,
+    pipelineRun: row.pipeline_run,
   };
 }
 
@@ -38,7 +58,7 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
  * @param category - Optional category to filter by
  * @returns Array of crime records
  */
-export async function fetchCrimes(category?: CrimeCategory): Promise<CrimeRecord[]> {
+export async function fetchCrimes(category?: CrimeCategory, pipelineRun?: string): Promise<CrimeRecord[]> {
   const PAGE_SIZE = 1000;
   let allData: CrimeRecordRow[] = [];
   let from = 0;
@@ -54,6 +74,10 @@ export async function fetchCrimes(category?: CrimeCategory): Promise<CrimeRecord
 
     if (category) {
       query = query.contains('categories', [category]);
+    }
+
+    if (pipelineRun) {
+      query = query.eq('pipeline_run', pipelineRun);
     }
 
     const { data, error } = await query;
@@ -120,6 +144,25 @@ export async function fetchCrimeStats(): Promise<BlaulichtStats> {
     geocoded,
     byCategory,
   };
+}
+
+/**
+ * Fetch related articles in the same incident group (for timeline view)
+ */
+export async function fetchRelatedArticles(groupId: string): Promise<CrimeRecord[]> {
+  const { data, error } = await supabase
+    .from('crime_records')
+    .select('*')
+    .eq('incident_group_id', groupId)
+    .eq('hidden', false)
+    .order('published_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching related articles:', error);
+    return [];
+  }
+
+  return ((data ?? []) as CrimeRecordRow[]).map(rowToCrimeRecord);
 }
 
 // ============ Indicator Data Queries ============
@@ -235,6 +278,48 @@ export async function fetchAllDatasetMeta(): Promise<Record<string, DatasetMetaR
 /**
  * Fetch boundaries by level, keyed by AGS
  */
+/**
+ * Fetch distinct pipeline run names with record counts.
+ * Used for the experiment toggle in LayerControl.
+ */
+export async function fetchPipelineRuns(): Promise<Array<{ run: string; count: number }>> {
+  // Supabase doesn't support GROUP BY directly, so fetch all pipeline_run values
+  const PAGE_SIZE = 1000;
+  const runs: string[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('crime_records')
+      .select('pipeline_run')
+      .eq('hidden', false)
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error('Error fetching pipeline runs:', error);
+      return [];
+    }
+
+    const rows = (data ?? []) as Array<{ pipeline_run: string }>;
+    for (const row of rows) {
+      runs.push(row.pipeline_run ?? 'default');
+    }
+
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  // Aggregate counts
+  const counts: Record<string, number> = {};
+  for (const run of runs) {
+    counts[run] = (counts[run] || 0) + 1;
+  }
+
+  return Object.entries(counts)
+    .map(([run, count]) => ({ run, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 export async function fetchGeoBoundaries(level: GeoBoundaryRow['level']): Promise<Record<string, GeoBoundaryRow>> {
   const { data, error } = await supabase
     .from('geo_boundaries')

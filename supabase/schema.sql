@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS crime_records (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
+  clean_title TEXT,
   summary TEXT,
   body TEXT,
   published_at TIMESTAMPTZ NOT NULL,
@@ -17,6 +18,25 @@ CREATE TABLE IF NOT EXISTS crime_records (
   weapon_type TEXT,
   confidence DOUBLE PRECISION,
   hidden BOOLEAN DEFAULT false,
+  incident_date TEXT,
+  incident_time TEXT,
+  incident_time_precision TEXT,
+  crime_sub_type TEXT,
+  crime_confidence DOUBLE PRECISION,
+  drug_type TEXT,
+  victim_count SMALLINT,
+  suspect_count SMALLINT,
+  victim_age TEXT,
+  suspect_age TEXT,
+  victim_gender TEXT,
+  suspect_gender TEXT,
+  victim_herkunft TEXT,
+  suspect_herkunft TEXT,
+  severity TEXT,
+  motive TEXT,
+  incident_group_id TEXT,
+  group_role TEXT CHECK (group_role IN ('primary', 'follow_up', 'update', 'resolution', 'related')),
+  pipeline_run TEXT DEFAULT 'default',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -27,6 +47,8 @@ CREATE INDEX IF NOT EXISTS idx_crime_records_categories ON crime_records USING G
 CREATE INDEX IF NOT EXISTS idx_crime_records_location ON crime_records(latitude, longitude) WHERE latitude IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_crime_records_precision ON crime_records(precision);
 CREATE INDEX IF NOT EXISTS idx_crime_records_hidden ON crime_records(hidden) WHERE hidden = false;
+CREATE INDEX IF NOT EXISTS idx_crime_records_pipeline_run ON crime_records(pipeline_run);
+CREATE INDEX IF NOT EXISTS idx_crime_records_incident_group ON crime_records(incident_group_id) WHERE incident_group_id IS NOT NULL;
 
 -- Enable Row Level Security
 ALTER TABLE crime_records ENABLE ROW LEVEL SECURITY;
