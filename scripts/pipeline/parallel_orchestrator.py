@@ -23,6 +23,7 @@ from .config import (
     ASYNC_SCRAPER_SCRIPT,
     ENRICHER_SCRIPT,
     FAST_ENRICHER_SCRIPT,
+    FILTER_SCRIPT,
     BUNDESLAENDER,
     LOG_DIR,
     DATA_DIR,
@@ -119,6 +120,59 @@ def run_scraper_sync(chunk: dict, use_async: bool = True) -> tuple[str, bool, Op
         return chunk_id, False, None, str(e)[:200]
 
 
+def run_filter_sync(chunk: dict) -> tuple[str, bool, Optional[int], Optional[str]]:
+    """
+    Run article filter for a single chunk (synchronous, for ThreadPoolExecutor).
+    Returns: (chunk_id, success, filtered_count, error)
+    """
+    chunk_id = chunk["id"]
+
+    if _shutdown_requested:
+        return chunk_id, False, None, "Shutdown requested"
+
+    raw_path = Path(chunk["raw_file"])
+    if not raw_path.exists():
+        return chunk_id, False, None, "Raw file not found"
+
+    # Filtered output alongside raw
+    filtered_path = Path(str(raw_path).replace("/raw/", "/filtered/"))
+    filtered_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable,
+        str(FILTER_SCRIPT),
+        "--input", str(raw_path),
+        "--output", str(filtered_path),
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if result.returncode != 0:
+            error = result.stderr.strip()[:200] or "Unknown error"
+            return chunk_id, False, None, error
+
+        if filtered_path.exists():
+            with open(filtered_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                count = len(data) if isinstance(data, list) else len(data.get("articles", []))
+            # Store filtered path for enricher to use
+            chunk["filtered_file"] = str(filtered_path)
+            return chunk_id, True, count, None
+
+        return chunk_id, False, None, "Output file not found"
+
+    except subprocess.TimeoutExpired:
+        return chunk_id, False, None, "Timeout"
+    except Exception as e:
+        return chunk_id, False, None, str(e)[:200]
+
+
 def run_enricher_sync(chunk: dict) -> tuple[str, bool, Optional[int], Optional[str]]:
     """
     Run FAST enricher for a single chunk (synchronous, for ThreadPoolExecutor).
@@ -130,16 +184,19 @@ def run_enricher_sync(chunk: dict) -> tuple[str, bool, Optional[int], Optional[s
     if _shutdown_requested:
         return chunk_id, False, None, "Shutdown requested"
 
-    # Skip if raw file doesn't exist or is empty
-    raw_path = Path(chunk["raw_file"])
-    if not raw_path.exists():
-        return chunk_id, False, None, "Raw file not found"
+    # Use filtered file if available, otherwise raw
+    input_file = chunk.get("filtered_file") or chunk["raw_file"]
+    input_path = Path(input_file)
+    if not input_path.exists():
+        input_path = Path(chunk["raw_file"])
+    if not input_path.exists():
+        return chunk_id, False, None, "Input file not found"
 
     # Use FAST enricher (batched LLM calls)
     cmd = [
         sys.executable,
         str(FAST_ENRICHER_SCRIPT),
-        "--input", chunk["raw_file"],
+        "--input", str(input_path),
         "--output", chunk["enriched_file"],
     ]
 
@@ -243,6 +300,8 @@ def run_parallel_phase(
 def run_parallel_pipeline(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    skip_filter: bool = False,
+    run_name: str = "default",
 ) -> None:
     """
     Run the full pipeline with parallel processing.
@@ -256,6 +315,7 @@ def run_parallel_pipeline(
     print(f"[{datetime.now().isoformat()}] Starting PARALLEL Blaulicht Pipeline")
     print(f"  Scraper workers: {MAX_PARALLEL_SCRAPERS}")
     print(f"  Enricher workers: {MAX_PARALLEL_ENRICHERS}")
+    print(f"  Pipeline run: {run_name}")
 
     # Load manifest
     kwargs = {}
@@ -302,7 +362,24 @@ def run_parallel_pipeline(
             manifest,
         )
 
-    # Phase 2: Parallel enrichment (only for successfully scraped)
+    # Phase 2: Filter (junk removal + incident grouping)
+    if not _shutdown_requested and not skip_filter:
+        to_filter = [
+            {"id": chunk_id, **chunk}
+            for chunk_id, chunk in manifest["chunks"].items()
+            if chunk["status"] == "in_progress" and chunk.get("articles_count", 0) > 0
+        ]
+
+        if to_filter:
+            filter_success, filter_fail = run_parallel_phase(
+                to_filter,
+                "filter",
+                run_filter_sync,
+                MAX_PARALLEL_SCRAPERS,  # Filters are fast, use same concurrency
+                manifest,
+            )
+
+    # Phase 3: Parallel enrichment (only for successfully scraped)
     if not _shutdown_requested:
         # Get chunks that were scraped but not yet enriched
         to_enrich = [

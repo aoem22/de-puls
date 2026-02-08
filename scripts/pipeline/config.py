@@ -46,6 +46,7 @@ SCRAPER_SCRIPT = PROJECT_ROOT / "scripts" / "scrape_blaulicht.py"
 ASYNC_SCRAPER_SCRIPT = PROJECT_ROOT / "scripts" / "scrape_blaulicht_async.py"
 ENRICHER_SCRIPT = PROJECT_ROOT / "scripts" / "enrich_blaulicht.py"
 FAST_ENRICHER_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline" / "fast_enricher.py"
+FILTER_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline" / "filter_articles.py"
 TRANSFORMER_SCRIPT = PROJECT_ROOT / "scripts" / "transform_to_crimes.py"
 
 # Rate limiting and delays
@@ -56,6 +57,9 @@ RETRY_DELAYS_SECONDS = [60, 300, 900]  # 1min, 5min, 15min
 # API Keys (loaded from environment)
 # GOOGLE_MAPS_API_KEY - Required for geocoding (set in .env)
 # OPENROUTER_API_KEY - Required for LLM enrichment (set in .env)
+
+# Filter configuration
+CHUNKS_FILTERED_DIR = DATA_DIR / "chunks" / "filtered"
 
 # Output files
 MERGED_RAW_FILE = MERGED_DIR / "blaulicht_all_raw.json"

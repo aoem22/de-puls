@@ -355,6 +355,23 @@ def parse_article_page(html: str, url: str) -> Optional[dict]:
     }
 
 
+# Feuerwehr source filter — drop fire dept articles before enrichment
+FEUERWEHR_PATTERN = re.compile(
+    r'Feuerwehr|^FW[ -]|Berufsfeuerwehr|Freiwillige Feuerwehr',
+    re.IGNORECASE,
+)
+
+
+def is_feuerwehr_source(source: Optional[str], title: Optional[str] = None) -> bool:
+    """Check if article is from a fire department (not police)."""
+    if source and FEUERWEHR_PATTERN.search(source):
+        return True
+    # Also check title prefix (e.g. "FW-HH: ...")
+    if title and re.match(r'^FW[ -]', title):
+        return True
+    return False
+
+
 class AsyncPresseportalScraper:
     """
     Async scraper for Presseportal Blaulicht - 10-20x faster than sync version.
@@ -389,6 +406,7 @@ class AsyncPresseportalScraper:
         self.seen_urls: set[str] = set()
         self.url_cache = ScrapedUrlsCache(cache_dir)
         self.skipped_cached_count = 0
+        self.feuerwehr_dropped_count = 0
 
         # Stats
         self.fetch_count = 0
@@ -640,6 +658,12 @@ class AsyncPresseportalScraper:
                 if html:
                     parsed = parse_article_page(html, url)
                     if parsed:
+                        # Drop Feuerwehr (fire dept) articles
+                        if is_feuerwehr_source(parsed.get("source"), parsed.get("title")):
+                            self.feuerwehr_dropped_count += 1
+                            self.url_cache.mark_scraped(url)
+                            continue
+
                         # Use listing date as fallback
                         if not parsed["date"] and info.get("date"):
                             parsed["date"] = info["date"]
@@ -739,6 +763,8 @@ class AsyncPresseportalScraper:
         print()
         print("=" * 60)
         print(f"Saved {len(self.articles)} articles to {self.output}")
+        if self.feuerwehr_dropped_count:
+            print(f"Dropped {self.feuerwehr_dropped_count} Feuerwehr (fire dept) articles")
         print(f"URL cache: {len(self.url_cache)} total URLs in {self.url_cache.cache_file}")
         print(f"Elapsed time: {elapsed:.1f}s ({elapsed/60:.1f} min)")
         print(f"Fetch stats: {self.fetch_count} requests, {self.fetch_errors} errors")

@@ -52,6 +52,10 @@ PKS_TO_CATEGORY: dict[str, str] = {
     "7300": "traffic",
     # Drugs
     "8910": "drugs",
+    # Other violence
+    "6200": "assault",  # Widerstand gegen Vollstreckungsbeamte
+    # Traffic
+    "7400": "traffic",  # Unerlaubtes Entfernen vom Unfallort
     # Other
     "8990": "other",
 }
@@ -81,12 +85,13 @@ GERMAN_TO_CATEGORY: dict[str, str] = {
 }
 
 
-def make_id(url: str, published_at: str, location_text: str = "", pks_code: str = "") -> str:
-    """Generate a deterministic ID from URL + timestamp + location + crime type.
+def make_id(url: str, published_at: str, location_text: str = "", pks_code: str = "", pipeline_run: str = "default") -> str:
+    """Generate a deterministic ID from URL + timestamp + location + crime type + run.
 
     The location_text and pks_code disambiguate multiple incidents from the same article.
+    The pipeline_run ensures records from different experiment runs don't collide.
     """
-    raw = f"{url}:{published_at}:{location_text}:{pks_code}"
+    raw = f"{url}:{published_at}:{location_text}:{pks_code}:{pipeline_run}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -150,7 +155,7 @@ def sanitize_timestamp(ts: str) -> str:
     return ts
 
 
-def transform_article(article: dict) -> dict | None:
+def transform_article(article: dict, pipeline_run: str = "default") -> dict | None:
     """Transform enriched article to Supabase crime_records row."""
     loc = article.get("location", {})
     crime = article.get("crime", {})
@@ -171,13 +176,111 @@ def transform_article(article: dict) -> dict | None:
     if weapon_type not in valid_weapons:
         weapon_type = None
 
+    # Extract drug_type, validate against known values
+    drug_type = details.get("drug_type")
+    valid_drugs = {"cannabis", "cocaine", "amphetamine", "heroin", "ecstasy", "meth", "other"}
+    if drug_type not in valid_drugs:
+        drug_type = None
+
+    # Extract counts, validate as non-negative ints
+    victim_count = details.get("victim_count")
+    if isinstance(victim_count, (int, float)) and victim_count >= 0:
+        victim_count = int(victim_count)
+    else:
+        victim_count = None
+
+    suspect_count = details.get("suspect_count")
+    if isinstance(suspect_count, (int, float)) and suspect_count >= 0:
+        suspect_count = int(suspect_count)
+    else:
+        suspect_count = None
+
+    # Ages as strings (can be "34", "30-35", "Kind")
+    victim_age = details.get("victim_age")
+    if not isinstance(victim_age, str) or not victim_age.strip():
+        victim_age = None
+
+    suspect_age = details.get("suspect_age")
+    if not isinstance(suspect_age, str) or not suspect_age.strip():
+        suspect_age = None
+
+    # Gender fields
+    valid_genders = {"male", "female", "unknown"}
+    victim_gender = details.get("victim_gender")
+    if victim_gender not in valid_genders:
+        victim_gender = None
+
+    suspect_gender = details.get("suspect_gender")
+    if suspect_gender not in valid_genders:
+        suspect_gender = None
+
+    # Herkunft fields — any non-empty string or null
+    victim_herkunft = details.get("victim_herkunft")
+    if not isinstance(victim_herkunft, str) or not victim_herkunft.strip():
+        victim_herkunft = None
+
+    suspect_herkunft = details.get("suspect_herkunft")
+    if not isinstance(suspect_herkunft, str) or not suspect_herkunft.strip():
+        suspect_herkunft = None
+
+    # Severity, validate against known values
+    severity = details.get("severity")
+    valid_severities = {"minor", "serious", "critical", "fatal", "property_only", "unknown"}
+    if severity not in valid_severities:
+        severity = None
+
+    # Motive, validate against known values
+    motive = details.get("motive")
+    valid_motives = {"domestic", "robbery", "hate", "drugs", "road_rage", "dispute", "unknown"}
+    if motive not in valid_motives:
+        motive = None
+
+    # Incident time fields
+    incident_time_obj = article.get("incident_time", {})
+    incident_date = incident_time_obj.get("date")
+    if not isinstance(incident_date, str) or not incident_date.strip():
+        incident_date = None
+
+    incident_time = incident_time_obj.get("time")
+    if not isinstance(incident_time, str) or not incident_time.strip():
+        incident_time = None
+
+    incident_time_precision = incident_time_obj.get("precision")
+    valid_precisions = {"exact", "approximate", "unknown"}
+    if incident_time_precision not in valid_precisions:
+        incident_time_precision = None
+
+    # Crime sub-fields
+    crime_sub_type = crime.get("sub_type")
+    if not isinstance(crime_sub_type, str) or not crime_sub_type.strip():
+        crime_sub_type = None
+
+    crime_confidence = crime.get("confidence")
+    if isinstance(crime_confidence, (int, float)) and 0 <= crime_confidence <= 1:
+        crime_confidence = float(crime_confidence)
+    else:
+        crime_confidence = None
+
     location_text = build_location_text(article)
 
     pks_code = crime.get("pks_code", "")
 
+    # Incident grouping fields (from filter_articles.py)
+    incident_group_id = article.get("incident_group_id")
+    group_role = article.get("group_role")
+    valid_group_roles = {"primary", "follow_up", "update", "resolution", "related"}
+    if group_role not in valid_group_roles:
+        group_role = None
+
+    # Clean title from AI enrichment
+    clean_title = article.get("clean_title")
+    if not isinstance(clean_title, str) or not clean_title.strip():
+        clean_title = None
+
     return {
-        "id": make_id(url, published_at, location_text or "", pks_code),
+        "id": make_id(url, published_at, location_text or "", pks_code, pipeline_run),
         "title": article.get("title", ""),
+        "clean_title": clean_title,
         "summary": None,
         "body": article.get("body"),
         "published_at": published_at,
@@ -190,6 +293,25 @@ def transform_article(article: dict) -> dict | None:
         "categories": map_category(crime),
         "weapon_type": weapon_type,
         "confidence": loc.get("confidence", 0.5),
+        "incident_date": incident_date,
+        "incident_time": incident_time,
+        "incident_time_precision": incident_time_precision,
+        "crime_sub_type": crime_sub_type,
+        "crime_confidence": crime_confidence,
+        "drug_type": drug_type,
+        "victim_count": victim_count,
+        "suspect_count": suspect_count,
+        "victim_age": victim_age,
+        "suspect_age": suspect_age,
+        "victim_gender": victim_gender,
+        "suspect_gender": suspect_gender,
+        "victim_herkunft": victim_herkunft,
+        "suspect_herkunft": suspect_herkunft,
+        "severity": severity,
+        "motive": motive,
+        "incident_group_id": incident_group_id,
+        "group_role": group_role,
+        "pipeline_run": pipeline_run,
     }
 
 
@@ -204,6 +326,7 @@ def main():
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview without uploading")
     parser.add_argument("--batch-size", type=int, default=500, help="Records per batch")
+    parser.add_argument("--run-name", default="default", help="Pipeline run name for A/B experiments")
     args = parser.parse_args()
 
     # Load enriched data
@@ -214,6 +337,7 @@ def main():
 
     articles = json.load(open(input_path, encoding="utf-8"))
     print(f"Loaded {len(articles)} articles from {input_path}")
+    print(f"Pipeline run: {args.run_name}")
 
     # Transform and deduplicate by ID (multi-incident articles can produce dupes)
     rows = []
@@ -221,7 +345,7 @@ def main():
     skipped = 0
     dupes = 0
     for art in articles:
-        row = transform_article(art)
+        row = transform_article(art, pipeline_run=args.run_name)
         if row:
             if row["id"] in seen_ids:
                 dupes += 1

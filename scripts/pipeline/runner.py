@@ -9,6 +9,7 @@ Usage:
     python -m scripts.pipeline.runner merge          # Merge completed chunks
     python -m scripts.pipeline.runner transform      # Generate crimes.json
     python -m scripts.pipeline.runner reset          # Reset all progress
+    python -m scripts.pipeline.runner week --year 2026 --week 1  # Process one week
 
     # Process a single chunk (for testing)
     python -m scripts.pipeline.runner start --chunk bayern_2024-01
@@ -33,6 +34,7 @@ from .parallel_orchestrator import (
     run_enrich_only,
 )
 from .merge import run_merge, run_transform
+from .weekly_processor import process_week
 
 
 def cmd_start(args):
@@ -65,6 +67,8 @@ def cmd_fast(args):
     run_parallel_pipeline(
         start_date=args.start_date,
         end_date=args.end_date,
+        skip_filter=getattr(args, 'skip_filter', False),
+        run_name=getattr(args, 'run_name', 'default'),
     )
 
 
@@ -73,6 +77,21 @@ def cmd_scrape(args):
     run_scrape_only(
         start_date=args.start_date,
         end_date=args.end_date,
+    )
+
+
+def cmd_filter(args):
+    """Run article filter on scraped data."""
+    from .filter_articles import run_filter
+
+    if not args.input or not args.output:
+        print("ERROR: --input and --output are required for filter command")
+        return
+
+    run_filter(
+        input_path=args.input,
+        output_path=args.output,
+        dry_run=args.dry_run,
     )
 
 
@@ -151,6 +170,18 @@ def cmd_reset(args):
         print(f"Reset {count1} in_progress and {count2} failed chunks to pending")
 
     save_manifest(manifest)
+
+
+def cmd_week(args):
+    """Process a single ISO week through the full pipeline."""
+    process_week(
+        year=args.year,
+        week=args.week,
+        dry_run=args.dry_run,
+        no_geocode=args.no_geocode,
+        prompt_version=args.prompt_version,
+        model=args.model,
+    )
 
 
 def cmd_list_chunks(args):
@@ -234,6 +265,16 @@ def main():
         default=DEFAULT_END_DATE,
         help=f"End date (default: {DEFAULT_END_DATE})",
     )
+    fast_parser.add_argument(
+        "--skip-filter",
+        action="store_true",
+        help="Skip the article filter step (for raw comparison runs)",
+    )
+    fast_parser.add_argument(
+        "--run-name",
+        default="default",
+        help="Pipeline run name for A/B experiments (default: 'default')",
+    )
     fast_parser.set_defaults(func=cmd_fast)
 
     # scrape command (scraping only)
@@ -252,6 +293,16 @@ def main():
         help=f"End date (default: {DEFAULT_END_DATE})",
     )
     scrape_parser.set_defaults(func=cmd_scrape)
+
+    # filter command (junk removal + incident grouping)
+    filter_parser = subparsers.add_parser(
+        "filter",
+        help="Run article filter (junk removal + incident grouping)",
+    )
+    filter_parser.add_argument("--input", "-i", help="Input JSON file")
+    filter_parser.add_argument("--output", "-o", help="Output JSON file")
+    filter_parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
+    filter_parser.set_defaults(func=cmd_filter)
 
     # enrich command (enrichment only)
     enrich_parser = subparsers.add_parser(
@@ -299,6 +350,37 @@ def main():
         help="Reset all chunks including completed",
     )
     reset_parser.set_defaults(func=cmd_reset)
+
+    # week command (weekly processing with prompt versioning)
+    week_parser = subparsers.add_parser(
+        "week",
+        help="Process a single ISO week (filter + enrich + push)",
+    )
+    week_parser.add_argument(
+        "--year", type=int, required=True,
+        help="ISO year (e.g. 2026)",
+    )
+    week_parser.add_argument(
+        "--week", type=int, required=True,
+        help="ISO week number (1-53)",
+    )
+    week_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview stats without pushing to Supabase",
+    )
+    week_parser.add_argument(
+        "--no-geocode", action="store_true",
+        help="Skip geocoding (faster testing)",
+    )
+    week_parser.add_argument(
+        "--prompt-version", default="v2",
+        help="Prompt version tag (default: 'v2')",
+    )
+    week_parser.add_argument(
+        "--model",
+        help="LLM model to use (default: x-ai/grok-4-fast)",
+    )
+    week_parser.set_defaults(func=cmd_week)
 
     # list command
     list_parser = subparsers.add_parser("list", help="List chunks")
