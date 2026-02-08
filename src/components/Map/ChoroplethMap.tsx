@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import MapGL from 'react-map-gl/maplibre';
+import type { MapRef, ViewStateChangeEvent } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { LayerControl } from './LayerControl';
 import { MobileCategoryBar } from './MobileCategoryBar';
@@ -13,38 +13,36 @@ import type { KreisHoverInfo } from './KreisLayer';
 import { KreisHoverCard } from './KreisHoverCard';
 import { RankingPanel } from './RankingPanel';
 import { CrimeLayer } from './CrimeLayer';
-import { CitiesLayer } from './CitiesLayer';
+import { HexbinLayer, type BlaulichtViewMode } from './HexbinLayer';
 import { GermanyBorder } from './GermanyBorder';
 import { BlaulichtDetailPanel } from './BlaulichtDetailPanel';
 import { TimelineFloatingControl } from './TimelineFloatingControl';
 import { BlaulichtPlaybackControl } from './BlaulichtPlaybackControl';
 import { PulseMarkerOverlay } from './PulseMarkerOverlay';
+import { AddressSearch } from './AddressSearch';
 import { CRIME_CATEGORIES, type CrimeRecord } from '@/lib/types/crime';
+import { useFavorites } from '@/lib/useFavorites';
 import type { CrimeTypeKey } from '../../../lib/types/cityCrime';
 import type { IndicatorKey, SubMetricKey } from '../../../lib/indicators/types';
 import type { CrimeCategory } from '@/lib/types/crime';
-import { useCrimes, useCrimeStats, useAuslaenderData, useDeutschlandatlasData, useCityCrimeData, useAllDatasetMeta } from '@/lib/supabase';
+import { useCrimes, usePipelineRuns, useAuslaenderData, useDeutschlandatlasData, useCityCrimeData, useAllDatasetMeta } from '@/lib/supabase';
 
-// Tile layer URLs
-const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+// Map style — CARTO Dark Matter vector tiles (free, no API key)
+const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+
 const FALLBACK_AUSLAENDER_YEARS = ['2024'];
 const FALLBACK_CRIME_YEARS = ['2024'];
 
 // Map view settings
-const MIN_ZOOM = 6;
+const MIN_ZOOM = 3.5;
 const MAX_ZOOM = 18;
 
-// Germany-wide view settings
-const GERMANY_CENTER: [number, number] = [51.1657, 10.4515];
+// Germany bounds [sw_lng, sw_lat, ne_lng, ne_lat]
+const GERMANY_BOUNDS: [number, number, number, number] = [5.87, 47.27, 15.04, 55.06];
+const GERMANY_CENTER_LNG = 10.4515;
+const GERMANY_CENTER_LAT = 51.1657;
 const GERMANY_ZOOM = 6;
 
-// Germany bounds - tighter fit to actual Germany extent
-const GERMANY_BOUNDS: [[number, number], [number, number]] = [
-  [47.27, 5.87],   // Southwest corner (near Basel)
-  [55.06, 15.04],  // Northeast corner (near Szczecin)
-];
-
-// Zoom threshold for deselecting a Kreis (when zoomed out enough to see it fully)
 const KREIS_DESELECT_ZOOM_THRESHOLD = 7;
 const BLAULICHT_PLAYBACK_INTERVAL_MS = 1100;
 const BLAULICHT_FLASH_DURATION_MS = 1300;
@@ -59,121 +57,8 @@ function getCrimeTimestamp(crime: CrimeRecord): number {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-// Component to track zoom level changes
-function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
-  const map = useMap();
-
-  useEffect(() => {
-    const handleZoom = () => onZoomChange(map.getZoom());
-    map.on('zoomend', handleZoom);
-    onZoomChange(map.getZoom()); // Initial value
-    return () => {
-      map.off('zoomend', handleZoom);
-    };
-  }, [map, onZoomChange]);
-
-  return null;
-}
-
-// Zoom map back out when leaving selected Kreis detail mode.
-function KreisSelectionResetter({
-  selectedKreis,
-  enabled,
-  germanyBounds,
-}: {
-  selectedKreis: string | null;
-  enabled: boolean;
-  germanyBounds: [[number, number], [number, number]];
-}) {
-  const map = useMap();
-  const previousSelectedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const hadSelection = Boolean(previousSelectedRef.current);
-    const leftSelectionMode = hadSelection && !selectedKreis;
-
-    if (enabled && leftSelectionMode) {
-      const isMobile = map.getContainer().clientWidth < 768;
-      map.fitBounds(germanyBounds, {
-        paddingTopLeft: [80, 80 + (isMobile ? 60 : 0)],
-        paddingBottomRight: [80, 80 + (isMobile ? 140 : 0)],
-        maxZoom: GERMANY_ZOOM,
-      });
-    }
-
-    previousSelectedRef.current = selectedKreis;
-  }, [enabled, selectedKreis, germanyBounds, map]);
-
-  return null;
-}
-
-// Zoom map back out when closing the mobile ranking panel.
-function RankingCloseResetter({
-  isMobileRankingOpen,
-  germanyBounds,
-}: {
-  isMobileRankingOpen: boolean;
-  germanyBounds: [[number, number], [number, number]];
-}) {
-  const map = useMap();
-  const previousOpenRef = useRef<boolean>(false);
-
-  useEffect(() => {
-    const wasOpen = previousOpenRef.current;
-    const justClosed = wasOpen && !isMobileRankingOpen;
-
-    if (justClosed) {
-      const isMobile = map.getContainer().clientWidth < 768;
-      if (isMobile) {
-        map.fitBounds(germanyBounds, {
-          paddingTopLeft: [80, 80 + 60],
-          paddingBottomRight: [80, 80 + 140],
-          maxZoom: GERMANY_ZOOM,
-        });
-      }
-    }
-
-    previousOpenRef.current = isMobileRankingOpen;
-  }, [isMobileRankingOpen, germanyBounds, map]);
-
-  return null;
-}
-
-// Component to set initial map bounds
-function MapInitializer({ germanyBounds }: { germanyBounds: [[number, number], [number, number]] }) {
-  const map = useMap();
-
-  useEffect(() => {
-    // Calculate padding: 8% on mobile, 10% on desktop
-    const container = map.getContainer();
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-    const isMobile = width < 768;
-    const paddingRatio = isMobile ? 0.08 : 0.1;
-    const padding: L.PointTuple = [height * paddingRatio, width * paddingRatio];
-    // On mobile, add extra top padding for category bar and bottom for timeline + ranking
-    const topExtra = isMobile ? 60 : 0;
-    const bottomExtra = isMobile ? 140 : 0;
-
-    map.fitBounds(germanyBounds, {
-      paddingTopLeft: [padding[1], padding[0] + topExtra],
-      paddingBottomRight: [padding[1], padding[0] + bottomExtra],
-    });
-
-    // Expand maxBounds slightly so user can pan a bit but not lose Germany
-    const expandedBounds: [[number, number], [number, number]] = [
-      [germanyBounds[0][0] - 1, germanyBounds[0][1] - 1],
-      [germanyBounds[1][0] + 1, germanyBounds[1][1] + 1],
-    ];
-    map.setMaxBounds(expandedBounds);
-    map.setMinZoom(MIN_ZOOM);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return null;
-}
-
 export function ChoroplethMap() {
+  const mapRef = useRef<MapRef | null>(null);
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
   const [isMobileRankingOpen, setIsMobileRankingOpen] = useState(false);
   const [shouldRenderRankingPanel, setShouldRenderRankingPanel] = useState(true);
@@ -187,13 +72,12 @@ export function ChoroplethMap() {
   const deutschlandatlasYear = datasetMeta?.deutschlandatlas?.years?.[0] ?? '2022';
   const crimeDataYears = datasetMeta?.kriminalstatistik?.years ?? FALLBACK_CRIME_YEARS;
 
-  // Unified indicator state (Ausländer, Deutschlandatlas, or Kriminalstatistik)
+  // Unified indicator state
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorKey>('auslaender');
   const [selectedSubMetric, setSelectedSubMetric] = useState<SubMetricKey>('total');
   const [selectedIndicatorYear, setSelectedIndicatorYear] = useState<string>('2024');
   const [isIndicatorPlaying, setIsIndicatorPlaying] = useState(false);
 
-  // Compute available years for the currently selected indicator
   const indicatorYears = useMemo((): string[] => {
     if (selectedIndicator === 'auslaender') return auslaenderYears;
     if (selectedIndicator === 'kriminalstatistik') return crimeDataYears;
@@ -201,7 +85,6 @@ export function ChoroplethMap() {
     return [deutschlandatlasYear];
   }, [selectedIndicator, auslaenderYears, crimeDataYears, deutschlandatlasYear]);
 
-  // Always use a valid year for fetch/rendering, even if metadata changed.
   const effectiveIndicatorYear = useMemo(() => {
     if (selectedIndicator === 'blaulicht') return '';
     if (indicatorYears.length === 0) return selectedIndicatorYear;
@@ -209,24 +92,24 @@ export function ChoroplethMap() {
     return indicatorYears[indicatorYears.length - 1];
   }, [selectedIndicator, indicatorYears, selectedIndicatorYear]);
 
-  // Fetch indicator data from Supabase
+  // Fetch indicator data
   const { data: ausData } = useAuslaenderData(
     selectedIndicator === 'auslaender' ? effectiveIndicatorYear : ''
   );
   const { data: datlasData } = useDeutschlandatlasData();
   const { data: cityCrimeData } = useCityCrimeData();
 
-  // Crime-specific state (only used when selectedIndicator === 'kriminalstatistik')
+  // Crime-specific state
   const [cityCrimeMetric, setCityCrimeMetric] = useState<'hz' | 'aq'>('hz');
   const [hoveredCity, setHoveredCity] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
-  // Kreis-specific state (used for auslaender and deutschlandatlas)
+  // Kreis-specific state
   const [hoveredKreis, setHoveredKreis] = useState<string | null>(null);
   const [selectedKreis, setSelectedKreis] = useState<string | null>(null);
   const [kreisHoverInfo, setKreisHoverInfo] = useState<KreisHoverInfo | null>(null);
 
-  // Zoom level tracking for fade effects
+  // Zoom level tracking
   const [currentZoom, setCurrentZoom] = useState<number>(GERMANY_ZOOM);
 
   // Blaulicht crime state
@@ -234,26 +117,41 @@ export function ChoroplethMap() {
   const [hoveredCrime, setHoveredCrime] = useState<CrimeRecord | null>(null);
   const [selectedBlaulichtCategory, setSelectedBlaulichtCategory] = useState<CrimeCategory | null>(null);
   const [selectedWeaponType, setSelectedWeaponType] = useState<string | null>(null);
+  const [selectedPipelineRun, setSelectedPipelineRun] = useState<string | undefined>(undefined);
   const [isBlaulichtPlaying, setIsBlaulichtPlaying] = useState(false);
   const [blaulichtPlaybackIndex, setBlaulichtPlaybackIndex] = useState<number | null>(null);
   const [flashingCrimeIds, setFlashingCrimeIds] = useState<Set<string>>(new Set());
   const [detailPanelFlashToken, setDetailPanelFlashToken] = useState(0);
   const flashTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const { favoriteIds, toggleFavorite, isFavorite, count: favoritesCount, getComment, setComment } = useFavorites();
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [blaulichtViewMode, setBlaulichtViewMode] = useState<BlaulichtViewMode>('both');
+  const [dateFilterFrom, setDateFilterFrom] = useState<string | null>(null);
+  const [dateFilterTo, setDateFilterTo] = useState<string | null>(null);
 
-  // Determine which layer type to show based on indicator
+  // Layer visibility
   const showCityCrimeLayer = selectedIndicator === 'kriminalstatistik';
   const showBlaulichtLayer = selectedIndicator === 'blaulicht';
   const showKreisLayer = !showCityCrimeLayer && !showBlaulichtLayer;
   const shouldShowRankingPanel = !showBlaulichtLayer;
 
-  // Fetch Blaulicht crime data from Supabase
-  const { data: blaulichtCrimes = [] } = useCrimes();
-  const { data: blaulichtStats } = useCrimeStats();
+  // Fetch Blaulicht data (filtered by pipeline run if selected)
+  const { data: blaulichtCrimes = [] } = useCrimes(undefined, selectedPipelineRun);
+  const { data: pipelineRuns } = usePipelineRuns();
 
-  // Default stats while loading
-  const stats = blaulichtStats ?? { total: 0, geocoded: 0, byCategory: {} };
+  // Compute stats from the fetched crimes (already filtered by pipeline run)
+  const stats = useMemo(() => {
+    const byCategory: Partial<Record<CrimeCategory, number>> = {};
+    let geocoded = 0;
+    for (const crime of blaulichtCrimes) {
+      if (crime.latitude != null) geocoded++;
+      for (const cat of crime.categories) {
+        byCategory[cat] = (byCategory[cat] || 0) + 1;
+      }
+    }
+    return { total: blaulichtCrimes.length, geocoded, byCategory };
+  }, [blaulichtCrimes]);
 
-  // Compute weapon type counts from loaded crimes (respects active category filter)
   const weaponCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const crime of blaulichtCrimes) {
@@ -267,22 +165,23 @@ export function ChoroplethMap() {
     return counts;
   }, [blaulichtCrimes, selectedBlaulichtCategory]);
 
-  // Geocoded Blaulicht crimes sorted from oldest to newest for timeline playback.
   const orderedBlaulichtCrimes = useMemo(() => {
     const filtered = blaulichtCrimes
       .filter((crime) => crime.latitude != null && crime.longitude != null)
+      .filter((crime) => !selectedBlaulichtCategory || crime.categories.includes(selectedBlaulichtCategory))
+      .filter((crime) => !selectedWeaponType || crime.weaponType === selectedWeaponType)
+      .filter((crime) => !showFavoritesOnly || favoriteIds.has(crime.id))
       .filter((crime) => {
-        if (!selectedBlaulichtCategory) return true;
-        return crime.categories.includes(selectedBlaulichtCategory);
-      })
-      .filter((crime) => {
-        if (!selectedWeaponType) return true;
-        return crime.weaponType === selectedWeaponType;
+        if (!dateFilterFrom && !dateFilterTo) return true;
+        const ts = getCrimeTimestamp(crime);
+        if (ts === 0) return false;
+        if (dateFilterFrom && ts < new Date(dateFilterFrom + 'T00:00:00').getTime()) return false;
+        if (dateFilterTo && ts > new Date(dateFilterTo + 'T23:59:59.999').getTime()) return false;
+        return true;
       });
-
     filtered.sort((left, right) => getCrimeTimestamp(left) - getCrimeTimestamp(right));
     return filtered;
-  }, [blaulichtCrimes, selectedBlaulichtCategory, selectedWeaponType]);
+  }, [blaulichtCrimes, selectedBlaulichtCategory, selectedWeaponType, showFavoritesOnly, favoriteIds, dateFilterFrom, dateFilterTo]);
 
   const clampedBlaulichtIndex = useMemo(() => {
     if (orderedBlaulichtCrimes.length === 0) return -1;
@@ -295,15 +194,13 @@ export function ChoroplethMap() {
   const visibleBlaulichtCrimeIds = useMemo(() => {
     if (!showBlaulichtLayer) return null;
     if (orderedBlaulichtCrimes.length === 0 || clampedBlaulichtIndex < 0) return new Set<string>();
-    return new Set(orderedBlaulichtCrimes.slice(0, clampedBlaulichtIndex + 1).map((crime) => crime.id));
+    return new Set(orderedBlaulichtCrimes.slice(0, clampedBlaulichtIndex + 1).map((c) => c.id));
   }, [showBlaulichtLayer, orderedBlaulichtCrimes, clampedBlaulichtIndex]);
 
   const crimeById = useMemo(() => {
-    const map = new Map<string, CrimeRecord>();
-    for (const crime of orderedBlaulichtCrimes) {
-      map.set(crime.id, crime);
-    }
-    return map;
+    const m = new Map<string, CrimeRecord>();
+    for (const crime of orderedBlaulichtCrimes) m.set(crime.id, crime);
+    return m;
   }, [orderedBlaulichtCrimes]);
 
   const flashingCrimes = useMemo(() => {
@@ -330,36 +227,78 @@ export function ChoroplethMap() {
     return crimeById.has(hoveredCrime.id) ? hoveredCrime : null;
   }, [hoveredCrime, crimeById]);
 
-  // Indicator year playback animation
-  useEffect(() => {
-    if (!isIndicatorPlaying) return;
-    if (indicatorYears.length <= 1) return;
+  // ── Map view reset helpers ──────────────────────────────────────
 
+  const previousSelectedKreisRef = useRef<string | null>(null);
+  const previousMobileRankingRef = useRef(false);
+
+  // Reset view when leaving selected Kreis detail mode
+  useEffect(() => {
+    const hadSelection = Boolean(previousSelectedKreisRef.current);
+    const leftSelectionMode = hadSelection && !selectedKreis;
+
+    if (showKreisLayer && leftSelectionMode && mapRef.current) {
+      const container = mapRef.current.getContainer();
+      const isMobile = container.clientWidth < 768;
+      mapRef.current.fitBounds(GERMANY_BOUNDS, {
+        padding: {
+          top: 80 + (isMobile ? 60 : 0),
+          bottom: 80 + (isMobile ? 140 : 0),
+          left: 80,
+          right: 80,
+        },
+        maxZoom: GERMANY_ZOOM,
+      });
+    }
+
+    previousSelectedKreisRef.current = selectedKreis;
+  }, [showKreisLayer, selectedKreis]);
+
+  // Reset view when closing mobile ranking panel
+  useEffect(() => {
+    const wasOpen = previousMobileRankingRef.current;
+    const justClosed = wasOpen && !isMobileRankingOpen;
+
+    if (justClosed && mapRef.current) {
+      const container = mapRef.current.getContainer();
+      const isMobile = container.clientWidth < 768;
+      if (isMobile) {
+        mapRef.current.fitBounds(GERMANY_BOUNDS, {
+          padding: { top: 140, bottom: 220, left: 80, right: 80 },
+          maxZoom: GERMANY_ZOOM,
+        });
+      }
+    }
+
+    previousMobileRankingRef.current = isMobileRankingOpen;
+  }, [isMobileRankingOpen]);
+
+  // ── Playback timers (identical logic) ───────────────────────────
+
+  // Indicator year playback
+  useEffect(() => {
+    if (!isIndicatorPlaying || indicatorYears.length <= 1) return;
     const interval = window.setInterval(() => {
       setSelectedIndicatorYear((current) => {
-        const currentIndex = indicatorYears.indexOf(current);
-        const nextIndex = (currentIndex + 1) % indicatorYears.length;
-        return indicatorYears[nextIndex];
+        const idx = indicatorYears.indexOf(current);
+        return indicatorYears[(idx + 1) % indicatorYears.length];
       });
     }, 1500);
     return () => window.clearInterval(interval);
   }, [isIndicatorPlaying, indicatorYears]);
 
-  // Clear pending flash timeouts on unmount.
+  // Clear flash timeouts on unmount
   useEffect(() => {
-    const timeoutRegistry = flashTimeoutsRef.current;
+    const reg = flashTimeoutsRef.current;
     return () => {
-      for (const timeoutId of timeoutRegistry.values()) {
-        window.clearTimeout(timeoutId);
-      }
-      timeoutRegistry.clear();
+      for (const id of reg.values()) window.clearTimeout(id);
+      reg.clear();
     };
   }, []);
 
-  // Timeline playback for Blaulicht points and synchronized press release panel.
+  // Blaulicht timeline playback
   useEffect(() => {
-    if (!showBlaulichtLayer || !isBlaulichtPlaying) return;
-    if (orderedBlaulichtCrimes.length === 0) return;
+    if (!showBlaulichtLayer || !isBlaulichtPlaying || orderedBlaulichtCrimes.length === 0) return;
 
     const interval = window.setInterval(() => {
       setBlaulichtPlaybackIndex((current) => {
@@ -374,30 +313,28 @@ export function ChoroplethMap() {
         const nextCrime = orderedBlaulichtCrimes[nextIndex];
         setSelectedCrime(nextCrime);
         setHoveredCrime(null);
-        setDetailPanelFlashToken((token) => token + 1);
+        setDetailPanelFlashToken((t) => t + 1);
 
-        setFlashingCrimeIds((previous) => {
-          const next = new Set(previous);
+        setFlashingCrimeIds((prev) => {
+          const next = new Set(prev);
           next.add(nextCrime.id);
           return next;
         });
 
-        const existingTimeout = flashTimeoutsRef.current.get(nextCrime.id);
-        if (existingTimeout) {
-          window.clearTimeout(existingTimeout);
-        }
+        const existing = flashTimeoutsRef.current.get(nextCrime.id);
+        if (existing) window.clearTimeout(existing);
 
-        const timeoutId = window.setTimeout(() => {
-          setFlashingCrimeIds((previous) => {
-            if (!previous.has(nextCrime.id)) return previous;
-            const next = new Set(previous);
+        const tid = window.setTimeout(() => {
+          setFlashingCrimeIds((prev) => {
+            if (!prev.has(nextCrime.id)) return prev;
+            const next = new Set(prev);
             next.delete(nextCrime.id);
             return next;
           });
           flashTimeoutsRef.current.delete(nextCrime.id);
         }, BLAULICHT_FLASH_DURATION_MS);
 
-        flashTimeoutsRef.current.set(nextCrime.id, timeoutId);
+        flashTimeoutsRef.current.set(nextCrime.id, tid);
         return nextIndex;
       });
     }, BLAULICHT_PLAYBACK_INTERVAL_MS);
@@ -405,7 +342,10 @@ export function ChoroplethMap() {
     return () => window.clearInterval(interval);
   }, [showBlaulichtLayer, isBlaulichtPlaying, orderedBlaulichtCrimes]);
 
-  const handleZoomChange = useCallback((zoom: number) => {
+  // ── Event handlers ──────────────────────────────────────────────
+
+  const handleZoom = useCallback((e: ViewStateChangeEvent) => {
+    const zoom = e.viewState.zoom;
     setCurrentZoom(zoom);
     if (zoom <= KREIS_DESELECT_ZOOM_THRESHOLD) {
       setSelectedKreis((prev) => (prev ? null : prev));
@@ -414,7 +354,6 @@ export function ChoroplethMap() {
 
   const handleToggleBlaulichtPlayback = useCallback(() => {
     if (orderedBlaulichtCrimes.length === 0) return;
-
     setIsBlaulichtPlaying((previous) => {
       if (previous) return false;
       if (clampedBlaulichtIndex >= orderedBlaulichtCrimes.length - 1) {
@@ -436,6 +375,16 @@ export function ChoroplethMap() {
     setFlashingCrimeIds(new Set());
   }, []);
 
+  const handleDateFilterChange = useCallback((from: string | null, to: string | null) => {
+    setDateFilterFrom(from);
+    setDateFilterTo(to);
+    setIsBlaulichtPlaying(false);
+    setBlaulichtPlaybackIndex(null);
+    setSelectedCrime(null);
+    setHoveredCrime(null);
+    setFlashingCrimeIds(new Set());
+  }, []);
+
   const handleWeaponTypeChange = useCallback((weaponType: string | null) => {
     setSelectedWeaponType(weaponType);
     setIsBlaulichtPlaying(false);
@@ -448,14 +397,13 @@ export function ChoroplethMap() {
   const handleBlaulichtScrub = useCallback((nextIndex: number) => {
     if (orderedBlaulichtCrimes.length === 0) return;
     const clampedIndex = Math.max(0, Math.min(nextIndex, orderedBlaulichtCrimes.length - 1));
-    const activeCrime = orderedBlaulichtCrimes[clampedIndex];
     setBlaulichtPlaybackIndex(clampedIndex);
     setIsBlaulichtPlaying(false);
     setHoveredCrime(null);
-    setSelectedCrime(activeCrime ?? null);
+    setSelectedCrime(orderedBlaulichtCrimes[clampedIndex] ?? null);
   }, [orderedBlaulichtCrimes]);
 
-  // Keep ranking panel mounted long enough to animate out when switching to Blaulicht.
+  // Keep ranking panel mounted for animation
   useEffect(() => {
     let rafId: number | null = null;
     let nestedRafId: number | null = null;
@@ -464,16 +412,12 @@ export function ChoroplethMap() {
     if (shouldShowRankingPanel) {
       rafId = window.requestAnimationFrame(() => {
         setShouldRenderRankingPanel(true);
-        nestedRafId = window.requestAnimationFrame(() => {
-          setIsRankingPanelVisible(true);
-        });
+        nestedRafId = window.requestAnimationFrame(() => setIsRankingPanelVisible(true));
       });
     } else {
       rafId = window.requestAnimationFrame(() => {
         setIsRankingPanelVisible(false);
-        timeoutId = window.setTimeout(() => {
-          setShouldRenderRankingPanel(false);
-        }, 260);
+        timeoutId = window.setTimeout(() => setShouldRenderRankingPanel(false), 260);
       });
     }
 
@@ -484,49 +428,68 @@ export function ChoroplethMap() {
     };
   }, [shouldShowRankingPanel]);
 
+  // ── Map language + load handler ─────────────────────────────────
+
+  const setMapLanguage = useCallback((map: MapRef) => {
+    const style = map.getStyle();
+    if (!style?.layers) return;
+    for (const layer of style.layers) {
+      if (layer.type === 'symbol' && (layer.layout as Record<string, unknown>)?.['text-field']) {
+        map.getMap().setLayoutProperty(layer.id, 'text-field', ['coalesce', ['get', 'name:de'], ['get', 'name']]);
+      }
+    }
+  }, []);
+
+  const handleLoad = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Switch all labels to German
+    setMapLanguage(map);
+
+    // Re-apply on style reload (e.g. tile re-fetch)
+    map.getMap().on('styledata', () => setMapLanguage(map));
+
+    const container = map.getContainer();
+    const isMobile = container.clientWidth < 768;
+
+    map.fitBounds(GERMANY_BOUNDS, {
+      padding: {
+        top: (isMobile ? 0.08 : 0.1) * container.clientHeight + (isMobile ? 60 : 0),
+        bottom: (isMobile ? 0.08 : 0.1) * container.clientHeight + (isMobile ? 140 : 0),
+        left: (isMobile ? 0.08 : 0.1) * container.clientWidth,
+        right: (isMobile ? 0.08 : 0.1) * container.clientWidth,
+      },
+    });
+  }, [setMapLanguage]);
+
   return (
     <div className="relative w-full h-full">
-      <MapContainer
-        center={GERMANY_CENTER}
-        zoom={GERMANY_ZOOM}
+      <MapGL
+        ref={mapRef}
+        mapStyle={MAP_STYLE}
+        initialViewState={{
+          longitude: GERMANY_CENTER_LNG,
+          latitude: GERMANY_CENTER_LAT,
+          zoom: GERMANY_ZOOM,
+        }}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
-        maxBounds={GERMANY_BOUNDS}
-        maxBoundsViscosity={1.0}
-        className="w-full h-full"
-        zoomControl={false}
-        preferCanvas
+        maxBounds={[
+          [GERMANY_BOUNDS[0] - 10, GERMANY_BOUNDS[1] - 8],
+          [GERMANY_BOUNDS[2] + 10, GERMANY_BOUNDS[3] + 8],
+        ]}
+        dragRotate={false}
+        touchZoomRotate={false}
+        touchPitch={false}
+        pitchWithRotate={false}
+        maxPitch={0}
+        onZoom={handleZoom}
+        onLoad={handleLoad}
+        style={{ width: '100%', height: '100%' }}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-          url={DARK_TILES}
-        />
-
-
         {/* Germany border with glow */}
         <GermanyBorder />
-
-        {/* Progressive city labels */}
-        <CitiesLayer currentZoom={currentZoom} />
-
-        {/* Zoom tracker for fade effects */}
-        <ZoomTracker onZoomChange={handleZoomChange} />
-
-        {/* Reset view when leaving selected Kreis detail */}
-        <KreisSelectionResetter
-          selectedKreis={selectedKreis}
-          enabled={showKreisLayer}
-          germanyBounds={GERMANY_BOUNDS}
-        />
-
-        {/* Reset view when closing mobile ranking panel */}
-        <RankingCloseResetter
-          isMobileRankingOpen={isMobileRankingOpen}
-          germanyBounds={GERMANY_BOUNDS}
-        />
-
-        {/* Initial map bounds setup */}
-        <MapInitializer germanyBounds={GERMANY_BOUNDS} />
 
         {/* City crime layer (when kriminalstatistik is selected) */}
         {showCityCrimeLayer && (
@@ -543,7 +506,7 @@ export function ChoroplethMap() {
           />
         )}
 
-        {/* Kreis indicator layer (Ausländer or Deutschlandatlas) */}
+        {/* Kreis indicator layer */}
         {showKreisLayer && (
           <KreisLayer
             indicatorKey={selectedIndicator}
@@ -560,8 +523,18 @@ export function ChoroplethMap() {
           />
         )}
 
-        {/* Blaulicht crime markers (when blaulicht indicator selected) */}
-        {showBlaulichtLayer && (
+        {/* Blaulicht hexbin density underlay */}
+        {showBlaulichtLayer && (blaulichtViewMode === 'density' || blaulichtViewMode === 'both') && (
+          <HexbinLayer
+            crimes={orderedBlaulichtCrimes}
+            currentZoom={currentZoom}
+            visible
+            beforeCrimeCircles={blaulichtViewMode === 'both'}
+          />
+        )}
+
+        {/* Blaulicht crime markers */}
+        {showBlaulichtLayer && (blaulichtViewMode === 'dots' || blaulichtViewMode === 'both') && (
           <CrimeLayer
             crimes={orderedBlaulichtCrimes}
             monochrome
@@ -579,10 +552,11 @@ export function ChoroplethMap() {
             filterCategory={selectedBlaulichtCategory}
             visibleCrimeIds={visibleBlaulichtCrimeIds}
             flashingCrimeIds={flashingCrimeIds}
+            favoriteIds={favoriteIds}
           />
         )}
 
-        {/* Pulse overlay for newly appeared crimes while playing */}
+        {/* Pulse overlay for newly appeared crimes */}
         {showBlaulichtLayer && flashingCrimes.map((crime) => {
           if (crime.latitude == null || crime.longitude == null) return null;
           const category = crime.categories[0];
@@ -596,9 +570,12 @@ export function ChoroplethMap() {
             />
           );
         })}
-      </MapContainer>
 
-      {/* Mobile category bar — horizontal pills to switch indicator */}
+        {/* Address search (pin marker renders inside map) */}
+        <AddressSearch mapRef={mapRef} />
+      </MapGL>
+
+      {/* Mobile category bar */}
       <MobileCategoryBar
         selectedIndicator={selectedIndicator}
         onIndicatorChange={(indicator) => {
@@ -625,6 +602,8 @@ export function ChoroplethMap() {
           setSelectedBlaulichtCategory(null);
           setBlaulichtPlaybackIndex(null);
           setFlashingCrimeIds(new Set());
+          setDateFilterFrom(null);
+          setDateFilterTo(null);
           setIsMobileRankingOpen(false);
         }}
         onOpenSettings={() => setIsControlsExpanded(true)}
@@ -655,22 +634,19 @@ export function ChoroplethMap() {
             setSelectedIndicator(indicator);
             setIsIndicatorPlaying(false);
             setIsBlaulichtPlaying(false);
-            // Set appropriate defaults based on indicator type
             if (indicator === 'auslaender') {
               setSelectedSubMetric('total');
               setSelectedIndicatorYear(auslaenderYears[auslaenderYears.length - 1] ?? '2024');
             } else if (indicator === 'deutschlandatlas') {
-              setSelectedSubMetric('kinder_bg'); // Default to child poverty
+              setSelectedSubMetric('kinder_bg');
               setSelectedIndicatorYear(deutschlandatlasYear);
             } else if (indicator === 'kriminalstatistik') {
               setSelectedSubMetric('total');
               setSelectedIndicatorYear(crimeDataYears[crimeDataYears.length - 1] ?? '2024');
             } else if (indicator === 'blaulicht') {
-              // Blaulicht has no sub-metrics or year selection
               setSelectedSubMetric('all');
               setSelectedIndicatorYear('');
             }
-            // Clear selections when switching indicators
             setSelectedKreis(null);
             setSelectedCity(null);
             setSelectedCrime(null);
@@ -679,30 +655,37 @@ export function ChoroplethMap() {
             setSelectedWeaponType(null);
             setBlaulichtPlaybackIndex(null);
             setFlashingCrimeIds(new Set());
+            setDateFilterFrom(null);
+            setDateFilterTo(null);
             setIsControlsExpanded(false);
             setIsMobileRankingOpen(false);
           }}
           selectedSubMetric={selectedSubMetric}
           onSubMetricChange={setSelectedSubMetric}
           selectedIndicatorYear={effectiveIndicatorYear}
-          // Crime-specific props (only used when kriminalstatistik is selected)
           cityCrimeMetric={cityCrimeMetric}
           onCityCrimeMetricChange={setCityCrimeMetric}
-          // Blaulicht stats and category filter
           blaulichtStats={stats}
           selectedBlaulichtCategory={selectedBlaulichtCategory}
           onBlaulichtCategoryChange={handleBlaulichtCategoryChange}
           weaponCounts={weaponCounts}
           selectedWeaponType={selectedWeaponType}
           onWeaponTypeChange={handleWeaponTypeChange}
-          // Data props for legends
+          favoritesCount={favoritesCount}
+          showFavoritesOnly={showFavoritesOnly}
+          onToggleFavoritesOnly={() => setShowFavoritesOnly((prev) => !prev)}
+          blaulichtViewMode={blaulichtViewMode}
+          onBlaulichtViewModeChange={setBlaulichtViewMode}
+          pipelineRuns={pipelineRuns}
+          selectedPipelineRun={selectedPipelineRun}
+          onPipelineRunChange={setSelectedPipelineRun}
           auslaenderData={ausData}
           deutschlandatlasData={datlasData}
           cityCrimeData={cityCrimeData}
         />
       </div>
 
-      {/* Floating bottom-center timeline transport controls */}
+      {/* Timeline transport controls */}
       {!showBlaulichtLayer && (
         <TimelineFloatingControl
           years={indicatorYears}
@@ -726,11 +709,14 @@ export function ChoroplethMap() {
           onTogglePlay={handleToggleBlaulichtPlayback}
           onIndexChange={handleBlaulichtScrub}
           currentTimestamp={playbackCurrentCrime?.publishedAt}
+          dateFilterFrom={dateFilterFrom}
+          dateFilterTo={dateFilterTo}
+          onDateFilterChange={handleDateFilterChange}
           className="bottom-20 md:bottom-4"
         />
       )}
 
-      {/* Kreis hover card (custom positioned tooltip) - desktop only */}
+      {/* Kreis hover card (desktop) */}
       <div className="hidden md:block">
         {kreisHoverInfo && !selectedKreis && showKreisLayer && (
           <KreisHoverCard
@@ -746,7 +732,7 @@ export function ChoroplethMap() {
         )}
       </div>
 
-      {/* Unified ranking/detail panel (right side) - shown for all non-blaulicht indicators */}
+      {/* Ranking panel */}
       {shouldRenderRankingPanel && (
         <RankingPanel
           indicatorKey={selectedIndicator}
@@ -767,7 +753,7 @@ export function ChoroplethMap() {
         />
       )}
 
-      {/* Blaulicht detail panel - shown when a crime is selected or hovered */}
+      {/* Blaulicht detail panel */}
       {showBlaulichtLayer && (selectedCrimeInTimeline || hoveredCrimeInTimeline) && (
         <BlaulichtDetailPanel
           crime={selectedCrimeInTimeline || hoveredCrimeInTimeline!}
@@ -778,6 +764,10 @@ export function ChoroplethMap() {
           }}
           isPreview={!selectedCrimeInTimeline && !!hoveredCrimeInTimeline}
           flashToken={detailPanelFlashToken}
+          isFavorite={isFavorite((selectedCrimeInTimeline || hoveredCrimeInTimeline!).id)}
+          onToggleFavorite={toggleFavorite}
+          favoriteComment={getComment((selectedCrimeInTimeline || hoveredCrimeInTimeline!).id)}
+          onSetFavoriteComment={setComment}
         />
       )}
     </div>

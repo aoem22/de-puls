@@ -1,7 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTranslation } from '@/lib/i18n';
+
+type PresetKey = 'all' | 'today' | 'yesterday' | 'week';
 
 interface BlaulichtPlaybackControlProps {
   totalEvents: number;
@@ -10,6 +12,9 @@ interface BlaulichtPlaybackControlProps {
   onTogglePlay: () => void;
   onIndexChange: (index: number) => void;
   currentTimestamp?: string;
+  dateFilterFrom: string | null;
+  dateFilterTo: string | null;
+  onDateFilterChange: (from: string | null, to: string | null) => void;
   className?: string;
 }
 
@@ -41,6 +46,37 @@ function formatTimelineDate(value: string | undefined, locale: string): string {
   }).format(parsed);
 }
 
+function toLocalDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function computePresetRange(key: PresetKey): { from: string | null; to: string | null } {
+  if (key === 'all') return { from: null, to: null };
+  const today = new Date();
+  const todayStr = toLocalDateString(today);
+  if (key === 'today') return { from: todayStr, to: todayStr };
+  if (key === 'yesterday') {
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = toLocalDateString(yesterday);
+    return { from: yStr, to: yStr };
+  }
+  // week
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 6);
+  return { from: toLocalDateString(weekAgo), to: todayStr };
+}
+
+const PRESETS: { key: PresetKey; labelDe: string; labelEn: string }[] = [
+  { key: 'all', labelDe: 'Alle', labelEn: 'All' },
+  { key: 'today', labelDe: 'Heute', labelEn: 'Today' },
+  { key: 'yesterday', labelDe: 'Gestern', labelEn: 'Yesterday' },
+  { key: 'week', labelDe: 'Woche', labelEn: 'Week' },
+];
+
 export function BlaulichtPlaybackControl({
   totalEvents,
   currentIndex,
@@ -48,6 +84,9 @@ export function BlaulichtPlaybackControl({
   onTogglePlay,
   onIndexChange,
   currentTimestamp,
+  dateFilterFrom,
+  dateFilterTo,
+  onDateFilterChange,
   className = '',
 }: BlaulichtPlaybackControlProps) {
   const { lang } = useTranslation();
@@ -63,6 +102,19 @@ export function BlaulichtPlaybackControl({
   const currentLabel = formatTimelineDate(currentTimestamp, locale);
   const progressLabel = hasData ? `${safeIndex + 1}/${totalEvents}` : '0/0';
 
+  const activePreset = useMemo<PresetKey | null>(() => {
+    for (const preset of PRESETS) {
+      const range = computePresetRange(preset.key);
+      if (range.from === dateFilterFrom && range.to === dateFilterTo) return preset.key;
+    }
+    return null;
+  }, [dateFilterFrom, dateFilterTo]);
+
+  const handlePresetClick = useCallback((key: PresetKey) => {
+    const range = computePresetRange(key);
+    onDateFilterChange(range.from, range.to);
+  }, [onDateFilterChange]);
+
   return (
     <div
       className={`absolute left-1/2 -translate-x-1/2 z-[1000] transition-all duration-200 ease-out ${hasData ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-6 opacity-0 pointer-events-none'} ${className}`}
@@ -70,6 +122,7 @@ export function BlaulichtPlaybackControl({
       aria-label={lang === 'de' ? 'Blaulicht-Zeitachse' : 'Blaulicht timeline'}
     >
       <div className="w-[min(90vw,540px)] bg-[#141414]/68 backdrop-blur-sm border border-[#2a2a2a]/70 rounded-xl shadow-xl px-3 py-2">
+        {/* Row 1: Playback controls */}
         <div className="grid grid-cols-[28px_56px_minmax(0,1fr)] md:grid-cols-[28px_56px_minmax(0,1fr)_164px] items-center gap-2">
           <button
             type="button"
@@ -122,6 +175,48 @@ export function BlaulichtPlaybackControl({
           <span className="col-span-3 md:col-span-1 inline-flex items-center justify-center h-7 whitespace-nowrap text-[10px] text-zinc-100 font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-md px-1.5 shadow-sm">
             {currentLabel}
           </span>
+        </div>
+
+        {/* Row 2: Date filter */}
+        <div className="border-t border-[#2a2a2a]/70 mt-2 pt-1.5 flex items-center gap-1.5 flex-wrap">
+          {/* Preset pills */}
+          {PRESETS.map((preset) => {
+            const isActive = activePreset === preset.key;
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                onClick={() => handlePresetClick(preset.key)}
+                className={`date-filter-pill text-[10px] px-2 py-0.5 rounded-md border transition-colors duration-150 ${
+                  isActive
+                    ? 'bg-blue-500/25 border-blue-500 text-blue-300'
+                    : 'bg-[#0a0a0a]/70 border-[#333] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                {lang === 'de' ? preset.labelDe : preset.labelEn}
+              </button>
+            );
+          })}
+
+          {/* Spacer to push date inputs right */}
+          <div className="flex-1" />
+
+          {/* Date range inputs */}
+          <input
+            type="date"
+            value={dateFilterFrom ?? ''}
+            onChange={(e) => onDateFilterChange(e.target.value || null, dateFilterTo)}
+            className="date-filter-input w-[100px] h-5 text-[10px] text-zinc-200 bg-[#0a0a0a]/70 border border-[#333] rounded-md px-1 [color-scheme:dark] focus:border-blue-500/60 focus:outline-none"
+            aria-label={lang === 'de' ? 'Datum von' : 'Date from'}
+          />
+          <span className="text-[10px] text-zinc-500">–</span>
+          <input
+            type="date"
+            value={dateFilterTo ?? ''}
+            onChange={(e) => onDateFilterChange(dateFilterFrom, e.target.value || null)}
+            className="date-filter-input w-[100px] h-5 text-[10px] text-zinc-200 bg-[#0a0a0a]/70 border border-[#333] rounded-md px-1 [color-scheme:dark] focus:border-blue-500/60 focus:outline-none"
+            aria-label={lang === 'de' ? 'Datum bis' : 'Date to'}
+          />
         </div>
       </div>
     </div>

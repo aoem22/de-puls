@@ -26,9 +26,17 @@ body {
   line-height: 1.45;
 }
 
-/* Leaflet tooltip styling - solid dark background with white text */
-.leaflet-tooltip,
-.leaflet-tooltip.custom-tooltip {
+/* MapLibre GL map container */
+.maplibregl-map {
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  background: var(--background);
+  outline: none;
+}
+
+/* MapLibre popup styling — dark theme */
+.maplibregl-popup-content {
   background: #1a1a1a !important;
   border: 1px solid #333 !important;
   border-radius: 10px !important;
@@ -38,33 +46,21 @@ body {
   color: #ffffff !important;
 }
 
-.leaflet-tooltip-top::before,
-.custom-tooltip.leaflet-tooltip-top::before {
+.maplibregl-popup-tip {
   border-top-color: #1a1a1a !important;
 }
 
-.leaflet-tooltip-bottom::before,
-.custom-tooltip.leaflet-tooltip-bottom::before {
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: #1a1a1a !important;
+}
+
+.maplibregl-popup-anchor-top .maplibregl-popup-tip {
   border-bottom-color: #1a1a1a !important;
 }
 
-.leaflet-tooltip-left::before,
-.custom-tooltip.leaflet-tooltip-left::before {
-  border-left-color: #1a1a1a !important;
-}
-
-.leaflet-tooltip-right::before,
-.custom-tooltip.leaflet-tooltip-right::before {
-  border-right-color: #1a1a1a !important;
-}
-
-/* Ensure map fills container properly */
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  font-family: var(--font-space-grotesk), system-ui, sans-serif;
-  background: var(--background);
-  outline: none;
+/* Hide default close button on popups */
+.maplibregl-popup-close-button {
+  display: none;
 }
 
 /* Custom scrollbar for controls - dark mode */
@@ -105,31 +101,16 @@ body {
 }
 
 /* Minimize map attribution for cleaner look - dark mode */
-.leaflet-control-attribution {
-  font-size: 8px;
+.maplibregl-ctrl-attrib {
+  font-size: 8px !important;
   background: rgba(20, 20, 20, 0.8) !important;
   color: #52525b !important;
   padding: 0 4px !important;
   border-radius: 4px 0 0 0;
 }
 
-.leaflet-control-attribution a {
+.maplibregl-ctrl-attrib a {
   color: #71717a !important;
-}
-
-/* Crime marker cluster dots */
-.crime-marker {
-  background: transparent;
-  border: none;
-}
-
-.crime-marker span {
-  display: block;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
 }
 
 /* Select dropdown dark mode fix */
@@ -140,13 +121,8 @@ select option {
 
 /* Mobile optimizations */
 @media (max-width: 768px) {
-  .leaflet-tooltip {
-    font-size: 12px !important;
-    max-width: 200px !important;
-  }
-
-  .leaflet-control-attribution {
-    font-size: 7px;
+  .maplibregl-ctrl-attrib {
+    font-size: 7px !important;
     max-width: 120px;
     white-space: nowrap;
     overflow: hidden;
@@ -155,19 +131,9 @@ select option {
 }
 
 /* Disable text selection on map controls */
-.leaflet-control {
+.maplibregl-ctrl {
   user-select: none;
   -webkit-user-select: none;
-}
-
-/* Smoother polygon transitions */
-.leaflet-interactive {
-  transition: fill-opacity 0.15s ease, stroke-width 0.15s ease, stroke 0.15s ease;
-  outline: none;
-}
-
-.leaflet-interactive:focus {
-  outline: none;
 }
 
 /* Touch-friendly tap targets */
@@ -182,8 +148,8 @@ select option {
   }
 }
 
-/* Ensure tooltip text is always white and readable */
-.leaflet-tooltip * {
+/* Ensure popup text is always white and readable */
+.maplibregl-popup-content * {
   color: inherit;
 }
 
@@ -620,6 +586,28 @@ input[type="range"].timeline-slider-red::-moz-range-thumb {
     transform: scale(1.3);
     box-shadow: 0 0 16px var(--pulse-color, #3b82f6), 0 0 32px var(--pulse-color, #3b82f6);
   }
+}
+
+/* ============================================
+   DATE FILTER (Blaulicht playback)
+   ============================================ */
+
+/* Prevent 44px min-height inflation on touch devices for compact pills */
+@media (pointer: coarse) {
+  .date-filter-pill {
+    min-width: unset;
+    min-height: unset;
+  }
+
+  .date-filter-input {
+    min-height: unset;
+  }
+}
+
+/* Dark-mode calendar picker icon */
+input[type="date"].date-filter-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
 }
 
 /* Blue-themed range slider for Blaulicht timeline */

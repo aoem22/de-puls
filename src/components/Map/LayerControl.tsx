@@ -18,6 +18,7 @@ import {
 import { CRIME_CATEGORIES, WEAPON_LABELS, type CrimeCategory } from '@/lib/types/crime';
 import { useTranslation, translations, tNested } from '@/lib/i18n';
 import type { AuslaenderRow, DeutschlandatlasRow, CityCrimeRow } from '@/lib/supabase';
+import type { BlaulichtViewMode } from './HexbinLayer';
 
 interface LayerControlProps {
   // Indicator props
@@ -42,6 +43,17 @@ interface LayerControlProps {
   weaponCounts?: Record<string, number>;
   selectedWeaponType?: string | null;
   onWeaponTypeChange?: (weaponType: string | null) => void;
+  // Favorites filter
+  favoritesCount?: number;
+  showFavoritesOnly?: boolean;
+  onToggleFavoritesOnly?: () => void;
+  // Blaulicht view mode (dots / density / both)
+  blaulichtViewMode?: BlaulichtViewMode;
+  onBlaulichtViewModeChange?: (mode: BlaulichtViewMode) => void;
+  // Pipeline run toggle (experiment A/B)
+  pipelineRuns?: Array<{ run: string; count: number }>;
+  selectedPipelineRun?: string;
+  onPipelineRunChange?: (run: string | undefined) => void;
   // Data props for legend computation
   auslaenderData?: Record<string, AuslaenderRow>;
   deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
@@ -114,6 +126,14 @@ export function LayerControl({
   weaponCounts,
   selectedWeaponType,
   onWeaponTypeChange,
+  favoritesCount,
+  showFavoritesOnly,
+  onToggleFavoritesOnly,
+  blaulichtViewMode,
+  onBlaulichtViewModeChange,
+  pipelineRuns,
+  selectedPipelineRun,
+  onPipelineRunChange,
   auslaenderData: ausData,
   deutschlandatlasData: datlasData,
   cityCrimeData,
@@ -144,7 +164,7 @@ export function LayerControl({
   };
 
   return (
-    <div className="bg-[#141414]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[#262626] p-3 space-y-3">
+    <div className="bg-[#141414]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[#262626] p-3 space-y-3 max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-thin">
       {/* Primary indicator selector */}
       <div>
         <div className="space-y-1.5">
@@ -294,6 +314,72 @@ export function LayerControl({
         </div>
       )}
 
+      {/* Pipeline run toggle (only when multiple runs exist) — above categories so it scopes them */}
+      {selectedIndicator === 'blaulicht' && pipelineRuns && pipelineRuns.length > 1 && onPipelineRunChange && (
+        <div className="pt-2 border-t border-[#333]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-zinc-400 uppercase tracking-wide">{lang === 'de' ? 'Pipeline-Lauf' : 'Pipeline Run'}</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {/* All runs button */}
+            <button
+              onClick={() => onPipelineRunChange(undefined)}
+              className={`px-2 py-1.5 md:py-1 text-xs rounded-md border transition-colors touch-feedback ${
+                !selectedPipelineRun
+                  ? 'bg-blue-500/20 border-blue-500/60 text-blue-300'
+                  : 'bg-transparent border-[#333] text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {lang === 'de' ? 'Alle' : 'All'}
+            </button>
+            {pipelineRuns.map(({ run, count }) => (
+              <button
+                key={run}
+                onClick={() => onPipelineRunChange(selectedPipelineRun === run ? undefined : run)}
+                className={`px-2 py-1.5 md:py-1 text-xs rounded-md border transition-colors touch-feedback ${
+                  selectedPipelineRun === run
+                    ? 'bg-blue-500/20 border-blue-500/60 text-blue-300'
+                    : 'bg-transparent border-[#333] text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {run} <span className="text-zinc-500">({count})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Blaulicht view mode toggle (Punkte / Dichte / Beides) */}
+      {selectedIndicator === 'blaulicht' && blaulichtViewMode && onBlaulichtViewModeChange && (
+        <div className="pt-2 border-t border-[#333]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-zinc-400 uppercase tracking-wide">
+              {lang === 'de' ? 'Darstellung' : 'Display'}
+            </span>
+          </div>
+          <div className="flex gap-1">
+            {([
+              { mode: 'dots' as const, de: 'Punkte', en: 'Dots' },
+              { mode: 'density' as const, de: 'Dichte', en: 'Density' },
+              { mode: 'both' as const, de: 'Beides', en: 'Both' },
+            ] as const).map(({ mode, de, en }) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => onBlaulichtViewModeChange(mode)}
+                className={`flex-1 px-2 py-2.5 md:py-2 text-sm md:text-xs rounded-md border transition-colors touch-feedback ${
+                  blaulichtViewMode === mode
+                    ? 'bg-blue-500/20 border-blue-500 text-blue-300'
+                    : 'bg-transparent border-[#333] text-zinc-400 hover:text-zinc-200 active:bg-blue-500/10'
+                }`}
+              >
+                {lang === 'de' ? de : en}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Blaulicht clickable category filters */}
       {selectedIndicator === 'blaulicht' && blaulichtStats && onBlaulichtCategoryChange && (
         <div className="pt-2 border-t border-[#333]">
@@ -391,6 +477,28 @@ export function LayerControl({
                 );
               })}
           </div>
+        </div>
+      )}
+
+      {/* Favorites filter */}
+      {selectedIndicator === 'blaulicht' && onToggleFavoritesOnly && (favoritesCount ?? 0) > 0 && (
+        <div className="pt-2 border-t border-[#333]">
+          <button
+            onClick={onToggleFavoritesOnly}
+            className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
+              showFavoritesOnly
+                ? 'bg-amber-500/15 border border-amber-500/60'
+                : 'hover:bg-[#1a1a1a] active:bg-[#1a1a1a] border border-transparent'
+            }`}
+          >
+            <span className="w-3 md:w-2.5 text-center text-sm flex-shrink-0">
+              {showFavoritesOnly ? '\u2605' : '\u2606'}
+            </span>
+            <span className={`text-sm md:text-xs flex-1 text-left no-select ${showFavoritesOnly ? 'text-amber-300' : 'text-zinc-400'}`}>
+              {lang === 'de' ? 'Favoriten' : 'Favorites'}
+            </span>
+            <span className="text-xs text-zinc-400 tabular-nums">{favoritesCount}</span>
+          </button>
         </div>
       )}
 

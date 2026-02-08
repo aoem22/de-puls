@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 
 // Dynamically import the map component with SSR disabled
-// Leaflet requires DOM access and won't work during server-side rendering
+// MapLibre GL requires DOM access and won't work during server-side rendering
 const ChoroplethMap = dynamic(
   () => import('./ChoroplethMap').then((mod) => mod.ChoroplethMap),
   {

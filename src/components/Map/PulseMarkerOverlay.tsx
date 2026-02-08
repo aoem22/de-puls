@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { Marker } from 'react-map-gl/maplibre';
 
 interface PulseMarkerOverlayProps {
   lat: number;
@@ -11,34 +9,18 @@ interface PulseMarkerOverlayProps {
 }
 
 export function PulseMarkerOverlay({ lat, lng, color = '#3b82f6' }: PulseMarkerOverlayProps) {
-  const map = useMap();
-  const markerRef = useRef<L.Marker | null>(null);
-
-  useEffect(() => {
-    if (!map) return;
-
-    const icon = L.divIcon({
-      className: 'pulse-marker-container',
-      html: `<div class="pulse-marker-ring" style="--pulse-color: ${color}"></div>
-             <div class="pulse-marker-dot" style="--pulse-color: ${color}; background: ${color}; box-shadow: 0 0 8px ${color}"></div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-    });
-
-    const marker = L.marker([lat, lng], {
-      icon,
-      interactive: false,
-      zIndexOffset: 1000,
-    });
-
-    marker.addTo(map);
-    markerRef.current = marker;
-
-    return () => {
-      map.removeLayer(marker);
-      markerRef.current = null;
-    };
-  }, [map, lat, lng, color]);
-
-  return null;
+  return (
+    <Marker longitude={lng} latitude={lat} anchor="center">
+      <div
+        className="pulse-marker-container"
+        style={{ '--pulse-color': color, width: 24, height: 24, position: 'relative' } as React.CSSProperties}
+      >
+        <div className="pulse-marker-ring" style={{ '--pulse-color': color } as React.CSSProperties} />
+        <div
+          className="pulse-marker-dot"
+          style={{ '--pulse-color': color, background: color, boxShadow: `0 0 8px ${color}` } as React.CSSProperties}
+        />
+      </div>
+    </Marker>
+  );
 }

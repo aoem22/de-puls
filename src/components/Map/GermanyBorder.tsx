@@ -1,66 +1,79 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useMap } from 'react-leaflet';
-import L from 'leaflet';
-
-// Import Germany boundary GeoJSON
+import { useMemo } from 'react';
+import { Source, Layer } from 'react-map-gl/maplibre';
+import type { LayerProps } from 'react-map-gl/maplibre';
 import germanyBoundary from '../../../lib/data/geo/germany-boundary.json';
 
+/**
+ * Darkens everything outside Germany so only Germany shows in full detail.
+ * European borders/coastlines remain faintly visible through the overlay.
+ *
+ * Uses an inverted polygon: a world-covering rectangle with Germany's
+ * polygons cut out as holes, rendered as a dark semi-transparent fill.
+ */
+
+const maskFillStyle: LayerProps = {
+  id: 'germany-mask-fill',
+  type: 'fill',
+  paint: {
+    'fill-color': '#0e0e0e',
+    'fill-opacity': 0.92,
+  },
+};
+
+const borderLineStyle: LayerProps = {
+  id: 'germany-border-line',
+  type: 'line',
+  source: 'germany-border',
+  paint: {
+    'line-color': '#ffffff',
+    'line-width': 1.5,
+    'line-opacity': 0.6,
+  },
+};
+
 export function GermanyBorder() {
-  const map = useMap();
+  const maskGeoJson = useMemo(() => {
+    const worldRing: GeoJSON.Position[] = [
+      [-180, -85],
+      [180, -85],
+      [180, 85],
+      [-180, 85],
+      [-180, -85],
+    ];
 
-  useEffect(() => {
-    if (!map) return;
+    const geometry = (germanyBoundary as unknown as GeoJSON.Feature<GeoJSON.MultiPolygon>)
+      .geometry;
 
-    const layers: L.Layer[] = [];
+    // Collect all exterior rings from the MultiPolygon as holes
+    const holes = geometry.coordinates.map((polygon) => polygon[0]);
 
-    // Outer glow (largest, most transparent)
-    const outerGlow = L.geoJSON(germanyBoundary as GeoJSON.Feature, {
-      style: {
-        fill: false,
-        stroke: true,
-        color: '#ffffff',
-        weight: 10,
-        opacity: 0.08,
-        interactive: false,
+    return {
+      type: 'Feature' as const,
+      properties: {},
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [worldRing, ...holes],
       },
-    });
-    outerGlow.addTo(map);
-    layers.push(outerGlow);
-
-    // Middle glow
-    const middleGlow = L.geoJSON(germanyBoundary as GeoJSON.Feature, {
-      style: {
-        fill: false,
-        stroke: true,
-        color: '#ffffff',
-        weight: 5,
-        opacity: 0.2,
-        interactive: false,
-      },
-    });
-    middleGlow.addTo(map);
-    layers.push(middleGlow);
-
-    // Main border (crisp white line)
-    const mainBorder = L.geoJSON(germanyBoundary as GeoJSON.Feature, {
-      style: {
-        fill: false,
-        stroke: true,
-        color: '#ffffff',
-        weight: 2,
-        opacity: 0.85,
-        interactive: false,
-      },
-    });
-    mainBorder.addTo(map);
-    layers.push(mainBorder);
-
-    return () => {
-      layers.forEach(layer => map.removeLayer(layer));
     };
-  }, [map]);
+  }, []);
 
-  return null;
+  return (
+    <>
+      {/* Dark overlay with Germany cut out — renders above labels to hide them outside Germany */}
+      <Source id="germany-mask" type="geojson" data={maskGeoJson}>
+        <Layer {...maskFillStyle} />
+      </Source>
+
+      {/* Subtle border line around Germany */}
+      <Source
+        id="germany-border"
+        type="geojson"
+        data={germanyBoundary as unknown as GeoJSON.Feature}
+      >
+        <Layer {...borderLineStyle} />
+      </Source>
+    </>
+  );
 }
