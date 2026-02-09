@@ -172,8 +172,12 @@ def extract_montagedata(html: str) -> list[dict]:
         return []
 
     raw_json = match.group(1)
+    # Use raw_decode to stop at the end of the JSON array, ignoring
+    # trailing content like "; window.filterdata = [...]" that the
+    # greedy regex may capture.
     try:
-        data = json.loads(raw_json)
+        decoder = json.JSONDecoder()
+        data, _ = decoder.raw_decode(raw_json)
         if isinstance(data, list):
             return data
     except json.JSONDecodeError as e:

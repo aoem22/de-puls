@@ -161,10 +161,12 @@ def parse_listing_page(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     articles = []
 
-    # Find all links matching the single-article URL pattern
+    # Find all links matching the single-article URL pattern.
+    # Brackets may be literal [] or percent-encoded %5B %5D depending on
+    # how the CMS renders the href attributes.
     article_links = soup.find_all(
         "a",
-        href=re.compile(r'tx_tsarssinclude_pi1\[action\]=single'),
+        href=re.compile(r'tx_tsarssinclude_pi1(?:\[|%5B)action(?:\]|%5D)=single', re.IGNORECASE),
     )
 
     for link in article_links:

@@ -33,7 +33,7 @@ DEDICATED_SCRAPER_STATES = {
     "brandenburg",  # presseportal endpoint broken; no dedicated scraper yet
     "bayern",
     "sachsen-anhalt",
-    "hamburg",
+    # hamburg removed: polizei.hamburg embeds presseportal.de iframe, use presseportal
     "sachsen",
 }
 
