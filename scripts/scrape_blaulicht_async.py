@@ -45,8 +45,6 @@ MAX_RETRIES = 3
 BUNDESLAND_SLUGS = {
     "baden-wuerttemberg": "Baden-Württemberg",
     "bayern": "Bayern",
-    "berlin": "Berlin",
-    "brandenburg": "Brandenburg",
     "bremen": "Bremen",
     "hamburg": "Hamburg",
     "hessen": "Hessen",
@@ -59,7 +57,24 @@ BUNDESLAND_SLUGS = {
     "sachsen-anhalt": "Sachsen-Anhalt",
     "schleswig-holstein": "Schleswig-Holstein",
     "thueringen": "Thüringen",
+    "berlin-brandenburg": "Berlin/Brandenburg",
 }
+
+# Dienststelle (agency type) slug to display name mapping
+DIENSTSTELLE_SLUGS = {
+    "polizei": "Polizei",
+    "feuerwehr": "Feuerwehr",
+    "bundesbehoerden": "Bundesbehörden",
+    "bundespolizei": "Bundespolizei",
+    "staatsanwaltschaft": "Staatsanwaltschaft",
+    "zoll": "Zoll",
+    "thw": "THW",
+}
+
+# States skipped from presseportal — their /blaulicht/l/{slug} endpoints
+# return ALL German articles (not state-filtered), producing ~18K duplicates/month.
+# These states are covered by dedicated scrapers in scripts/scrapers/.
+SKIP_STATES_PRESSEPORTAL = {"berlin", "brandenburg"}
 
 
 @dataclass
@@ -69,11 +84,12 @@ class Article:
     date: str
     city: Optional[str]
     bundesland: Optional[str]
-    lat: Optional[float]
-    lon: Optional[float]
+    agency_code: Optional[str]  # e.g. "POL-DA", "BPOL-HH", "LPI-EF"
     source: Optional[str]
     url: str
     body: str
+    places: list[str]  # from "Orte in dieser Meldung" tags
+    themes: list[str]  # from "Themen in dieser Meldung" tags
 
 
 class ScrapedUrlsCache:
@@ -200,6 +216,19 @@ def parse_german_date(date_str: str) -> Optional[str]:
         return f"{year}-{month}-{day}"
 
     return None
+
+
+def parse_to_datetime(date_str: str) -> Optional[datetime]:
+    """Parse an ISO or German date string into a naive datetime."""
+    if not date_str:
+        return None
+    try:
+        if "T" in date_str:
+            return datetime.fromisoformat(date_str.replace("Z", "+00:00")).replace(tzinfo=None)
+        parsed = parse_german_date(date_str)
+        return datetime.fromisoformat(parsed) if parsed else None
+    except (ValueError, AttributeError):
+        return None
 
 
 def parse_article_page(html: str, url: str) -> Optional[dict]:
@@ -345,13 +374,38 @@ def parse_article_page(html: str, url: str) -> Optional[dict]:
         if loc_match:
             city = loc_match.group(1).strip()
 
+    # Agency code — prefix before first colon, e.g. "POL-DA:", "BPOL-HH:", "LPI-EF:"
+    agency_code = None
+    if title:
+        agency_match = re.match(r'^([A-Z][A-Z0-9 -]+?):\s', title)
+        if agency_match:
+            agency_code = agency_match.group(1).strip()
+
+    # Orte / Themen in dieser Meldung — structured tags
+    # Presseportal wraps section labels in <div class="thisisnoh"> (not headings)
+    def _extract_tags(label: str) -> list[str]:
+        for el in soup.find_all(string=re.compile(label)):
+            parent = el.find_parent()
+            if not parent:
+                continue
+            ul = parent.find_next_sibling('ul') or parent.find_next('ul')
+            if ul:
+                return [a.get_text(strip=True) for a in ul.select('li a')]
+        return []
+
+    places = _extract_tags('Orte in dieser Meldung')
+    themes = _extract_tags('Themen in dieser Meldung')
+
     return {
         "title": title,
         "date": date_str,
         "city": city,
         "source": source,
+        "agency_code": agency_code,
         "url": url,
         "body": body,
+        "places": places,
+        "themes": themes,
     }
 
 
@@ -385,6 +439,7 @@ class AsyncPresseportalScraper:
     def __init__(
         self,
         bundesland: Optional[str] = None,
+        dienststelle: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         max_pages: int = 0,
@@ -395,6 +450,8 @@ class AsyncPresseportalScraper:
     ):
         self.bundesland = bundesland
         self.bundesland_display = BUNDESLAND_SLUGS.get(bundesland) if bundesland else None
+        self.dienststelle = dienststelle
+        self.dienststelle_display = DIENSTSTELLE_SLUGS.get(dienststelle) if dienststelle else None
         self.start_date = datetime.fromisoformat(start_date) if start_date else None
         self.end_date = datetime.fromisoformat(end_date) if end_date else None
         self.max_pages = max_pages
@@ -413,17 +470,36 @@ class AsyncPresseportalScraper:
         self.fetch_errors = 0
 
     def _build_listing_url(self, page: int = 1) -> str:
-        """Build the listing page URL with optional Bundesland and date filters."""
-        if self.bundesland:
-            if page == 1:
+        """Build the listing page URL with optional Bundesland, Dienststelle, and date filters.
+
+        URL patterns:
+          - No filters:              /blaulicht/{offset}
+          - State only:              /blaulicht/l/{state}/{offset}
+          - Dienststelle only:       /blaulicht/d/{dienststelle}/{offset}
+          - Dienststelle + state:    /blaulicht/d/{dienststelle}/l/{state}/{offset}
+        """
+        offset = (page - 1) * 30
+
+        if self.dienststelle and self.bundesland:
+            if offset == 0:
+                base = f"{BASE_URL}/blaulicht/d/{self.dienststelle}/l/{self.bundesland}"
+            else:
+                base = f"{BASE_URL}/blaulicht/d/{self.dienststelle}/l/{self.bundesland}/{offset}"
+        elif self.dienststelle:
+            if offset == 0:
+                base = f"{BASE_URL}/blaulicht/d/{self.dienststelle}"
+            else:
+                base = f"{BASE_URL}/blaulicht/d/{self.dienststelle}/{offset}"
+        elif self.bundesland:
+            if offset == 0:
                 base = f"{BASE_URL}/blaulicht/l/{self.bundesland}"
             else:
-                base = f"{BASE_URL}/blaulicht/l/{self.bundesland}/{page}"
+                base = f"{BASE_URL}/blaulicht/l/{self.bundesland}/{offset}"
         else:
-            if page == 1:
+            if offset == 0:
                 base = f"{BASE_URL}/blaulicht/"
             else:
-                base = f"{BASE_URL}/blaulicht/{page}"
+                base = f"{BASE_URL}/blaulicht/{offset}"
 
         params = []
         if self.start_date:
@@ -437,32 +513,19 @@ class AsyncPresseportalScraper:
 
     def _is_in_date_range(self, date_str: Optional[str]) -> bool:
         """Check if article date falls within configured range."""
-        if not date_str:
+        if not date_str or (not self.start_date and not self.end_date):
             return True
 
-        if not self.start_date and not self.end_date:
+        article_date = parse_to_datetime(date_str)
+        if not article_date:
             return True
 
-        try:
-            if "T" in date_str:
-                article_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-            else:
-                parsed = parse_german_date(date_str)
-                if parsed:
-                    article_date = datetime.fromisoformat(parsed)
-                else:
-                    return True
+        if self.start_date and article_date.date() < self.start_date.date():
+            return False
+        if self.end_date and article_date.date() > self.end_date.date():
+            return False
 
-            article_date = article_date.replace(tzinfo=None)
-
-            if self.start_date and article_date.date() < self.start_date.date():
-                return False
-            if self.end_date and article_date.date() > self.end_date.date():
-                return False
-
-            return True
-        except (ValueError, AttributeError):
-            return True
+        return True
 
     async def _fetch_url(
         self,
@@ -533,6 +596,8 @@ class AsyncPresseportalScraper:
         print(f"Discovering listing pages (batch size: {batch_size})...")
         if self.bundesland:
             print(f"  Bundesland: {self.bundesland_display}")
+        if self.dienststelle:
+            print(f"  Dienststelle: {self.dienststelle_display}")
         if self.start_date:
             print(f"  Date range: {self.start_date.date()} to {self.end_date.date() if self.end_date else 'now'}")
 
@@ -575,18 +640,8 @@ class AsyncPresseportalScraper:
 
                     # Check if still in date range
                     if article_date_str and self.start_date:
-                        try:
-                            if "T" in article_date_str:
-                                article_date = datetime.fromisoformat(
-                                    article_date_str.replace("Z", "+00:00")
-                                ).replace(tzinfo=None)
-                            else:
-                                parsed = parse_german_date(article_date_str)
-                                article_date = datetime.fromisoformat(parsed) if parsed else None
-
-                            if article_date and article_date.date() >= self.start_date.date():
-                                all_too_old_batch = False
-                        except (ValueError, AttributeError):
+                        article_date = parse_to_datetime(article_date_str)
+                        if not article_date or article_date.date() >= self.start_date.date():
                             all_too_old_batch = False
                     else:
                         all_too_old_batch = False
@@ -658,8 +713,9 @@ class AsyncPresseportalScraper:
                 if html:
                     parsed = parse_article_page(html, url)
                     if parsed:
-                        # Drop Feuerwehr (fire dept) articles
-                        if is_feuerwehr_source(parsed.get("source"), parsed.get("title")):
+                        # Drop Feuerwehr (fire dept) articles — unless
+                        # user explicitly requested them via --dienststelle feuerwehr
+                        if self.dienststelle != "feuerwehr" and is_feuerwehr_source(parsed.get("source"), parsed.get("title")):
                             self.feuerwehr_dropped_count += 1
                             self.url_cache.mark_scraped(url)
                             continue
@@ -683,11 +739,12 @@ class AsyncPresseportalScraper:
                             date=parsed["date"] or "",
                             city=parsed["city"],
                             bundesland=self.bundesland_display,
-                            lat=None,  # Geocoding disabled for speed
-                            lon=None,
+                            agency_code=parsed["agency_code"],
                             source=parsed["source"],
                             url=parsed["url"],
                             body=parsed["body"],
+                            places=parsed.get("places", []),
+                            themes=parsed.get("themes", []),
                         )
                         articles.append(article)
                         # Mark URL as scraped in persistent cache
@@ -796,6 +853,13 @@ Examples:
     )
 
     parser.add_argument(
+        "--dienststelle",
+        type=str,
+        choices=list(DIENSTSTELLE_SLUGS.keys()),
+        help="Filter by Dienststelle/agency type (e.g., 'polizei', 'bundespolizei')"
+    )
+
+    parser.add_argument(
         "--start-date",
         type=str,
         help="Start date filter (ISO format: YYYY-MM-DD)"
@@ -862,6 +926,7 @@ Examples:
 
     scraper = AsyncPresseportalScraper(
         bundesland=args.bundesland,
+        dienststelle=args.dienststelle,
         start_date=args.start_date,
         end_date=args.end_date,
         max_pages=args.max_pages,

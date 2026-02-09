@@ -159,6 +159,8 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
     """Transform enriched article to Supabase crime_records row."""
     loc = article.get("location", {})
     crime = article.get("crime", {})
+    if isinstance(crime, list):
+        crime = crime[0] if crime else {}
     details = article.get("details", {})
 
     # Skip articles without coordinates

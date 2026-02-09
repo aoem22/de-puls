@@ -461,21 +461,43 @@ class FastEnricher:
         uncached_indices = []
         results_by_idx: dict[int, list[dict]] = {}
 
+        regeocode_count = 0
         for i, art in enumerate(articles):
             key = self._cache_key(art.get("url", ""), art.get("body", ""))
             if key in self.cache:
                 cached = self.cache[key]
-                if isinstance(cached, list):
-                    results_by_idx[i] = [{**art, **e} for e in cached]
-                else:
-                    results_by_idx[i] = [{**art, **cached}]
+                entries = cached if isinstance(cached, list) else [cached]
+
+                # Re-geocode cached entries missing coordinates
+                if not self.no_geocode:
+                    updated = False
+                    for entry in entries:
+                        loc = entry.get("location", {})
+                        if isinstance(loc, dict) and not loc.get("lat") and (loc.get("street") or loc.get("city")):
+                            lat, lon, precision = self._geocode(
+                                street=loc.get("street"),
+                                city=loc.get("city") or art.get("city"),
+                                district=loc.get("district"),
+                                bundesland=art.get("bundesland"),
+                            )
+                            loc["lat"] = lat
+                            loc["lon"] = lon
+                            loc["precision"] = precision
+                            loc["bundesland"] = art.get("bundesland")
+                            updated = True
+                            regeocode_count += 1
+                    if updated:
+                        self.cache[key] = entries
+
+                results_by_idx[i] = [{**art, **e} for e in entries]
             else:
                 uncached.append(art)
                 uncached_indices.append(i)
 
         cached_count = len(articles) - len(uncached)
         if cached_count > 0:
-            print(f"  {label}: {cached_count} cached, {len(uncached)} to enrich")
+            geo_msg = f", {regeocode_count} re-geocoded" if regeocode_count else ""
+            print(f"  {label}: {cached_count} cached{geo_msg}, {len(uncached)} to enrich")
 
         if uncached:
             batches = [uncached[i:i + batch_size] for i in range(0, len(uncached), batch_size)]
@@ -748,8 +770,12 @@ class FastEnricher:
 
     # ── Main Entry Point ─────────────────────────────────────────
 
-    def enrich_all(self, articles: list[dict]) -> tuple[list[dict], list[dict]]:
-        """Enrich all articles through 3 rounds.
+    def enrich_all(self, articles: list[dict], skip_clustering: bool = False) -> tuple[list[dict], list[dict]]:
+        """Enrich all articles through 2-3 rounds.
+
+        Args:
+            articles: Raw articles to enrich.
+            skip_clustering: If True, skip Round 3 (clustering).
 
         Returns (enriched_articles, removed_articles).
         """
@@ -785,8 +811,11 @@ class FastEnricher:
         print(f"  Total enriched records: {len(enriched)} (from {len(kept)} articles)")
 
         # ── Round 3: Clustering ──
-        print(f"\n--- Round 3: Clustering ---")
-        enriched = self._cluster_incidents(enriched)
+        if skip_clustering:
+            print(f"\n--- Round 3: Clustering [SKIPPED] ---")
+        else:
+            print(f"\n--- Round 3: Clustering ---")
+            enriched = self._cluster_incidents(enriched)
 
         # Clean up internal triage fields
         for art in enriched:
@@ -794,8 +823,8 @@ class FastEnricher:
             art.pop("_incident_count", None)
 
         print(f"\n{'='*60}")
-        geocoded = sum(1 for r in enriched if r.get("location", {}).get("lat"))
-        classified = sum(1 for r in enriched if r.get("crime", {}).get("pks_code"))
+        geocoded = sum(1 for r in enriched if isinstance(r.get("location"), dict) and r["location"].get("lat"))
+        classified = sum(1 for r in enriched if isinstance(r.get("crime"), dict) and r["crime"].get("pks_code"))
         print(f"Final: {len(enriched)} records, {geocoded} geocoded, {classified} classified")
         print(f"Removed: {len(removed)} articles (triage)")
         print(f"{'='*60}\n")

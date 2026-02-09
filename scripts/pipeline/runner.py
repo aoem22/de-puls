@@ -181,6 +181,7 @@ def cmd_week(args):
         no_geocode=args.no_geocode,
         prompt_version=args.prompt_version,
         model=args.model,
+        skip_clustering=args.skip_clustering,
     )
 
 
@@ -379,6 +380,10 @@ def main():
     week_parser.add_argument(
         "--model",
         help="LLM model to use (default: x-ai/grok-4-fast)",
+    )
+    week_parser.add_argument(
+        "--skip-clustering", action="store_true",
+        help="Skip Round 3 (clustering) — push enriched data without incident groups",
     )
     week_parser.set_defaults(func=cmd_week)
 

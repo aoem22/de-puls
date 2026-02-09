@@ -14,6 +14,7 @@ from typing import Optional
 
 from .config import (
     SCRAPER_SCRIPT,
+    ASYNC_SCRAPER_SCRIPT,
     ENRICHER_SCRIPT,
     FILTER_SCRIPT,
     DELAY_BETWEEN_CHUNKS_SECONDS,
@@ -21,6 +22,9 @@ from .config import (
     RETRY_DELAYS_SECONDS,
     LOG_DIR,
     BUNDESLAENDER,
+    DEDICATED_SCRAPER_STATES,
+    STATE_SCRAPER_SCRIPTS,
+    CHUNKS_RAW_DIR,
 )
 from .chunk_manager import (
     get_or_create_manifest,
@@ -82,16 +86,48 @@ def run_scraper(chunk: dict, manifest: dict) -> tuple[bool, Optional[int], Optio
             print(f"    Skipping {bundesland} ({i}/{total_states}) - already completed")
             continue
 
+        # Per-state output file (matches weekly_processor expectations)
+        state_dir = CHUNKS_RAW_DIR / bundesland
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_file = state_dir / f"{chunk['year_month']}.json"
+
+        # Skip if already exists with data
+        if state_file.exists() and state_file.stat().st_size > 10:
+            try:
+                with open(state_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    count = len(data) if isinstance(data, list) else len(data.get("articles", []))
+                print(f"    {bundesland} ({i}/{total_states}) - already has {count} articles")
+                all_articles.extend(data if isinstance(data, list) else data.get("articles", []))
+                completed_states.append(bundesland)
+                continue
+            except (json.JSONDecodeError, IOError):
+                pass  # Re-scrape if corrupt
+
         print(f"    Scraping {bundesland} ({i}/{total_states}) for {chunk['year_month']}...")
 
-        cmd = [
-            sys.executable,
-            str(SCRAPER_SCRIPT),
-            "--bundesland", bundesland,
-            "--start-date", chunk["start_date"],
-            "--end-date", chunk["end_date"],
-            "--output", f"/tmp/scrape_{bundesland}_{chunk['year_month']}.json",
-        ]
+        # Route to dedicated scraper or presseportal
+        if bundesland in DEDICATED_SCRAPER_STATES:
+            scraper_script = STATE_SCRAPER_SCRIPTS.get(bundesland)
+            if not scraper_script or not scraper_script.exists():
+                print(f"    WARNING: Dedicated scraper not found for {bundesland}")
+                continue
+            cmd = [
+                sys.executable,
+                str(scraper_script),
+                "--start-date", chunk["start_date"],
+                "--end-date", chunk["end_date"],
+                "--output", str(state_file),
+            ]
+        else:
+            cmd = [
+                sys.executable,
+                str(ASYNC_SCRAPER_SCRIPT),
+                "--bundesland", bundesland,
+                "--start-date", chunk["start_date"],
+                "--end-date", chunk["end_date"],
+                "--output", str(state_file),
+            ]
 
         try:
             result = subprocess.run(
@@ -107,16 +143,13 @@ def run_scraper(chunk: dict, manifest: dict) -> tuple[bool, Optional[int], Optio
                 # Continue with other states instead of failing entirely
                 continue
 
-            # Load articles from temp file
-            temp_path = Path(f"/tmp/scrape_{bundesland}_{chunk['year_month']}.json")
-            if temp_path.exists():
-                with open(temp_path, "r", encoding="utf-8") as f:
+            # Load articles from state file
+            if state_file.exists():
+                with open(state_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    articles = data.get("articles", [])
+                    articles = data if isinstance(data, list) else data.get("articles", [])
                     print(f"    Found {len(articles)} articles in {bundesland}")
                     all_articles.extend(articles)
-                # Clean up temp file
-                temp_path.unlink()
 
             # Track progress
             completed_states.append(bundesland)
@@ -130,7 +163,7 @@ def run_scraper(chunk: dict, manifest: dict) -> tuple[bool, Optional[int], Optio
             print(f"    WARNING: {bundesland} exception: {str(e)}")
             continue
 
-    # Save aggregated results
+    # Save aggregated results (legacy format, also used by enricher)
     raw_path = Path(chunk["raw_file"])
     raw_path.parent.mkdir(parents=True, exist_ok=True)
 

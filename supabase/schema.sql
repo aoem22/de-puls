@@ -122,3 +122,47 @@ CREATE TRIGGER update_geo_boundaries_updated_at
   BEFORE UPDATE ON geo_boundaries
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- Pipeline Runs Metadata Table
+-- Tracks enrichment pipeline executions for observability
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+  id TEXT PRIMARY KEY,            -- e.g. "v2_2026-w03"
+  year INT NOT NULL,
+  week INT NOT NULL,
+  model TEXT,                     -- e.g. "google/gemini-2.5-flash-lite"
+  status TEXT DEFAULT 'running',  -- running | enriched | clustered | complete
+  record_count INT,
+  stats JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE pipeline_runs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "pipeline_runs_public_read"
+  ON pipeline_runs FOR SELECT
+  USING (true);
+
+CREATE POLICY "pipeline_runs_service_write"
+  ON pipeline_runs FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+CREATE OR REPLACE FUNCTION update_pipeline_runs_updated_at()
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_pipeline_runs_updated_at
+  BEFORE UPDATE ON pipeline_runs
+  FOR EACH ROW
+  EXECUTE FUNCTION update_pipeline_runs_updated_at();

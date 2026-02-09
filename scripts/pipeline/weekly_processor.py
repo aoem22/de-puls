@@ -65,7 +65,9 @@ def _load_week_articles(year: int, week: int) -> list[dict]:
     """Load articles from all Bundeslaender for the given ISO week."""
     months = _months_for_week(year, week)
     articles = []
+    seen_urls: set[str] = set()
     files_loaded = 0
+    dups_skipped = 0
 
     for bl in BUNDESLAENDER:
         for y, m in months:
@@ -85,10 +87,16 @@ def _load_week_articles(year: int, week: int) -> list[dict]:
                     continue
                 iso = dt.isocalendar()
                 if iso.year == year and iso.week == week:
+                    url = art.get("url", "")
+                    if url in seen_urls:
+                        dups_skipped += 1
+                        continue
+                    if url:
+                        seen_urls.add(url)
                     articles.append(art)
 
     print(f"Loaded {len(articles)} articles from {files_loaded} files "
-          f"(ISO week {year}-W{week:02d})")
+          f"(ISO week {year}-W{week:02d}), skipped {dups_skipped} duplicate URLs")
 
     return articles
 
@@ -101,6 +109,7 @@ def process_week(
     prompt_version: str = "v2",
     batch_size: int = 500,
     model: str = None,
+    skip_clustering: bool = False,
 ) -> dict:
     """Process a single ISO week through filter -> enrich -> push.
 
@@ -164,7 +173,7 @@ def process_week(
     enricher = FastEnricher(cache_dir=cache_dir, no_geocode=no_geocode, model=model)
 
     try:
-        enriched, triage_removed = enricher.enrich_all(kept)
+        enriched, triage_removed = enricher.enrich_all(kept, skip_clustering=skip_clustering)
     except KeyboardInterrupt:
         print("\nInterrupted — saving caches")
         enricher.save_caches()
@@ -209,6 +218,8 @@ def process_week(
         "deduped": dupes,
         "records_to_push": len(rows),
         "pipeline_run": run_name,
+        "model": model,
+        "clustering_skipped": skip_clustering,
     }
 
     if dry_run:
@@ -271,5 +282,23 @@ def process_week(
     print(f"  Inserted/updated: {inserted}")
     print(f"  Errors: {errors}")
     print(f"  Pipeline run: {run_name}")
+
+    # ── Step 6: Upsert pipeline_runs metadata ──
+    run_status = "enriched" if skip_clustering else "complete"
+    run_row = {
+        "id": run_name,
+        "year": year,
+        "week": week,
+        "model": model,
+        "status": run_status,
+        "record_count": inserted,
+        "stats": stats,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    try:
+        supabase.table("pipeline_runs").upsert(run_row).execute()
+        print(f"  Pipeline run metadata: {run_name} -> {run_status}")
+    except Exception as e:
+        print(f"  WARNING: Failed to upsert pipeline_runs: {e}")
 
     return stats

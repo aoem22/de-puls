@@ -25,6 +25,8 @@ from .config import (
     FAST_ENRICHER_SCRIPT,
     FILTER_SCRIPT,
     BUNDESLAENDER,
+    DEDICATED_SCRAPER_STATES,
+    STATE_SCRAPER_SCRIPTS,
     LOG_DIR,
     DATA_DIR,
 )
@@ -63,12 +65,70 @@ def ensure_chunk_dirs(chunk: dict) -> None:
     Path(chunk["enriched_file"]).parent.mkdir(parents=True, exist_ok=True)
 
 
+def _run_single_state_scraper(
+    bundesland: str,
+    start_date: str,
+    end_date: str,
+    output_file: str,
+    use_async: bool = True,
+) -> tuple[bool, int, str]:
+    """Run a single state scraper. Returns (success, count, error)."""
+    from .config import CHUNKS_RAW_DIR
+
+    # Route to dedicated state scraper or presseportal
+    if bundesland in DEDICATED_SCRAPER_STATES:
+        scraper_script = STATE_SCRAPER_SCRIPTS.get(bundesland)
+        if not scraper_script or not scraper_script.exists():
+            return False, 0, f"Dedicated scraper not found for {bundesland}"
+        cmd = [
+            sys.executable,
+            str(scraper_script),
+            "--start-date", start_date,
+            "--end-date", end_date,
+            "--output", output_file,
+        ]
+    else:
+        scraper_script = ASYNC_SCRAPER_SCRIPT if use_async else SCRAPER_SCRIPT
+        cmd = [
+            sys.executable,
+            str(scraper_script),
+            "--bundesland", bundesland,
+            "--start-date", start_date,
+            "--end-date", end_date,
+            "--output", output_file,
+        ]
+
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=1800,
+        )
+        if result.returncode != 0:
+            return False, 0, (result.stderr.strip()[:200] or "Unknown error")
+
+        out = Path(output_file)
+        if out.exists():
+            with open(out, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                count = len(data) if isinstance(data, list) else len(data.get("articles", []))
+            return True, count, ""
+        return False, 0, "Output file not found"
+    except subprocess.TimeoutExpired:
+        return False, 0, "Timeout"
+    except Exception as e:
+        return False, 0, str(e)[:200]
+
+
 def run_scraper_sync(chunk: dict, use_async: bool = True) -> tuple[str, bool, Optional[int], Optional[str]]:
     """
-    Run scraper for a single chunk (synchronous, for ThreadPoolExecutor).
-    Uses async scraper by default for 10-20x speedup.
-    Returns: (chunk_id, success, article_count, error)
+    Run scraper for a single monthly chunk across all Bundesländer.
+
+    Each chunk covers one month. This function iterates through all 16 states,
+    routing each to either the presseportal scraper or a dedicated state scraper,
+    and writes per-state raw files under chunks/raw/{bundesland}/{year-month}.json.
+    Returns: (chunk_id, success, total_article_count, error)
     """
+    from .config import CHUNKS_RAW_DIR
+
     chunk_id = chunk["id"]
 
     if _shutdown_requested:
@@ -76,48 +136,46 @@ def run_scraper_sync(chunk: dict, use_async: bool = True) -> tuple[str, bool, Op
 
     ensure_chunk_dirs(chunk)
 
-    # Use async scraper for 10-20x speedup
-    scraper_script = ASYNC_SCRAPER_SCRIPT if use_async else SCRAPER_SCRIPT
+    total_articles = 0
+    failed_states = []
 
-    cmd = [
-        sys.executable,
-        str(scraper_script),
-        "--bundesland", chunk["bundesland"],
-        "--start-date", chunk["start_date"],
-        "--end-date", chunk["end_date"],
-        "--output", chunk["raw_file"],
-    ]
+    for bundesland in BUNDESLAENDER:
+        if _shutdown_requested:
+            break
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=1800,  # 30 min timeout (async is much faster)
+        # Per-state output file
+        state_dir = CHUNKS_RAW_DIR / bundesland
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_file = str(state_dir / f"{chunk['year_month']}.json")
+
+        # Skip if already exists with data
+        sf = Path(state_file)
+        if sf.exists() and sf.stat().st_size > 10:
+            try:
+                with open(sf, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    count = len(data) if isinstance(data, list) else len(data.get("articles", []))
+                total_articles += count
+                continue
+            except (json.JSONDecodeError, IOError):
+                pass  # Re-scrape if corrupt
+
+        success, count, error = _run_single_state_scraper(
+            bundesland, chunk["start_date"], chunk["end_date"], state_file, use_async,
         )
 
-        if result.returncode != 0:
-            error = result.stderr.strip()[:200] or "Unknown error"
-            return chunk_id, False, None, error
+        if success:
+            total_articles += count
+        else:
+            failed_states.append(f"{bundesland}: {error}")
 
-        # Count articles - async scraper outputs flat list, not {"articles": [...]}
-        raw_path = Path(chunk["raw_file"])
-        if raw_path.exists():
-            with open(raw_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                # Handle both formats: flat list or {"articles": [...]}
-                if isinstance(data, list):
-                    count = len(data)
-                else:
-                    count = len(data.get("articles", []))
-            return chunk_id, True, count, None
+    if failed_states and len(failed_states) == len(BUNDESLAENDER):
+        return chunk_id, False, None, f"All states failed: {failed_states[0]}"
 
-        return chunk_id, False, None, "Output file not found"
+    if failed_states:
+        print(f"  Warning: {len(failed_states)} states failed for {chunk_id}")
 
-    except subprocess.TimeoutExpired:
-        return chunk_id, False, None, "Timeout"
-    except Exception as e:
-        return chunk_id, False, None, str(e)[:200]
+    return chunk_id, True, total_articles, None
 
 
 def run_filter_sync(chunk: dict) -> tuple[str, bool, Optional[int], Optional[str]]:

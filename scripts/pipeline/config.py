@@ -24,6 +24,22 @@ BUNDESLAENDER = [
     "thueringen",
 ]
 
+# States that use dedicated scrapers instead of presseportal.de.
+# presseportal's /blaulicht/l/berlin and /blaulicht/l/brandenburg endpoints
+# return ALL German articles (not state-filtered), so they must be scraped
+# from their own state police portals.
+DEDICATED_SCRAPER_STATES = {
+    "berlin",
+    "brandenburg",  # presseportal endpoint broken; no dedicated scraper yet
+    "bayern",
+    "sachsen-anhalt",
+    "hamburg",
+    "sachsen",
+}
+
+# States that use presseportal.de (all except DEDICATED_SCRAPER_STATES)
+PRESSEPORTAL_STATES = [s for s in BUNDESLAENDER if s not in DEDICATED_SCRAPER_STATES]
+
 # Date range for 3-year scrape
 DEFAULT_START_DATE = "2023-02-01"
 DEFAULT_END_DATE = "2026-02-01"
@@ -48,6 +64,16 @@ ENRICHER_SCRIPT = PROJECT_ROOT / "scripts" / "enrich_blaulicht.py"
 FAST_ENRICHER_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline" / "fast_enricher.py"
 FILTER_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline" / "filter_articles.py"
 TRANSFORMER_SCRIPT = PROJECT_ROOT / "scripts" / "transform_to_crimes.py"
+
+# Dedicated state scrapers (scripts/scrapers/)
+SCRAPERS_DIR = PROJECT_ROOT / "scripts" / "scrapers"
+STATE_SCRAPER_SCRIPTS = {
+    "berlin": SCRAPERS_DIR / "scrape_berlin_polizei.py",
+    "bayern": SCRAPERS_DIR / "scrape_bayern_polizei.py",
+    "sachsen-anhalt": SCRAPERS_DIR / "scrape_sachsen_anhalt.py",
+    "hamburg": SCRAPERS_DIR / "scrape_hamburg_polizei.py",
+    "sachsen": SCRAPERS_DIR / "scrape_sachsen_polizei.py",
+}
 
 # Rate limiting and delays
 DELAY_BETWEEN_CHUNKS_SECONDS = 5
