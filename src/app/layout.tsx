@@ -15,7 +15,10 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#0a0a0a',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#e6e5e3' },
+    { media: '(prefers-color-scheme: dark)', color: '#0e0e0e' },
+  ],
 };
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de';
@@ -86,7 +89,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="de" className="dark">
+    <html lang="de" suppressHydrationWarning>
+      <head>
+        {/* Inline script to set data-theme before first paint (prevents FOUC) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem('theme');if(!t)t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);document.documentElement.style.colorScheme=t})()`,
+          }}
+        />
+      </head>
       <body className={`${spaceGrotesk.variable} font-sans antialiased`}>
         <LanguageProvider>
           {children}

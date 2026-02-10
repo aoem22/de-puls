@@ -114,9 +114,9 @@ export function AddressSearch({ mapRef }: AddressSearchProps) {
       <div className="address-search-container absolute z-[1000] top-4 left-1/2 -translate-x-1/2 w-[320px] max-md:top-16 max-md:left-3 max-md:right-3 max-md:w-auto max-md:translate-x-0">
         <div className="relative">
           {/* Search input */}
-          <div className="flex items-center bg-[#1a1a1a]/95 backdrop-blur-sm border border-[#333] rounded-lg overflow-hidden shadow-lg">
+          <div className="flex items-center bg-[var(--card-elevated)]/95 backdrop-blur-sm border border-[var(--border)] rounded-lg overflow-hidden shadow-lg">
             <svg
-              className="w-4 h-4 ml-3 text-zinc-500 shrink-0"
+              className="w-4 h-4 ml-3 text-[var(--text-muted)] shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -136,13 +136,13 @@ export function AddressSearch({ mapRef }: AddressSearchProps) {
               onKeyDown={handleKeyDown}
               onFocus={() => results.length > 0 && setIsOpen(true)}
               placeholder="Adresse suchen..."
-              className="w-full px-3 py-2.5 bg-transparent text-white text-sm placeholder-zinc-500 outline-none"
+              className="w-full px-3 py-2.5 bg-transparent text-[var(--foreground)] text-sm placeholder-[var(--text-muted)] outline-none"
               autoComplete="off"
             />
             {query && (
               <button
                 onClick={handleClear}
-                className="px-3 py-2 text-zinc-500 hover:text-white transition-colors"
+                className="px-3 py-2 text-[var(--text-muted)] hover:text-[var(--foreground)] transition-colors"
                 aria-label="Suche leeren"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,21 +154,21 @@ export function AddressSearch({ mapRef }: AddressSearchProps) {
 
           {/* Autocomplete dropdown */}
           {isOpen && results.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a]/95 backdrop-blur-sm border border-[#333] rounded-lg overflow-hidden shadow-lg max-h-[240px] overflow-y-auto">
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card-elevated)]/95 backdrop-blur-sm border border-[var(--border)] rounded-lg overflow-hidden shadow-lg max-h-[240px] overflow-y-auto">
               {results.map((feature, index) => (
                 <button
                   key={`${feature.properties.osm_id}-${index}`}
-                  className={`w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-[#262626] last:border-b-0 ${
+                  className={`w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-[var(--card-border)] last:border-b-0 ${
                     index === activeIndex
-                      ? 'bg-white/10 text-white'
-                      : 'text-zinc-300 hover:bg-white/5 hover:text-white'
+                      ? 'bg-white/10 text-[var(--foreground)]'
+                      : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--foreground)]'
                   }`}
                   onClick={() => selectResult(feature)}
                   onMouseEnter={() => setActiveIndex(index)}
                 >
                   <div className="truncate">{formatPhotonResult(feature)}</div>
                   {feature.properties.type && (
-                    <div className="text-[10px] text-zinc-600 mt-0.5 capitalize">
+                    <div className="text-[10px] text-[var(--text-faint)] mt-0.5 capitalize">
                       {feature.properties.type}
                     </div>
                   )}
@@ -187,7 +187,7 @@ export function AddressSearch({ mapRef }: AddressSearchProps) {
               d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24s12-15 12-24C24 5.373 18.627 0 12 0z"
               fill="#22d3ee"
             />
-            <circle cx="12" cy="12" r="5" fill="#0a0a0a" />
+            <circle cx="12" cy="12" r="5" style={{ fill: 'var(--background)' }} />
           </svg>
         </Marker>
       )}

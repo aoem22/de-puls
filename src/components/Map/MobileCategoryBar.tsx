@@ -11,22 +11,31 @@ const CHEVRON_ACTIVE_COLOR: Record<IndicatorKey, string> = {
   blaulicht: 'text-blue-400',
 };
 
+const INDICATOR_ACCENT: Record<IndicatorKey, string> = {
+  auslaender: '#ef4444',
+  deutschlandatlas: '#8b5cf6',
+  kriminalstatistik: '#f59e0b',
+  blaulicht: '#3b82f6',
+};
+
 interface MobileCategoryBarProps {
   selectedIndicator: IndicatorKey;
   onIndicatorChange: (indicator: IndicatorKey) => void;
   onOpenSettings: () => void;
+  isSettingsOpen?: boolean;
 }
 
 export function MobileCategoryBar({
   selectedIndicator,
   onIndicatorChange,
   onOpenSettings,
+  isSettingsOpen,
 }: MobileCategoryBarProps) {
   const { lang } = useTranslation();
 
   return (
-    <div className="md:hidden fixed top-3 left-3 right-3 z-[1001] overflow-x-auto scrollbar-hide scroll-snap-x-mandatory">
-      <div className="flex gap-2 w-max px-0.5 py-0.5">
+    <div className="md:hidden fixed top-4 left-0 right-0 z-[1001] overflow-x-auto scrollbar-hide scroll-snap-x-mandatory">
+      <div className="flex gap-2 w-max px-3 py-0.5">
         {PRIMARY_INDICATOR_STACK_ORDER.map((indicatorKey) => {
           const isSelected = selectedIndicator === indicatorKey;
           const meta = PRIMARY_INDICATOR_STACK_META[indicatorKey];
@@ -37,10 +46,11 @@ export function MobileCategoryBar({
               key={indicatorKey}
               type="button"
               onClick={() => onIndicatorChange(indicatorKey)}
-              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium whitespace-nowrap backdrop-blur-sm transition-all touch-feedback active:scale-95 scroll-snap-start ${
+              style={{ '--cat-accent': INDICATOR_ACCENT[indicatorKey] } as React.CSSProperties}
+              className={`mobile-cat-btn flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium whitespace-nowrap backdrop-blur-sm transition-all touch-feedback active:scale-95 scroll-snap-start ${
                 isSelected
-                  ? `${meta.activeClassName} bg-[#141414]/95 shadow-lg`
-                  : 'border-[#333] bg-[#141414]/80 text-zinc-300 active:bg-[#1a1a1a]'
+                  ? `mobile-cat-btn--active ${meta.activeClassName} bg-[var(--card)]/95 shadow-lg`
+                  : 'border-[var(--border)] bg-[var(--card)]/80 text-[var(--text-secondary)] active:bg-[var(--card-elevated)]'
               }`}
             >
               <span
@@ -50,14 +60,25 @@ export function MobileCategoryBar({
               </span>
               <span className="leading-none">{label}</span>
               <span
-                className={`ml-1 -mr-1 p-1 ${isSelected ? CHEVRON_ACTIVE_COLOR[indicatorKey] : 'text-zinc-400'}`}
+                className={`ml-1 -mr-1.5 self-stretch aspect-square rounded-full border-2 flex items-center justify-center transition-colors ${
+                  isSelected && isSettingsOpen
+                    ? 'border-[var(--cat-accent)] bg-[var(--cat-accent)] text-white'
+                    : isSelected
+                      ? `border-[var(--cat-accent)] ${CHEVRON_ACTIVE_COLOR[indicatorKey]}`
+                      : 'border-[var(--border)] text-[var(--text-tertiary)]'
+                }`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onIndicatorChange(indicatorKey);
+                  if (!isSelected) {
+                    onIndicatorChange(indicatorKey);
+                  }
                   onOpenSettings();
                 }}
               >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${isSelected && isSettingsOpen ? 'rotate-180' : ''}`}
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                >
                   <path d="M6 9l6 6 6-6" />
                 </svg>
               </span>

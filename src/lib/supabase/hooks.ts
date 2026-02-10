@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { fetchCrimes, fetchCrimeStats, fetchPipelineRuns, fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchAllDatasetMeta } from './queries';
+import { fetchCrimes, fetchCrimeById, fetchCrimeStats, fetchPipelineRuns, fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchAllDatasetMeta } from './queries';
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
 import type { BlaulichtStats, AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow } from './types';
 
@@ -18,6 +18,21 @@ export function useCrimes(category?: CrimeCategory, pipelineRun?: string) {
       // Keep data fresh for 5 minutes before revalidating
       revalidateOnFocus: false,
       dedupingInterval: 60000, // Dedupe requests within 1 minute
+    }
+  );
+}
+
+/**
+ * SWR hook for fetching a single crime record with all columns (for detail panel).
+ * Returns null when no ID is provided. Caches per crime ID.
+ */
+export function useCrimeDetail(crimeId: string | null) {
+  return useSWR<CrimeRecord | null, Error>(
+    crimeId ? ['crime-detail', crimeId] : null,
+    () => fetchCrimeById(crimeId!),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 300000, // 5 min — detail data rarely changes
     }
   );
 }

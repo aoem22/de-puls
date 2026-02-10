@@ -19,6 +19,8 @@ interface CrimeLayerProps {
   visibleCrimeIds?: Set<string> | null;
   flashingCrimeIds?: Set<string> | null;
   favoriteIds?: Set<string>;
+  /** Insert layer before this layer ID so dots render below labels */
+  beforeId?: string;
 }
 
 const categoryColorMap = new Map<CrimeCategory, string>(
@@ -40,6 +42,7 @@ export function CrimeLayer({
   visibleCrimeIds = null,
   flashingCrimeIds = null,
   favoriteIds,
+  beforeId,
 }: CrimeLayerProps) {
   const { current: mapRef } = useMap();
   const onClickRef = useRef(onCrimeClick);
@@ -216,24 +219,38 @@ export function CrimeLayer({
       handleMouseMove(e as unknown as MapLayerMouseEvent);
     };
     const onLeave = () => handleMouseLeave();
-    const onClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-      handleClick(e as unknown as MapLayerMouseEvent);
+
+    // Use bbox query instead of layer-specific click handler so small circles
+    // are reliably tappable on mobile (finger covers ~40px, circles are ~5px)
+    const TAP_PADDING = 15; // px around tap point
+    const onClick = (e: maplibregl.MapMouseEvent) => {
+      const { x, y } = e.point;
+      const features = map.queryRenderedFeatures(
+        [[x - TAP_PADDING, y - TAP_PADDING], [x + TAP_PADDING, y + TAP_PADDING]],
+        { layers: ['crime-circles'] },
+      );
+      if (features.length === 0) return;
+      e.originalEvent.stopPropagation();
+      const feature = features[0];
+      const crimeId = (feature.properties as { _crimeId: string })._crimeId;
+      const crime = crimeByIdRef.current.get(crimeId);
+      if (crime && onClickRef.current) onClickRef.current(crime);
     };
 
     map.on('mousemove', 'crime-circles', onMove);
     map.on('mouseleave', 'crime-circles', onLeave);
-    map.on('click', 'crime-circles', onClick);
+    map.on('click', onClick);
 
     return () => {
       map.off('mousemove', 'crime-circles', onMove);
       map.off('mouseleave', 'crime-circles', onLeave);
-      map.off('click', 'crime-circles', onClick);
+      map.off('click', onClick);
     };
-  }, [mapRef, handleMouseMove, handleMouseLeave, handleClick]);
+  }, [mapRef, handleMouseMove, handleMouseLeave]);
 
   return (
     <Source id="crime-points" type="geojson" data={geojson}>
-      <Layer {...circleStyle} />
+      <Layer beforeId={beforeId} {...circleStyle} />
     </Source>
   );
 }

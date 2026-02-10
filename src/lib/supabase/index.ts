@@ -2,7 +2,7 @@
 export { supabase } from './client';
 export type { Database, CrimeRecordRow, CrimeRecordInsert, CrimeRecordUpdate, BlaulichtStats } from './types';
 export type { AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow } from './types';
-export { fetchCrimes, fetchCrimeStats, fetchPipelineRuns } from './queries';
+export { fetchCrimes, fetchCrimeById, fetchCrimeStats, fetchPipelineRuns } from './queries';
 export { fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchDatasetMeta, fetchAllDatasetMeta } from './queries';
-export { useCrimes, useCrimeStats, usePipelineRuns } from './hooks';
+export { useCrimes, useCrimeDetail, useCrimeStats, usePipelineRuns } from './hooks';
 export { useAuslaenderData, useDeutschlandatlasData, useCityCrimeData, useAllDatasetMeta } from './hooks';

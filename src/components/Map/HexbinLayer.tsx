@@ -17,6 +17,8 @@ interface HexbinLayerProps {
   visible: boolean;
   /** When true, render below the crime-circles layer */
   beforeCrimeCircles?: boolean;
+  /** Insert layer before this layer ID so hexbins render below labels */
+  beforeLabelId?: string;
 }
 
 /** Map zoom → H3 resolution (discrete steps to avoid constant recomputation) */
@@ -35,6 +37,7 @@ export function HexbinLayer({
   currentZoom,
   visible,
   beforeCrimeCircles = false,
+  beforeLabelId,
 }: HexbinLayerProps) {
   const h3Resolution = zoomToH3Resolution(currentZoom);
 
@@ -91,6 +94,8 @@ export function HexbinLayer({
     return { type: 'FeatureCollection' as const, features };
   }, [crimes, h3Resolution, visible]);
 
+  const effectiveBeforeId = beforeCrimeCircles ? 'crime-circles' : beforeLabelId;
+
   const fillStyle: LayerProps = useMemo(
     () => ({
       id: 'hexbin-fill',
@@ -99,9 +104,9 @@ export function HexbinLayer({
         'fill-color': ['get', 'color'],
         'fill-opacity': 0.55,
       },
-      ...(beforeCrimeCircles ? { beforeId: 'crime-circles' } : {}),
+      ...(effectiveBeforeId ? { beforeId: effectiveBeforeId } : {}),
     }),
-    [beforeCrimeCircles],
+    [effectiveBeforeId],
   );
 
   const lineStyle: LayerProps = useMemo(
@@ -113,9 +118,9 @@ export function HexbinLayer({
         'line-width': 1,
         'line-opacity': 0.35,
       },
-      ...(beforeCrimeCircles ? { beforeId: 'crime-circles' } : {}),
+      ...(effectiveBeforeId ? { beforeId: effectiveBeforeId } : {}),
     }),
-    [beforeCrimeCircles],
+    [effectiveBeforeId],
   );
 
   if (!visible) return null;

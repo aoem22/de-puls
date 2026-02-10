@@ -11,25 +11,26 @@ import type {
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
 
 /**
- * Transform database row (snake_case) to application model (camelCase)
+ * Transform database row (snake_case) to application model (camelCase).
+ * Accepts partial rows from slim queries — missing fields become undefined.
  */
-function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
+function rowToCrimeRecord(row: Partial<CrimeRecordRow>): CrimeRecord {
   return {
-    id: row.id,
-    title: row.title,
+    id: row.id!,
+    title: row.title!,
     cleanTitle: row.clean_title,
     summary: row.summary,
     body: row.body,
-    publishedAt: row.published_at,
-    sourceUrl: row.source_url,
+    publishedAt: row.published_at!,
+    sourceUrl: row.source_url!,
     sourceAgency: row.source_agency,
     locationText: row.location_text,
     latitude: row.latitude,
     longitude: row.longitude,
-    precision: row.precision,
-    categories: row.categories,
-    weaponType: row.weapon_type,
-    confidence: row.confidence,
+    precision: row.precision ?? 'city',
+    categories: row.categories ?? [],
+    weaponType: row.weapon_type ?? undefined,
+    confidence: row.confidence ?? 0,
     incidentDate: row.incident_date,
     incidentTime: row.incident_time,
     incidentTimePrecision: row.incident_time_precision,
@@ -52,22 +53,27 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
   };
 }
 
+// Slim column set for map rendering & filtering (excludes heavy text fields)
+const SLIM_COLUMNS = 'id, title, clean_title, published_at, source_url, latitude, longitude, categories, weapon_type, confidence, incident_group_id, group_role, pipeline_run';
+
 /**
- * Fetch all crime records, optionally filtered by category
+ * Fetch all crime records, optionally filtered by category.
+ * Only fetches columns needed for map pins, filtering, and stats.
+ * Use fetchCrimeById() to get full record details.
  *
  * @param category - Optional category to filter by
- * @returns Array of crime records
+ * @returns Array of crime records (slim)
  */
 export async function fetchCrimes(category?: CrimeCategory, pipelineRun?: string): Promise<CrimeRecord[]> {
   const PAGE_SIZE = 1000;
-  let allData: CrimeRecordRow[] = [];
+  let allData: Partial<CrimeRecordRow>[] = [];
   let from = 0;
 
   // Paginate to avoid Supabase's default 1000-row limit
   while (true) {
     let query = supabase
       .from('crime_records')
-      .select('*')
+      .select(SLIM_COLUMNS)
       .eq('hidden', false)
       .order('published_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
@@ -87,7 +93,7 @@ export async function fetchCrimes(category?: CrimeCategory, pipelineRun?: string
       throw new Error(`Failed to fetch crimes: ${error.message}`);
     }
 
-    const rows = (data ?? []) as CrimeRecordRow[];
+    const rows = (data ?? []) as Partial<CrimeRecordRow>[];
     allData = allData.concat(rows);
 
     if (rows.length < PAGE_SIZE) break;
@@ -95,6 +101,24 @@ export async function fetchCrimes(category?: CrimeCategory, pipelineRun?: string
   }
 
   return allData.map(rowToCrimeRecord);
+}
+
+/**
+ * Fetch a single crime record by ID with all columns (for detail panel)
+ */
+export async function fetchCrimeById(id: string): Promise<CrimeRecord | null> {
+  const { data, error } = await supabase
+    .from('crime_records')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('Error fetching crime by ID:', error);
+    return null;
+  }
+
+  return rowToCrimeRecord(data as CrimeRecordRow);
 }
 
 /**

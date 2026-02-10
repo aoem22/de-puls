@@ -33,9 +33,9 @@ function AuslaenderHoverContent({
   if (!record) {
     return (
       <div className="p-3">
-        <div className="font-bold text-white text-sm leading-tight">{kreisName}</div>
-        <div className="text-[11px] text-zinc-500 mt-1">AGS: {ags}</div>
-        <div className="text-xs text-zinc-400 mt-2">Keine Daten verfügbar</div>
+        <div className="font-bold text-[var(--foreground)] text-sm leading-tight">{kreisName}</div>
+        <div className="text-[11px] text-[var(--text-muted)] mt-1">AGS: {ags}</div>
+        <div className="text-xs text-[var(--text-tertiary)] mt-2">Keine Daten verfügbar</div>
       </div>
     );
   }
@@ -49,29 +49,29 @@ function AuslaenderHoverContent({
   return (
     <div className="p-3">
       {/* Header */}
-      <div className="font-bold text-white text-sm leading-tight border-b border-[#444] pb-2 mb-2">
+      <div className="font-bold text-[var(--foreground)] text-sm leading-tight border-b border-[var(--border)] pb-2 mb-2">
         {record.name || kreisName}
       </div>
 
       {/* Selected region highlight - only show when not "Gesamt" to avoid duplication */}
       {selectedRegion !== 'total' && (
-        <div className="border-b border-[#444] pb-2 mb-2">
+        <div className="border-b border-[var(--border)] pb-2 mb-2">
           <div className="text-amber-400 text-[11px] mb-1">
             Aktuell: <span className="font-bold">{selectedMeta.labelDe}</span>
           </div>
           <div className="text-2xl font-bold text-amber-400">
             {formatNumber(selectedValue)}
-            <span className="text-zinc-500 text-sm ml-1">{calcPercentParens(selectedValue, total)}</span>
+            <span className="text-[var(--text-muted)] text-sm ml-1">{calcPercentParens(selectedValue, total)}</span>
           </div>
           {selectedData && (
             <div className="flex gap-4 mt-1.5">
               <div>
                 <span className="text-blue-400 text-sm">♂</span>
-                <span className="text-zinc-300 text-sm ml-1">{formatNumber(selectedData.male)}</span>
+                <span className="text-[var(--text-secondary)] text-sm ml-1">{formatNumber(selectedData.male)}</span>
               </div>
               <div>
                 <span className="text-pink-400 text-sm">♀</span>
-                <span className="text-zinc-300 text-sm ml-1">{formatNumber(selectedData.female)}</span>
+                <span className="text-[var(--text-secondary)] text-sm ml-1">{formatNumber(selectedData.female)}</span>
               </div>
             </div>
           )}
@@ -80,16 +80,16 @@ function AuslaenderHoverContent({
 
       {/* Total */}
       <div className="flex justify-between items-baseline mb-2">
-        <span className="text-zinc-500 text-[10px]">AGS: {ags}</span>
+        <span className="text-[var(--text-muted)] text-[10px]">AGS: {ags}</span>
         <div>
           <span className="text-xl font-bold text-amber-400">{formatNumber(total)}</span>
-          <span className="text-zinc-500 text-[10px] ml-1">Gesamt</span>
+          <span className="text-[var(--text-muted)] text-[10px] ml-1">Gesamt</span>
         </div>
       </div>
 
       {/* Continents */}
-      <div className="border-t border-[#333] pt-2">
-        <div className="text-zinc-500 text-[9px] uppercase tracking-wider mb-1">Nach Kontinent</div>
+      <div className="border-t border-[var(--border)] pt-2">
+        <div className="text-[var(--text-muted)] text-[9px] uppercase tracking-wider mb-1">Nach Kontinent</div>
         <div className="space-y-0.5">
           {continents.map((continent) => {
             const val = record.regions[continent]?.total;
@@ -104,12 +104,12 @@ function AuslaenderHoverContent({
                   isSelected ? 'bg-amber-500/15' : ''
                 }`}
               >
-                <span className={`text-[11px] ${isSelected ? 'text-amber-400' : 'text-zinc-400'}`}>
+                <span className={`text-[11px] ${isSelected ? 'text-amber-400' : 'text-[var(--text-tertiary)]'}`}>
                   {meta.labelDe}
                 </span>
-                <span className={`text-[11px] ${isSelected ? 'text-amber-400 font-semibold' : 'text-white'}`}>
+                <span className={`text-[11px] ${isSelected ? 'text-amber-400 font-semibold' : 'text-[var(--foreground)]'}`}>
                   {formatNumber(val)}
-                  {pct && <span className="text-zinc-600 text-[10px] ml-1">{pct}</span>}
+                  {pct && <span className="text-[var(--text-faint)] text-[10px] ml-1">{pct}</span>}
                 </span>
               </div>
             );
@@ -135,9 +135,9 @@ function DeutschlandatlasHoverContent({
   if (!record) {
     return (
       <div className="p-3">
-        <div className="font-bold text-white text-sm leading-tight">{kreisName}</div>
-        <div className="text-[11px] text-zinc-500 mt-1">AGS: {ags}</div>
-        <div className="text-xs text-zinc-400 mt-2">Keine Daten verfügbar</div>
+        <div className="font-bold text-[var(--foreground)] text-sm leading-tight">{kreisName}</div>
+        <div className="text-[11px] text-[var(--text-muted)] mt-1">AGS: {ags}</div>
+        <div className="text-xs text-[var(--text-tertiary)] mt-2">Keine Daten verfügbar</div>
       </div>
     );
   }
@@ -153,19 +153,19 @@ function DeutschlandatlasHoverContent({
   return (
     <div className="p-3">
       {/* Header */}
-      <div className="font-bold text-white text-sm leading-tight border-b border-[#444] pb-2 mb-2">
+      <div className="font-bold text-[var(--foreground)] text-sm leading-tight border-b border-[var(--border)] pb-2 mb-2">
         {record.name || kreisName}
       </div>
 
       {/* AGS */}
-      <div className="text-zinc-500 text-[10px] mb-2">AGS: {ags}</div>
+      <div className="text-[var(--text-muted)] text-[10px] mb-2">AGS: {ags}</div>
 
       {/* Selected indicator highlight */}
       <div className="bg-amber-500/10 border border-amber-500/30 rounded p-2 mb-2">
         <div className="text-amber-400 text-[10px] mb-0.5">{meta.labelDe}</div>
-        <div className="text-lg font-bold text-white">
+        <div className="text-lg font-bold text-[var(--foreground)]">
           {formatValue(value)}
-          {meta.unitDe && <span className="text-zinc-400 text-xs ml-1">{meta.unitDe}</span>}
+          {meta.unitDe && <span className="text-[var(--text-tertiary)] text-xs ml-1">{meta.unitDe}</span>}
         </div>
         {meta.higherIsBetter !== undefined && (
           <div className={`text-[9px] mt-0.5 ${meta.higherIsBetter ? 'text-green-400' : 'text-orange-400'}`}>
@@ -175,8 +175,8 @@ function DeutschlandatlasHoverContent({
       </div>
 
       {/* Priority indicators */}
-      <div className="border-t border-[#333] pt-2">
-        <div className="text-zinc-500 text-[9px] uppercase tracking-wider mb-1">Schnellübersicht</div>
+      <div className="border-t border-[var(--border)] pt-2">
+        <div className="text-[var(--text-muted)] text-[9px] uppercase tracking-wider mb-1">Schnellübersicht</div>
         <div className="space-y-0.5">
           {priorityIndicators.filter(k => k !== selectedIndicator).slice(0, 4).map((key) => {
             const val = record.indicators[key];
@@ -184,10 +184,10 @@ function DeutschlandatlasHoverContent({
 
             return (
               <div key={key} className="flex justify-between py-0.5 px-1">
-                <span className="text-[10px] text-zinc-400">{indMeta.labelDe}</span>
-                <span className="text-[10px] text-white">
+                <span className="text-[10px] text-[var(--text-tertiary)]">{indMeta.labelDe}</span>
+                <span className="text-[10px] text-[var(--foreground)]">
                   {formatValue(val)}
-                  {indMeta.unitDe && <span className="text-zinc-600 ml-0.5">{indMeta.unitDe}</span>}
+                  {indMeta.unitDe && <span className="text-[var(--text-faint)] ml-0.5">{indMeta.unitDe}</span>}
                 </span>
               </div>
             );
@@ -268,7 +268,7 @@ export function KreisHoverCard({
         transform: 'translateZ(0)',
       }}
     >
-      <div className="bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl min-w-[220px] max-w-[280px] overflow-hidden">
+      <div className="bg-[var(--card-elevated)] border border-[var(--border)] rounded-xl shadow-2xl min-w-[220px] max-w-[280px] overflow-hidden">
         {indicatorKey === 'auslaender' ? (
           <AuslaenderHoverContent
             record={record as { name: string; ags: string; regions: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }> } | null}

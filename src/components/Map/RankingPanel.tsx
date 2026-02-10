@@ -207,7 +207,7 @@ function AuslaenderDetailContent({
     <>
       {/* Total */}
       <div className="flex items-baseline justify-between">
-        <span className="text-zinc-400 text-sm uppercase tracking-wide">{t.totalForeigners[lang]}</span>
+        <span className="text-[var(--text-tertiary)] text-sm uppercase tracking-wide">{t.totalForeigners[lang]}</span>
         <span className="text-2xl font-bold text-red-400">{formatNumber(total)}</span>
       </div>
 
@@ -215,18 +215,18 @@ function AuslaenderDetailContent({
       <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
         <div className="flex items-center justify-between mb-1">
           <span className="text-red-400 text-xs font-medium">{t.current[lang]}: {getRegionLabel(selectedRegion, lang)}</span>
-          <span className="text-zinc-400 text-xs">{calcPercent(selectedValue, total)}</span>
+          <span className="text-[var(--text-tertiary)] text-xs">{calcPercent(selectedValue, total)}</span>
         </div>
-        <div className="text-white text-xl font-semibold">{formatNumber(selectedValue)}</div>
+        <div className="text-[var(--foreground)] text-xl font-semibold">{formatNumber(selectedValue)}</div>
         {selectedData && (
           <div className="flex gap-4 mt-2 text-xs">
             <div className="flex items-center gap-1">
-              <span className="text-blue-400">♂</span>
-              <span className="text-zinc-300">{formatNumber(selectedData.male)}</span>
+              <span className="text-blue-400">&#9794;</span>
+              <span className="text-[var(--text-secondary)]">{formatNumber(selectedData.male)}</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-pink-400">♀</span>
-              <span className="text-zinc-300">{formatNumber(selectedData.female)}</span>
+              <span className="text-pink-400">&#9792;</span>
+              <span className="text-[var(--text-secondary)]">{formatNumber(selectedData.female)}</span>
             </div>
           </div>
         )}
@@ -234,7 +234,7 @@ function AuslaenderDetailContent({
 
       {/* Continent breakdown */}
       <div>
-        <h4 className="text-zinc-400 text-xs uppercase tracking-wider mb-2">{t.byContinent[lang]}</h4>
+        <h4 className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">{t.byContinent[lang]}</h4>
         <div className="space-y-1">
           {continents.map((continent) => {
             const val = record.regions[continent]?.total;
@@ -246,12 +246,12 @@ function AuslaenderDetailContent({
                 key={continent}
                 className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-red-500/15' : ''}`}
               >
-                <span className={`text-xs ${isSelected ? 'text-red-400' : 'text-zinc-400'}`}>
+                <span className={`text-xs ${isSelected ? 'text-red-400' : 'text-[var(--text-tertiary)]'}`}>
                   {getRegionLabel(continent, lang)}
                 </span>
-                <span className={`text-xs ${isSelected ? 'text-red-400 font-medium' : 'text-white'}`}>
+                <span className={`text-xs ${isSelected ? 'text-red-400 font-medium' : 'text-[var(--foreground)]'}`}>
                   {formatNumber(val)}
-                  {pct && <span className="text-zinc-400 ml-1.5 text-xs">{pct}</span>}
+                  {pct && <span className="text-[var(--text-tertiary)] ml-1.5 text-xs">{pct}</span>}
                 </span>
               </div>
             );
@@ -261,7 +261,7 @@ function AuslaenderDetailContent({
 
       {/* Special groups */}
       <div>
-        <h4 className="text-zinc-400 text-xs uppercase tracking-wider mb-2">{t.otherGroups[lang]}</h4>
+        <h4 className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">{t.otherGroups[lang]}</h4>
         <div className="space-y-1">
           {specialRegions.map((region) => {
             const val = record.regions[region]?.total;
@@ -274,12 +274,12 @@ function AuslaenderDetailContent({
                 key={region}
                 className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-red-500/15' : ''}`}
               >
-                <span className={`text-xs ${isSelected ? 'text-red-400' : 'text-zinc-300'}`}>
+                <span className={`text-xs ${isSelected ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>
                   {getRegionLabel(region, lang)}
                 </span>
-                <span className={`text-xs ${isSelected ? 'text-red-400 font-medium' : 'text-zinc-300'}`}>
+                <span className={`text-xs ${isSelected ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}`}>
                   {formatNumber(val)}
-                  {pct && <span className="text-zinc-400 ml-1.5 text-xs">{pct}</span>}
+                  {pct && <span className="text-[var(--text-tertiary)] ml-1.5 text-xs">{pct}</span>}
                 </span>
               </div>
             );
@@ -335,13 +335,13 @@ function DeutschlandatlasDetailContent({
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
         <div className="flex items-center justify-between mb-1">
           <span className="text-amber-400 text-xs font-medium">{getAtlasLabel(selectedIndicator)}</span>
-          <span className="text-zinc-400 text-xs">{meta.categoryDe}</span>
+          <span className="text-[var(--text-tertiary)] text-xs">{meta.categoryDe}</span>
         </div>
-        <div className="text-white text-xl font-semibold">
+        <div className="text-[var(--foreground)] text-xl font-semibold">
           {formatDetailValue(value)}
-          {meta.unitDe && <span className="text-zinc-400 text-sm ml-1">{meta.unitDe}</span>}
+          {meta.unitDe && <span className="text-[var(--text-tertiary)] text-sm ml-1">{meta.unitDe}</span>}
         </div>
-        <p className="text-zinc-400 text-xs mt-1">{meta.descriptionDe}</p>
+        <p className="text-[var(--text-tertiary)] text-xs mt-1">{meta.descriptionDe}</p>
         {meta.higherIsBetter !== undefined && (
           <div className={`text-xs mt-1 ${meta.higherIsBetter ? 'text-green-400' : 'text-orange-400'}`}>
             {meta.higherIsBetter ? `↑ ${t.higherIsBetter[lang]}` : `↓ ${t.lowerIsBetter[lang]}`}
@@ -351,7 +351,7 @@ function DeutschlandatlasDetailContent({
 
       {/* Priority indicators overview */}
       <div>
-        <h4 className="text-zinc-400 text-xs uppercase tracking-wider mb-2">{t.importantIndicators[lang]}</h4>
+        <h4 className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">{t.importantIndicators[lang]}</h4>
         <div className="space-y-1">
           {priorityIndicators.map((key) => {
             const val = record.indicators[key];
@@ -363,12 +363,12 @@ function DeutschlandatlasDetailContent({
                 key={key}
                 className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-amber-500/15' : ''}`}
               >
-                <span className={`text-xs ${isSelected ? 'text-amber-400' : 'text-zinc-400'}`}>
+                <span className={`text-xs ${isSelected ? 'text-amber-400' : 'text-[var(--text-tertiary)]'}`}>
                   {getAtlasLabel(key)}
                 </span>
-                <span className={`text-xs ${isSelected ? 'text-amber-400 font-medium' : 'text-white'}`}>
+                <span className={`text-xs ${isSelected ? 'text-amber-400 font-medium' : 'text-[var(--foreground)]'}`}>
                   {formatDetailValue(val)}
-                  {indMeta.unitDe && <span className="text-zinc-400 ml-1 text-xs">{indMeta.unitDe}</span>}
+                  {indMeta.unitDe && <span className="text-[var(--text-tertiary)] ml-1 text-xs">{indMeta.unitDe}</span>}
                 </span>
               </div>
             );
@@ -378,14 +378,14 @@ function DeutschlandatlasDetailContent({
 
       {/* All indicators by category (collapsed by default) */}
       <details className="group">
-        <summary className="text-zinc-400 text-xs uppercase tracking-wider cursor-pointer hover:text-zinc-200 list-none flex items-center gap-1">
-          <span className="group-open:rotate-90 transition-transform">▶</span>
+        <summary className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider cursor-pointer hover:text-[var(--text-primary)] list-none flex items-center gap-1">
+          <span className="group-open:rotate-90 transition-transform">&#9654;</span>
           {t.allIndicators[lang]} ({Object.keys(record.indicators).length})
         </summary>
         <div className="mt-2 space-y-3 max-h-60 overflow-y-auto">
           {Array.from(indicatorsByCategory.entries()).map(([category, indicators]) => (
             <div key={category}>
-              <h5 className="text-zinc-400 text-[11px] uppercase tracking-wider mb-1">{category}</h5>
+              <h5 className="text-[var(--text-tertiary)] text-[11px] uppercase tracking-wider mb-1">{category}</h5>
               <div className="space-y-0.5">
                 {indicators.map(({ key, value: val, meta: indMeta }) => {
                   const isSelected = selectedIndicator === key;
@@ -394,12 +394,12 @@ function DeutschlandatlasDetailContent({
                       key={key}
                       className={`flex justify-between py-1 px-1.5 rounded text-xs ${isSelected ? 'bg-amber-500/15' : ''}`}
                     >
-                      <span className={isSelected ? 'text-amber-400' : 'text-zinc-300'}>
+                      <span className={isSelected ? 'text-amber-400' : 'text-[var(--text-secondary)]'}>
                         {getAtlasLabel(key)}
                       </span>
-                      <span className={isSelected ? 'text-amber-400' : 'text-zinc-300'}>
+                      <span className={isSelected ? 'text-amber-400' : 'text-[var(--text-secondary)]'}>
                         {formatDetailValue(val)}
-                        {indMeta.unitDe && <span className="text-zinc-400 ml-0.5">{indMeta.unitDe}</span>}
+                        {indMeta.unitDe && <span className="text-[var(--text-tertiary)] ml-0.5">{indMeta.unitDe}</span>}
                       </span>
                     </div>
                   );
@@ -453,7 +453,7 @@ function CityCrimeDetailContent({
 
   if (!selectedStats) {
     return (
-      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-zinc-300 text-sm">
+      <div className="bg-[var(--card-elevated)]/50 border border-[var(--border)] rounded-lg p-3 text-[var(--text-secondary)] text-sm">
         {t.noDataAvailable[lang]}
       </div>
     );
@@ -466,36 +466,36 @@ function CityCrimeDetailContent({
           <span className="text-amber-300 text-sm font-semibold">
             {lang === 'de' ? (selectedType?.labelDe ?? selectedCrimeType) : (selectedType?.label ?? selectedCrimeType)}
           </span>
-          <span className="text-zinc-400 text-xs">{rankingMetricLabel}</span>
+          <span className="text-[var(--text-tertiary)] text-xs">{rankingMetricLabel}</span>
         </div>
-        <div className="text-white text-xl font-semibold">
+        <div className="text-[var(--foreground)] text-xl font-semibold">
           {formatDetailValue(metric === 'hz' ? selectedStats.hz : selectedStats.aq)}
-          <span className="text-zinc-400 text-sm ml-1">{rankingMetricUnit}</span>
+          <span className="text-[var(--text-tertiary)] text-sm ml-1">{rankingMetricUnit}</span>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-zinc-800/40 rounded-lg px-3 py-2 border border-zinc-700/50">
-          <div className="text-zinc-400 text-xs uppercase tracking-wide mb-0.5">
+        <div className="bg-[var(--card-elevated)]/40 rounded-lg px-3 py-2 border border-[var(--border)]/50">
+          <div className="text-[var(--text-tertiary)] text-xs uppercase tracking-wide mb-0.5">
             {lang === 'de' ? 'Fälle' : 'Cases'}
           </div>
-          <div className="text-white text-base font-semibold">
+          <div className="text-[var(--foreground)] text-base font-semibold">
             {formatNumber(selectedStats.cases)}
           </div>
         </div>
-        <div className="bg-zinc-800/40 rounded-lg px-3 py-2 border border-zinc-700/50">
-          <div className="text-zinc-400 text-xs uppercase tracking-wide mb-0.5">
+        <div className="bg-[var(--card-elevated)]/40 rounded-lg px-3 py-2 border border-[var(--border)]/50">
+          <div className="text-[var(--text-tertiary)] text-xs uppercase tracking-wide mb-0.5">
             {secondaryMetricLabel}
           </div>
-          <div className="text-white text-base font-semibold">
+          <div className="text-[var(--foreground)] text-base font-semibold">
             {formatDetailValue(metric === 'hz' ? selectedStats.aq : selectedStats.hz)}
-            <span className="text-zinc-400 text-xs ml-1">{secondaryMetricUnit}</span>
+            <span className="text-[var(--text-tertiary)] text-xs ml-1">{secondaryMetricUnit}</span>
           </div>
         </div>
       </div>
 
       <div>
-        <h4 className="text-zinc-400 text-xs uppercase tracking-wider mb-2">
+        <h4 className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">
           {lang === 'de' ? 'Alle Delikte' : 'All Offenses'} ({crimeTypesByMetric.length})
         </h4>
         <div className="space-y-1 max-h-56 overflow-y-auto scrollbar-thin pr-1">
@@ -507,12 +507,12 @@ function CityCrimeDetailContent({
                 key={entry.key}
                 className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1.5 px-2 rounded ${isSelected ? 'bg-amber-500/15' : ''}`}
               >
-                <span className={`text-sm font-medium min-w-0 truncate ${isSelected ? 'text-amber-300' : 'text-zinc-200'}`}>
+                <span className={`text-sm font-medium min-w-0 truncate ${isSelected ? 'text-amber-300' : 'text-[var(--text-primary)]'}`}>
                   {entry.label}
                 </span>
-                <span className={`text-sm whitespace-nowrap tabular-nums font-semibold ${isSelected ? 'text-amber-300' : 'text-zinc-100'}`}>
+                <span className={`text-sm whitespace-nowrap tabular-nums font-semibold ${isSelected ? 'text-amber-300' : 'text-[var(--text-primary)]'}`}>
                   {formatDetailValue(entry.value)}
-                  <span className="text-zinc-400 ml-1 text-xs whitespace-nowrap">{rankingMetricUnit}</span>
+                  <span className="text-[var(--text-tertiary)] ml-1 text-xs whitespace-nowrap">{rankingMetricUnit}</span>
                 </span>
               </div>
             );
@@ -566,7 +566,7 @@ function MobileDetailSheet({
       {/* Sheet */}
       <div
         ref={sheetRef}
-        className="md:hidden fixed inset-x-0 bottom-0 z-[1001] bg-[#141414]/98 backdrop-blur-sm rounded-t-2xl shadow-2xl border-t border-[#262626] max-h-[70vh] mobile-bottom-sheet flex flex-col overflow-hidden animate-slide-up-spring"
+        className="md:hidden fixed inset-x-0 bottom-0 z-[1001] bg-[var(--card)]/98 backdrop-blur-sm rounded-t-2xl shadow-2xl border-t border-[var(--card-border)] max-h-[70vh] mobile-bottom-sheet flex flex-col overflow-hidden animate-slide-up-spring"
         {...handlers}
       >
         {/* Drag handle */}
@@ -575,7 +575,7 @@ function MobileDetailSheet({
         </div>
 
         {/* Header */}
-        <div className="sheet-drag-area flex items-start justify-between px-4 pb-3 border-b border-[#262626] shrink-0">
+        <div className="sheet-drag-area flex items-start justify-between px-4 pb-3 border-b border-[var(--card-border)] shrink-0">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               {selectedRank && (
@@ -583,15 +583,15 @@ function MobileDetailSheet({
                   #{selectedRank}
                 </span>
               )}
-              <h3 className="text-white font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
+              <h3 className="text-[var(--foreground)] font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
             </div>
-            <span className="text-zinc-400 text-sm">
+            <span className="text-[var(--text-tertiary)] text-sm">
               {selectedYear}
             </span>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 p-2 -mr-2 touch-feedback active:bg-white/10 rounded-lg"
+            className="text-[var(--text-tertiary)] p-2 -mr-2 touch-feedback active:bg-white/10 rounded-lg"
             aria-label={t.close[lang]}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -673,7 +673,7 @@ function MobileRankingSheet({
       {/* Sheet */}
       <div
         ref={sheetRef}
-        className="md:hidden fixed inset-x-0 bottom-0 z-[1001] bg-[#141414]/98 backdrop-blur-sm rounded-t-2xl shadow-2xl border-t border-[#262626] max-h-[70vh] mobile-bottom-sheet flex flex-col overflow-hidden animate-slide-up-spring"
+        className="md:hidden fixed inset-x-0 bottom-0 z-[1001] bg-[var(--card)]/98 backdrop-blur-sm rounded-t-2xl shadow-2xl border-t border-[var(--card-border)] max-h-[70vh] mobile-bottom-sheet flex flex-col overflow-hidden animate-slide-up-spring"
         {...handlers}
       >
         {/* Drag handle */}
@@ -682,20 +682,20 @@ function MobileRankingSheet({
         </div>
 
         {/* Header */}
-        <div className="sheet-drag-area flex items-center justify-between px-4 pb-3 border-b border-[#262626] shrink-0">
+        <div className="sheet-drag-area flex items-center justify-between px-4 pb-3 border-b border-[var(--card-border)] shrink-0">
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <h3 className="text-white font-semibold text-sm truncate">
+              <h3 className="text-[var(--foreground)] font-semibold text-sm truncate">
                 {indicatorLabel}
               </h3>
             </div>
-            <div className="text-zinc-400 text-xs">
+            <div className="text-[var(--text-tertiary)] text-xs">
               {rankings.length} {locationLabel} · {selectedYear}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 p-2 -mr-2 touch-feedback active:bg-white/10 rounded-lg"
+            className="text-[var(--text-tertiary)] p-2 -mr-2 touch-feedback active:bg-white/10 rounded-lg"
             aria-label={t.close[lang]}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -705,10 +705,10 @@ function MobileRankingSheet({
         </div>
 
         {/* Search */}
-        <div className="shrink-0 px-4 py-2 border-b border-[#262626]/50">
+        <div className="shrink-0 px-4 py-2 border-b border-[var(--card-border)]/50">
           <div className="relative">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] w-4 h-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -722,7 +722,7 @@ function MobileRankingSheet({
               placeholder={t.search[lang]}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className={`w-full bg-[#1a1a1a] border border-[#333] rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors ${isAuslaenderAccent ? 'focus:border-red-500/50' : 'focus:border-amber-500/50'}`}
+              className={`w-full bg-[var(--card-elevated)] border border-[var(--border)] rounded-lg pl-9 pr-4 py-2.5 text-sm text-[var(--foreground)] placeholder-zinc-600 focus:outline-none transition-colors ${isAuslaenderAccent ? 'focus:border-red-500/50' : 'focus:border-amber-500/50'}`}
             />
           </div>
         </div>
@@ -730,7 +730,7 @@ function MobileRankingSheet({
         {/* Scrollable list */}
         <div className="flex-1 overflow-y-auto scroll-touch">
           {filteredRankings.length === 0 ? (
-            <div className="p-4 text-center text-zinc-400 text-sm">
+            <div className="p-4 text-center text-[var(--text-tertiary)] text-sm">
               {searchQuery ? t.noResults[lang] : t.noDataAvailable[lang]}
             </div>
           ) : (
@@ -738,24 +738,24 @@ function MobileRankingSheet({
               {filteredRankings.map((item) => (
                 <div
                   key={item.ags}
-                  className={`px-4 py-3 touch-feedback transition-colors border-b border-[#262626]/30 ${isAuslaenderAccent ? 'active:bg-red-500/15' : 'active:bg-amber-500/15'}`}
+                  className={`px-4 py-3 touch-feedback transition-colors border-b border-[var(--card-border)]/30 ${isAuslaenderAccent ? 'active:bg-red-500/15' : 'active:bg-amber-500/15'}`}
                   onClick={() => {
                     onSelectAgs(item.ags);
                     onClose();
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="w-8 text-right text-sm font-mono text-zinc-500">
+                    <span className="w-8 text-right text-sm font-mono text-[var(--text-muted)]">
                       {item.rank}.
                     </span>
-                    <span className="flex-1 text-sm text-white truncate">
+                    <span className="flex-1 text-sm text-[var(--foreground)] truncate">
                       {item.name}
                     </span>
-                    <span className="text-sm font-mono text-zinc-400">
+                    <span className="text-sm font-mono text-[var(--text-tertiary)]">
                       {formatRankingValue(item.value, indicatorKey, subMetric, cityCrimeMetric)}
                     </span>
                   </div>
-                  <div className="mt-2 ml-11 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="mt-2 ml-11 h-1.5 bg-[var(--card-elevated)] rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full"
                       style={{
@@ -772,7 +772,7 @@ function MobileRankingSheet({
 
         {/* Footer with count */}
         {searchQuery && filteredRankings.length !== rankings.length && (
-          <div className="shrink-0 px-4 py-2 border-t border-[#262626]/50 text-zinc-400 text-sm text-center safe-area-pb">
+          <div className="shrink-0 px-4 py-2 border-t border-[var(--card-border)]/50 text-[var(--text-tertiary)] text-sm text-center safe-area-pb">
             {filteredRankings.length} {t.of[lang]} {rankings.length} {t.shown[lang]}
           </div>
         )}
@@ -992,12 +992,12 @@ export function RankingPanel({
       <>
         {/* Desktop detail view */}
         <div
-          className={`hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[#262626] w-80 max-h-[80vh] flex-col overflow-hidden transition-all duration-300 ease-out ${
+          className={`hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[var(--card)]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[var(--card-border)] w-80 max-h-[80vh] flex-col overflow-hidden transition-all duration-300 ease-out ${
             isVisible ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0 pointer-events-none'
           }`}
         >
           {/* Header with back button */}
-          <div className="flex items-start justify-between p-4 border-b border-[#262626] shrink-0">
+          <div className="flex items-start justify-between p-4 border-b border-[var(--card-border)] shrink-0">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 {selectedRank && (
@@ -1005,15 +1005,15 @@ export function RankingPanel({
                     #{selectedRank}
                   </span>
                 )}
-                <h3 className="text-white font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
+                <h3 className="text-[var(--foreground)] font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
               </div>
-              <span className="text-zinc-400 text-sm">
+              <span className="text-[var(--text-tertiary)] text-sm">
                 AGS: {selectedRecord.ags} · {indicatorKey === 'deutschlandatlas' ? (deutschlandatlasYear || '2022') : selectedYear}
               </span>
             </div>
             <button
               onClick={() => onSelectAgs(null)}
-              className="text-zinc-500 hover:text-zinc-300 transition-colors ml-2 mt-0.5 p-1 hover:bg-white/5 rounded"
+              className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors ml-2 mt-0.5 p-1 hover:bg-white/5 rounded"
               aria-label="Zurück zur Liste"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1047,10 +1047,10 @@ export function RankingPanel({
           </div>
 
           {/* Footer - back to ranking */}
-          <div className="shrink-0 px-4 py-3 border-t border-[#262626]/50">
+          <div className="shrink-0 px-4 py-3 border-t border-[var(--card-border)]/50">
             <button
               onClick={() => onSelectAgs(null)}
-              className="w-full flex items-center justify-center gap-2 text-zinc-400 hover:text-white text-xs transition-colors py-1.5 rounded hover:bg-white/5"
+              className="w-full flex items-center justify-center gap-2 text-[var(--text-tertiary)] hover:text-[var(--foreground)] text-xs transition-colors py-1.5 rounded hover:bg-white/5"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -1091,7 +1091,7 @@ export function RankingPanel({
       {/* Mobile ranking toggle button */}
       <button
         onClick={onMobileToggle}
-        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-full shadow-xl border border-[#262626] px-5 py-3 flex items-center justify-center gap-2 touch-feedback active:scale-95 transition-all safe-area-pb"
+        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-[var(--card)]/95 backdrop-blur-sm rounded-full shadow-xl border border-[var(--card-border)] px-5 py-3 flex items-center justify-center gap-2 touch-feedback active:scale-95 transition-all safe-area-pb"
         aria-label={t.openRanking[lang]}
       >
         <svg
@@ -1104,9 +1104,9 @@ export function RankingPanel({
           <rect x="10" y="8" width="4" height="13" rx="0.5" />
           <rect x="17" y="3" width="4" height="18" rx="0.5" />
         </svg>
-        <span className="text-zinc-200 text-[15px] font-medium leading-none no-select">{t.ranking[lang]}</span>
+        <span className="text-[var(--text-primary)] text-[15px] font-medium leading-none no-select">{t.ranking[lang]}</span>
         <svg
-          className="w-[18px] h-[18px] shrink-0 text-zinc-400"
+          className="w-[18px] h-[18px] shrink-0 text-[var(--text-tertiary)]"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -1139,28 +1139,28 @@ export function RankingPanel({
 
       {/* Desktop panel */}
       <div
-        className={`hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[#141414]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[#262626] w-80 max-h-[80vh] flex-col overflow-hidden transition-all duration-300 ease-out ${
+        className={`hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-[1000] bg-[var(--card)]/95 backdrop-blur-sm rounded-xl shadow-2xl border border-[var(--card-border)] w-80 max-h-[80vh] flex-col overflow-hidden transition-all duration-300 ease-out ${
           isVisible ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0 pointer-events-none'
         }`}
       >
         {/* Header */}
-        <div className="shrink-0 p-3 border-b border-[#262626]">
+        <div className="shrink-0 p-3 border-b border-[var(--card-border)]">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-white font-semibold text-base truncate">
+            <h3 className="text-[var(--foreground)] font-semibold text-base truncate">
               {indicatorLabel}
             </h3>
           </div>
-          <div className="text-zinc-400 text-xs">
+          <div className="text-[var(--text-tertiary)] text-xs">
             {rankings.length} {locationLabel} · {indicatorKey === 'deutschlandatlas' ? (deutschlandatlasYear || '2022') : selectedYear}
             {unit && <span className="ml-1">· {unit}</span>}
           </div>
         </div>
 
         {/* Search */}
-        <div className="shrink-0 px-3 py-2 border-b border-[#262626]/50">
+        <div className="shrink-0 px-3 py-2 border-b border-[var(--card-border)]/50">
           <div className="relative">
             <svg
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] w-4 h-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -1174,7 +1174,7 @@ export function RankingPanel({
               placeholder={t.search[lang]}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full bg-[#1a1a1a] border border-[#333] rounded-md pl-8.5 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none transition-colors ${isAuslaenderAccent ? 'focus:border-red-500/50' : 'focus:border-amber-500/50'}`}
+              className={`w-full bg-[var(--card-elevated)] border border-[var(--border)] rounded-md pl-8.5 pr-3 py-2 text-sm text-[var(--foreground)] placeholder-zinc-500 focus:outline-none transition-colors ${isAuslaenderAccent ? 'focus:border-red-500/50' : 'focus:border-amber-500/50'}`}
             />
           </div>
         </div>
@@ -1192,7 +1192,7 @@ export function RankingPanel({
           }}
         >
           {filteredRankings.length === 0 ? (
-            <div className="p-4 text-center text-zinc-400 text-sm">
+            <div className="p-4 text-center text-[var(--text-tertiary)] text-sm">
               {searchQuery ? t.noResults[lang] : t.noDataAvailable[lang]}
             </div>
           ) : (
@@ -1214,24 +1214,24 @@ export function RankingPanel({
                     {/* Row content */}
                     <div className="flex items-center gap-2">
                       <span className={`w-8 text-right text-sm font-mono ${
-                        isHovered ? (isAuslaenderAccent ? 'text-red-400' : 'text-amber-300') : 'text-zinc-500'
+                        isHovered ? (isAuslaenderAccent ? 'text-red-400' : 'text-amber-300') : 'text-[var(--text-muted)]'
                       }`}>
                         {item.rank}.
                       </span>
                       <span className={`flex-1 text-[15px] leading-snug font-medium truncate ${
-                        isHovered ? (isAuslaenderAccent ? 'text-red-400' : 'text-amber-300') : 'text-zinc-100'
+                        isHovered ? (isAuslaenderAccent ? 'text-red-400' : 'text-amber-300') : 'text-[var(--text-primary)]'
                       }`}>
                         {item.name}
                       </span>
                       <span className={`text-sm font-semibold font-mono tabular-nums ${
-                        isHovered ? (isAuslaenderAccent ? 'text-red-400' : 'text-amber-300') : 'text-zinc-200'
+                        isHovered ? (isAuslaenderAccent ? 'text-red-400' : 'text-amber-300') : 'text-[var(--text-primary)]'
                       }`}>
                         {formatRankingValue(item.value, indicatorKey, subMetric, cityCrimeMetric)}
                       </span>
                     </div>
 
                     {/* Percentage bar */}
-                    <div className="mt-1.5 ml-10 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="mt-1.5 ml-10 h-1.5 bg-[var(--card-elevated)] rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-300"
                         style={{
@@ -1249,7 +1249,7 @@ export function RankingPanel({
 
         {/* Footer with count */}
         {searchQuery && filteredRankings.length !== rankings.length && (
-          <div className="shrink-0 px-3 py-2 border-t border-[#262626]/50 text-zinc-400 text-xs text-center">
+          <div className="shrink-0 px-3 py-2 border-t border-[var(--card-border)]/50 text-[var(--text-tertiary)] text-xs text-center">
             {filteredRankings.length} von {rankings.length} angezeigt
           </div>
         )}

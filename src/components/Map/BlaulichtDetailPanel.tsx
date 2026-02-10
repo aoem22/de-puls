@@ -1,65 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, type TouchEvent, type KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, type KeyboardEvent } from 'react';
 import type { CrimeRecord, CrimeCategory, Gender, Severity, Motive, DrugType, IncidentTimePrecision } from '@/lib/types/crime';
 import { CRIME_CATEGORIES, WEAPON_LABELS, SEVERITY_LABELS, MOTIVE_LABELS, GENDER_LABELS, DRUG_LABELS } from '@/lib/types/crime';
+import { WeaponIcon } from './BlaulichtPlaybackControl';
 import { useTranslation, translations, tNested, type Language } from '@/lib/i18n';
 import { fetchRelatedArticles } from '@/lib/supabase/queries';
-
-// Draggable bottom sheet hook
-function useDraggableSheet(onClose: () => void, threshold = 100) {
-  const sheetRef = useRef<HTMLDivElement>(null);
-  const dragStartY = useRef<number>(0);
-  const currentTranslateY = useRef<number>(0);
-  const isDragging = useRef<boolean>(false);
-
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    const target = e.target as HTMLElement;
-    if (!target.closest('.sheet-drag-area')) return;
-
-    isDragging.current = true;
-    dragStartY.current = e.touches[0].clientY;
-    currentTranslateY.current = 0;
-
-    if (sheetRef.current) {
-      sheetRef.current.style.transition = 'none';
-    }
-  }, []);
-
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isDragging.current || !sheetRef.current) return;
-
-    const deltaY = e.touches[0].clientY - dragStartY.current;
-    if (deltaY > 0) {
-      currentTranslateY.current = deltaY;
-      sheetRef.current.style.transform = `translateY(${deltaY}px)`;
-    }
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    if (!isDragging.current || !sheetRef.current) return;
-
-    isDragging.current = false;
-    sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
-
-    if (currentTranslateY.current > threshold) {
-      sheetRef.current.style.transform = 'translateY(100%)';
-      setTimeout(onClose, 300);
-    } else {
-      sheetRef.current.style.transform = 'translateY(0)';
-    }
-    currentTranslateY.current = 0;
-  }, [onClose, threshold]);
-
-  return {
-    sheetRef,
-    handlers: {
-      onTouchStart: handleTouchStart,
-      onTouchMove: handleTouchMove,
-      onTouchEnd: handleTouchEnd,
-    },
-  };
-}
+import { useCrimeDetail } from '@/lib/supabase/hooks';
+import { useDraggableSheet } from './useBottomSheet';
 
 interface BlaulichtDetailPanelProps {
   crime: CrimeRecord;
@@ -202,7 +150,7 @@ function CommentInput({
 
   return (
     <div className="flex items-center gap-2 mt-2">
-      <span className="text-zinc-500 shrink-0">{Icons.pencil}</span>
+      <span className="text-[var(--text-muted)] shrink-0">{Icons.pencil}</span>
       <input
         ref={inputRef}
         type="text"
@@ -211,7 +159,7 @@ function CommentInput({
         onBlur={save}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="flex-1 bg-[#111] border border-[#222] rounded-md px-2.5 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 outline-none focus:border-amber-500/40 transition-colors"
+        className="flex-1 bg-[var(--card-inner)] border border-[var(--border-inner)] rounded-md px-2.5 py-1.5 text-xs text-[var(--text-secondary)] placeholder-[var(--text-faint)] outline-none focus:border-amber-500/40 transition-colors"
       />
     </div>
   );
@@ -293,19 +241,19 @@ function DetailsSection({ crime, lang, compact = false }: { crime: CrimeRecord; 
   const py = compact ? 'py-3' : 'py-4';
 
   return (
-    <div className={`${px} ${py} space-y-2.5 border-b border-[#151515]`}>
+    <div className={`${px} ${py} space-y-2.5 border-b border-[var(--card-border)]`}>
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
+        <span className="text-[10px] font-semibold tracking-widest text-[var(--text-muted)] uppercase">
           {t.details[lang]}
         </span>
-        <div className="flex-1 h-px bg-[#1a1a1a]" />
+        <div className="flex-1 h-px bg-[var(--card-elevated)]" />
       </div>
 
       {victimLine && (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-500 w-5 flex justify-center text-xs">👤</span>
-          <span className="text-sm text-zinc-300">
-            <span className="text-zinc-500 mr-1.5">{t.victim[lang]}:</span>
+          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs">👤</span>
+          <span className="text-sm text-[var(--text-secondary)]">
+            <span className="text-[var(--text-muted)] mr-1.5">{t.victim[lang]}:</span>
             {victimLine}
           </span>
         </div>
@@ -313,9 +261,9 @@ function DetailsSection({ crime, lang, compact = false }: { crime: CrimeRecord; 
 
       {suspectLine && (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-500 w-5 flex justify-center text-xs">👤</span>
-          <span className="text-sm text-zinc-300">
-            <span className="text-zinc-500 mr-1.5">{t.suspect[lang]}:</span>
+          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs">👤</span>
+          <span className="text-sm text-[var(--text-secondary)]">
+            <span className="text-[var(--text-muted)] mr-1.5">{t.suspect[lang]}:</span>
             {suspectLine}
           </span>
         </div>
@@ -323,7 +271,7 @@ function DetailsSection({ crime, lang, compact = false }: { crime: CrimeRecord; 
 
       {severity && (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-500 w-5 flex justify-center text-xs">⚠️</span>
+          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs">⚠️</span>
           <span
             className="px-2.5 py-0.5 text-xs rounded-md border font-medium"
             style={{
@@ -339,8 +287,8 @@ function DetailsSection({ crime, lang, compact = false }: { crime: CrimeRecord; 
 
       {drugType && (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-500 w-5 flex justify-center text-xs">💊</span>
-          <span className="text-sm text-zinc-300">
+          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs">💊</span>
+          <span className="text-sm text-[var(--text-secondary)]">
             {DRUG_LABELS[drugType][lang]}
           </span>
         </div>
@@ -348,9 +296,9 @@ function DetailsSection({ crime, lang, compact = false }: { crime: CrimeRecord; 
 
       {motive && (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-500 w-5 flex justify-center text-xs">📋</span>
-          <span className="text-sm text-zinc-300">
-            <span className="text-zinc-500 mr-1.5">{t.motiveLabel[lang]}:</span>
+          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs">📋</span>
+          <span className="text-sm text-[var(--text-secondary)]">
+            <span className="text-[var(--text-muted)] mr-1.5">{t.motiveLabel[lang]}:</span>
             {MOTIVE_LABELS[motive][lang]}
           </span>
         </div>
@@ -384,28 +332,28 @@ function TimelineSection({ crime, lang }: { crime: CrimeRecord; lang: Language }
   if (!crime.incidentGroupId || (related.length === 0 && !loading)) return null;
 
   return (
-    <div className="px-5 py-4 border-b border-[#151515]">
+    <div className="px-5 py-4 border-b border-[var(--card-border)]">
       <div className="flex items-center gap-3 mb-3">
-        <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
+        <span className="text-[10px] font-semibold tracking-widest text-[var(--text-muted)] uppercase">
           {t.timeline[lang]} ({related.length + 1} {t.messages[lang]})
         </span>
-        <div className="flex-1 h-px bg-[#1a1a1a]" />
+        <div className="flex-1 h-px bg-[var(--card-elevated)]" />
       </div>
 
       {loading ? (
-        <div className="text-xs text-zinc-500 py-2">...</div>
+        <div className="text-xs text-[var(--text-muted)] py-2">...</div>
       ) : (
         <div className="space-y-1.5">
           {/* Current article marker */}
           <div className="flex items-start gap-2.5">
             <div className="mt-1.5 w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
             <div className="min-w-0">
-              <span className="text-xs text-zinc-400">
+              <span className="text-xs text-[var(--text-tertiary)]">
                 {crime.incidentDate
                   ? formatIncidentDate(crime.incidentDate, null, null, lang)
                   : formatDate(crime.publishedAt).split(',')[0]}
               </span>
-              <span className="text-xs text-zinc-300 ml-2">{getDisplayTitle(crime)}</span>
+              <span className="text-xs text-[var(--text-secondary)] ml-2">{getDisplayTitle(crime)}</span>
               {crime.groupRole && ROLE_BADGES[crime.groupRole] && (
                 <span
                   className="ml-2 px-1.5 py-0.5 text-[10px] rounded border font-medium"
@@ -430,16 +378,16 @@ function TimelineSection({ crime, lang }: { crime: CrimeRecord; lang: Language }
               <div key={art.id}>
                 <button
                   onClick={() => setExpandedId(isExpanded ? null : art.id)}
-                  className="flex items-start gap-2.5 w-full text-left hover:bg-[#111] rounded-md px-1 py-0.5 -mx-1 transition-colors"
+                  className="flex items-start gap-2.5 w-full text-left hover:bg-[var(--card-inner)] rounded-md px-1 py-0.5 -mx-1 transition-colors"
                 >
-                  <div className="mt-1.5 w-2.5 h-2.5 rounded-full border border-zinc-600 shrink-0" />
+                  <div className="mt-1.5 w-2.5 h-2.5 rounded-full border border-[var(--text-faint)] shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-[var(--text-tertiary)]">
                       {art.incidentDate
                         ? formatIncidentDate(art.incidentDate, null, null, lang)
                         : formatDate(art.publishedAt).split(',')[0]}
                     </span>
-                    <span className="text-xs text-zinc-300 ml-2 line-clamp-1">
+                    <span className="text-xs text-[var(--text-secondary)] ml-2 line-clamp-1">
                       {getDisplayTitle(art)}
                     </span>
                     {badge && (
@@ -456,15 +404,15 @@ function TimelineSection({ crime, lang }: { crime: CrimeRecord; lang: Language }
                     )}
                   </div>
                   <span
-                    className={`text-zinc-500 shrink-0 mt-0.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                    className={`text-[var(--text-muted)] shrink-0 mt-0.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                   >
                     {Icons.chevron}
                   </span>
                 </button>
 
                 {isExpanded && art.body && (
-                  <div className="ml-5 mt-1 mb-2 pl-3 border-l border-[#1a1a1a]">
-                    <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap line-clamp-6">
+                  <div className="ml-5 mt-1 mb-2 pl-3 border-l border-[var(--card-border)]">
+                    <p className="text-xs text-[var(--text-tertiary)] leading-relaxed whitespace-pre-wrap line-clamp-6">
                       {art.body}
                     </p>
                     {art.sourceUrl && (
@@ -472,7 +420,7 @@ function TimelineSection({ crime, lang }: { crime: CrimeRecord; lang: Language }
                         href={art.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[10px] text-zinc-500 hover:text-zinc-300 mt-1 inline-flex items-center gap-1"
+                        className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] mt-1 inline-flex items-center gap-1"
                       >
                         {Icons.externalLink}
                         <span>Quelle</span>
@@ -526,43 +474,43 @@ function MetadataSection({
   })();
 
   return (
-    <div className={`${px} ${py} space-y-3 border-b border-[#151515] bg-[#0a0a0a]`}>
+    <div className={`${px} ${py} space-y-3 border-b border-[var(--card-border)] bg-[var(--background)]`}>
       {/* Tatzeit (incident time) — primary date */}
       {incidentTimeStr ? (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-400 w-5 flex justify-center">{Icons.clock}</span>
-          <span className="text-sm text-zinc-300">
-            <span className="text-zinc-500 mr-1.5">{t.crimeTime[lang]}:</span>
+          <span className="text-[var(--text-tertiary)] w-5 flex justify-center">{Icons.clock}</span>
+          <span className="text-sm text-[var(--text-secondary)]">
+            <span className="text-[var(--text-muted)] mr-1.5">{t.crimeTime[lang]}:</span>
             {incidentTimeStr}
           </span>
         </div>
       ) : (
         /* Fallback to published_at if no incident time */
         <div className="flex items-center gap-3">
-          <span className="text-zinc-400 w-5 flex justify-center">{Icons.calendar}</span>
-          <span className="text-sm text-zinc-300">{formatDate(crime.publishedAt)}</span>
+          <span className="text-[var(--text-tertiary)] w-5 flex justify-center">{Icons.calendar}</span>
+          <span className="text-sm text-[var(--text-secondary)]">{formatDate(crime.publishedAt)}</span>
         </div>
       )}
 
       {/* Delikt-Ort (crime location) */}
       {crimeLocation && (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-400 w-5 flex justify-center">{Icons.location}</span>
-          <span className="text-sm text-zinc-300">{crimeLocation}</span>
+          <span className="text-[var(--text-tertiary)] w-5 flex justify-center">{Icons.location}</span>
+          <span className="text-sm text-[var(--text-secondary)]">{crimeLocation}</span>
         </div>
       )}
 
       {/* Agency */}
       {crime.sourceAgency && (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-400 w-5 flex justify-center">{Icons.agency}</span>
-          <span className="text-sm text-zinc-300">{crime.sourceAgency}</span>
+          <span className="text-[var(--text-tertiary)] w-5 flex justify-center">{Icons.agency}</span>
+          <span className="text-sm text-[var(--text-secondary)]">{crime.sourceAgency}</span>
         </div>
       )}
 
       {/* Category badges */}
       <div className="flex items-start gap-3">
-        <span className="text-zinc-400 w-5 flex justify-center mt-0.5">{Icons.tag}</span>
+        <span className="text-[var(--text-tertiary)] w-5 flex justify-center mt-0.5">{Icons.tag}</span>
         <div className="flex flex-wrap gap-1.5">
           {crime.categories.length > 0 ? (
             crime.categories.map((cat) => {
@@ -582,7 +530,7 @@ function MetadataSection({
               );
             })
           ) : (
-            <span className={`${compact ? 'px-2 py-0.5' : 'px-2.5 py-1'} text-xs rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400`}>
+            <span className={`${compact ? 'px-2 py-0.5' : 'px-2.5 py-1'} text-xs rounded-md bg-[var(--card)] border border-[var(--card-border)] text-[var(--text-tertiary)]`}>
               {t.other[lang]}
             </span>
           )}
@@ -592,7 +540,7 @@ function MetadataSection({
       {/* Weapon type */}
       {crime.weaponType && crime.weaponType !== 'none' && crime.weaponType !== 'unknown' && WEAPON_LABELS[crime.weaponType] && (
         <div className="flex items-center gap-3">
-          <span className="text-zinc-400 w-5 flex justify-center text-sm">{WEAPON_LABELS[crime.weaponType].icon}</span>
+          <span className="w-5 flex justify-center"><WeaponIcon type={crime.weaponType} className="text-base" /></span>
           <span className={`${compact ? 'px-2 py-0.5' : 'px-2.5 py-1'} text-xs rounded-md border font-medium bg-red-950/30 border-red-900/40 text-red-400`}>
             {WEAPON_LABELS[crime.weaponType][lang]}
           </span>
@@ -602,13 +550,18 @@ function MetadataSection({
   );
 }
 
-export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashToken = 0, isFavorite = false, onToggleFavorite, favoriteComment = '', onSetFavoriteComment }: BlaulichtDetailPanelProps) {
-  const { sheetRef, handlers } = useDraggableSheet(onClose);
+export function BlaulichtDetailPanel({ crime: slimCrime, onClose, isPreview = false, flashToken = 0, isFavorite = false, onToggleFavorite, favoriteComment = '', onSetFavoriteComment }: BlaulichtDetailPanelProps) {
+  const { sheetRef, scrollRef, isExpanded, ready, handlers } = useDraggableSheet(onClose);
   const { lang } = useTranslation();
   const t = translations;
   const flashClass = flashToken > 0
     ? (flashToken % 2 === 0 ? 'blaulicht-panel-flash-a' : 'blaulicht-panel-flash-b')
     : '';
+
+  // Lazy-load full record (body, details, metadata) — only when not previewing
+  const { data: fullCrime, isLoading: isLoadingDetail } = useCrimeDetail(isPreview ? null : slimCrime.id);
+  const crime = fullCrime ?? slimCrime;
+  const isDetailLoaded = !!fullCrime || isPreview;
 
   const sourceDomain = (() => {
     try {
@@ -623,23 +576,23 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
 
   return (
     <>
-      {/* Backdrop - only for selected (not preview) */}
+      {/* Backdrop - desktop only (mobile bottom sheet uses drag-to-dismiss) */}
       {!isPreview && (
         <div
-          className="fixed inset-0 z-[1001] bg-black/30"
+          className="hidden md:block fixed inset-0 z-[1001] bg-black/30"
           onClick={onClose}
         />
       )}
 
       {/* Desktop: Right-side panel */}
       <div className={`hidden md:block fixed top-4 right-4 z-[1002] w-[380px] max-w-[calc(100vw-2rem)] pointer-events-none ${isPreview ? 'bottom-auto max-h-[70vh]' : 'bottom-4'}`}>
-        <div className={`bg-[#0c0c0c] rounded-xl border shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200 ${isPreview ? 'border-[#252525]' : 'border-[#1a1a1a] h-full'} ${flashClass}`}>
+        <div className={`bg-[var(--background)] rounded-xl border shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200 ${isPreview ? 'border-[#252525]' : 'border-[var(--card-border)] h-full'} ${flashClass}`}>
 
           {/* Header */}
-          <div className="px-5 py-4 border-b border-[#1a1a1a] flex items-center justify-between flex-shrink-0">
+          <div className="px-5 py-4 border-b border-[var(--card-border)] flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2.5">
-              <span className="text-zinc-400">{Icons.alert}</span>
-              <span className="text-[11px] font-medium tracking-wide text-zinc-300 uppercase">
+              <span className="text-[var(--text-tertiary)]">{Icons.alert}</span>
+              <span className="text-[11px] font-medium tracking-wide text-[var(--text-secondary)] uppercase">
                 {t.pressRelease[lang]}
               </span>
             </div>
@@ -650,7 +603,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
                   className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
                     isFavorite
                       ? 'text-amber-400 hover:text-amber-300'
-                      : 'text-zinc-500 hover:text-amber-400 hover:bg-[#1a1a1a]'
+                      : 'text-[var(--text-muted)] hover:text-amber-400 hover:bg-[var(--card-elevated)]'
                   }`}
                   aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                 >
@@ -659,7 +612,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
               )}
               <button
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1a1a] transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--card-elevated)] transition-colors"
                 aria-label={t.close[lang]}
               >
                 {Icons.close}
@@ -670,8 +623,8 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
           {/* Content area - scrollable */}
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {/* Title section */}
-            <div className="px-5 py-5 border-b border-[#151515]">
-              <h2 className="text-[15px] font-semibold text-zinc-100 leading-relaxed">
+            <div className="px-5 py-5 border-b border-[var(--card-border)]">
+              <h2 className="text-[15px] font-semibold text-[var(--text-primary)] leading-relaxed">
                 {displayTitle}
               </h2>
               {isFavorite && onSetFavoriteComment && (
@@ -694,34 +647,40 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
             {!isPreview && <TimelineSection crime={crime} lang={lang} />}
 
             {/* Body text section */}
-            {bodyText && (
+            {bodyText ? (
               <div className="px-5 py-5">
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="text-xs font-semibold tracking-widest text-zinc-400 uppercase">
+                  <span className="text-xs font-semibold tracking-widest text-[var(--text-tertiary)] uppercase">
                     {t.report[lang]}
                   </span>
-                  <div className="flex-1 h-px bg-[#1a1a1a]" />
+                  <div className="flex-1 h-px bg-[var(--card-elevated)]" />
                 </div>
-                <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
                   {bodyText}
                 </p>
               </div>
-            )}
+            ) : isLoadingDetail ? (
+              <div className="px-5 py-5 space-y-2.5 animate-pulse">
+                <div className="h-3 bg-[var(--card-elevated)] rounded w-3/4" />
+                <div className="h-3 bg-[var(--card-elevated)] rounded w-full" />
+                <div className="h-3 bg-[var(--card-elevated)] rounded w-5/6" />
+              </div>
+            ) : null}
           </div>
 
           {/* Footer - Source link */}
-          <div className="px-5 py-4 border-t border-[#1a1a1a] bg-[#080808] flex-shrink-0">
+          <div className="px-5 py-4 border-t border-[var(--card-border)] bg-[var(--background)] flex-shrink-0">
             <a
               href={crime.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors group"
+              className="flex items-center gap-2.5 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors group"
             >
               <span className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">
                 {Icons.externalLink}
               </span>
               <span>{t.openSource[lang]}</span>
-              <span className="text-zinc-400 text-xs ml-auto">{sourceDomain}</span>
+              <span className="text-[var(--text-tertiary)] text-xs ml-auto">{sourceDomain}</span>
             </a>
           </div>
         </div>
@@ -730,19 +689,19 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
       {/* Mobile: Bottom sheet */}
       <div
         ref={sheetRef}
-        className={`md:hidden fixed inset-x-0 bottom-0 z-[1002] max-h-[80vh] mobile-bottom-sheet flex flex-col bg-[#0c0c0c] rounded-t-2xl border-t border-[#1a1a1a] shadow-2xl shadow-black/60 overflow-hidden animate-slide-up-spring ${flashClass}`}
+        className={`md:hidden fixed inset-x-0 bottom-0 z-[1002] mobile-bottom-sheet flex flex-col bg-[var(--background)] border-t border-[var(--card-border)] shadow-2xl shadow-black/60 overflow-hidden h-[100dvh] rounded-t-2xl animate-sheet-enter will-change-transform ${flashClass}`}
         {...handlers}
       >
-        {/* Drag handle */}
-        <div className="sheet-drag-area flex justify-center py-3 shrink-0 cursor-grab active:cursor-grabbing">
-          <div className="drag-handle w-10 h-1 bg-zinc-600 rounded-full" />
+        {/* Drag handle — tall touch target */}
+        <div className="sheet-drag-area flex justify-center pt-3 pb-2 shrink-0 cursor-grab active:cursor-grabbing touch-action-none">
+          <div className="drag-handle w-12 h-1.5 bg-[var(--text-muted)] rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="sheet-drag-area px-4 pb-3 border-b border-[#1a1a1a] flex items-center justify-between flex-shrink-0">
+        <div className="sheet-drag-area px-4 pb-3 border-b border-[var(--card-border)] flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-zinc-400">{Icons.alert}</span>
-            <span className="text-[11px] font-medium tracking-wide text-zinc-300 uppercase no-select">
+            <span className="text-[var(--text-tertiary)]">{Icons.alert}</span>
+            <span className="text-[11px] font-medium tracking-wide text-[var(--text-secondary)] uppercase no-select">
               {t.report[lang]}
             </span>
           </div>
@@ -753,7 +712,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
                 className={`w-10 h-10 flex items-center justify-center rounded-lg touch-feedback transition-colors ${
                   isFavorite
                     ? 'text-amber-400'
-                    : 'text-zinc-500 active:text-amber-400 active:bg-[#1a1a1a]'
+                    : 'text-[var(--text-muted)] active:text-amber-400 active:bg-[var(--card-elevated)]'
                 }`}
                 aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
               >
@@ -762,7 +721,7 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
             )}
             <button
               onClick={onClose}
-              className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 touch-feedback active:bg-[#1a1a1a]"
+              className="w-10 h-10 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] touch-feedback active:bg-[var(--card-elevated)]"
               aria-label={t.close[lang]}
             >
               {Icons.close}
@@ -771,10 +730,10 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
         </div>
 
         {/* Content area - scrollable */}
-        <div className="flex-1 overflow-y-auto scroll-touch">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-touch overscroll-y-none">
           {/* Title section */}
-          <div className="px-4 py-4 border-b border-[#151515]">
-            <h2 className="text-base font-semibold text-zinc-100 leading-relaxed">
+          <div className="px-4 py-4 border-b border-[var(--card-border)]">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] leading-relaxed">
               {displayTitle}
             </h2>
             {isFavorite && onSetFavoriteComment && (
@@ -788,31 +747,45 @@ export function BlaulichtDetailPanel({ crime, onClose, isPreview = false, flashT
           </div>
 
           {/* Metadata section */}
-          <MetadataSection crime={crime} lang={lang} compact />
+          <MetadataSection crime={crime} lang={lang} compact={!isExpanded} />
 
           {/* Details section (mobile) */}
-          <DetailsSection crime={crime} lang={lang} compact />
+          <DetailsSection crime={crime} lang={lang} compact={!isExpanded} />
 
           {/* Timeline section (for grouped articles) */}
           <TimelineSection crime={crime} lang={lang} />
 
           {/* Body text section */}
-          {bodyText && (
-            <div className="px-4 py-4">
-              <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap line-clamp-6">
+          {bodyText ? (
+            <div className={isExpanded ? 'px-5 py-5' : 'px-4 py-4'}>
+              {isExpanded && (
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-xs font-semibold tracking-widest text-[var(--text-tertiary)] uppercase">
+                    {t.report[lang]}
+                  </span>
+                  <div className="flex-1 h-px bg-[var(--card-elevated)]" />
+                </div>
+              )}
+              <p className={`text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-6'}`}>
                 {bodyText}
               </p>
             </div>
-          )}
+          ) : isLoadingDetail ? (
+            <div className="px-4 py-4 space-y-2 animate-pulse">
+              <div className="h-3 bg-[var(--card-elevated)] rounded w-3/4" />
+              <div className="h-3 bg-[var(--card-elevated)] rounded w-full" />
+              <div className="h-3 bg-[var(--card-elevated)] rounded w-5/6" />
+            </div>
+          ) : null}
         </div>
 
         {/* Footer - Source link */}
-        <div className="px-4 py-3 border-t border-[#1a1a1a] bg-[#080808] flex-shrink-0 safe-area-pb">
+        <div className="px-4 py-3 border-t border-[var(--card-border)] bg-[var(--background)] flex-shrink-0 safe-area-pb">
           <a
             href={crime.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-2.5 text-sm text-zinc-100 bg-[#1a1a1a] rounded-lg touch-feedback active:bg-[#252525] transition-colors"
+            className="flex items-center justify-center gap-2 w-full py-2.5 text-sm text-[var(--text-primary)] bg-[var(--card-elevated)] rounded-lg touch-feedback active:bg-[#252525] transition-colors"
           >
             {Icons.externalLink}
             <span className="no-select">{t.openSource[lang]}</span>

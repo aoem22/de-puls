@@ -93,7 +93,7 @@ export function TimelineFloatingControl({
       aria-label={translations.timeSeries[lang]}
     >
       {/* Mobile year stepper */}
-      <div className="md:hidden flex items-center gap-3 bg-[#141414]/68 backdrop-blur-sm border border-[#2a2a2a]/70 rounded-xl shadow-xl px-3 py-2">
+      <div className="md:hidden flex items-center gap-3 bg-[var(--card)]/68 backdrop-blur-sm border border-[var(--border-subtle)]/70 rounded-xl shadow-xl px-3 py-2">
         <button
           type="button"
           onClick={() => stepTo(activeIndex - 1)}
@@ -101,10 +101,10 @@ export function TimelineFloatingControl({
           aria-label={lang === 'de' ? 'Vorheriges Jahr' : 'Previous year'}
           className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-all touch-feedback active:scale-90 ${
             activeIndex === 0
-              ? 'border-[#333] text-zinc-600 pointer-events-none'
+              ? 'border-[var(--border)] text-[var(--text-faint)] pointer-events-none'
               : isRedAccent
-                ? 'border-[#333] text-red-400 active:border-red-500/60'
-                : 'border-[#333] text-amber-400 active:border-amber-500/60'
+                ? 'border-[var(--border)] text-red-400 active:border-red-500/60'
+                : 'border-[var(--border)] text-amber-400 active:border-amber-500/60'
           }`}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -112,7 +112,7 @@ export function TimelineFloatingControl({
           </svg>
         </button>
 
-        <span className="inline-flex items-center justify-center h-8 min-w-[56px] text-sm text-zinc-100 font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-lg px-3 shadow-sm">
+        <span className="inline-flex items-center justify-center h-8 min-w-[56px] text-sm text-[var(--text-primary)] font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-lg px-3 shadow-sm">
           {activeYear}
         </span>
 
@@ -123,10 +123,10 @@ export function TimelineFloatingControl({
           aria-label={lang === 'de' ? 'Nächstes Jahr' : 'Next year'}
           className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-all touch-feedback active:scale-90 ${
             activeIndex === displayYears.length - 1
-              ? 'border-[#333] text-zinc-600 pointer-events-none'
+              ? 'border-[var(--border)] text-[var(--text-faint)] pointer-events-none'
               : isRedAccent
-                ? 'border-[#333] text-red-400 active:border-red-500/60'
-                : 'border-[#333] text-amber-400 active:border-amber-500/60'
+                ? 'border-[var(--border)] text-red-400 active:border-red-500/60'
+                : 'border-[var(--border)] text-amber-400 active:border-amber-500/60'
           }`}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -136,7 +136,7 @@ export function TimelineFloatingControl({
       </div>
 
       {/* Desktop slider */}
-      <div className="hidden md:block w-[min(90vw,540px)] bg-[#141414]/68 backdrop-blur-sm border border-[#2a2a2a]/70 rounded-xl shadow-xl px-3 py-2">
+      <div className="hidden md:block w-[min(90vw,540px)] bg-[var(--card)]/68 backdrop-blur-sm border border-[var(--border-subtle)]/70 rounded-xl shadow-xl px-3 py-2">
         <div className="grid grid-cols-[28px_56px_minmax(0,1fr)_56px] items-center gap-2">
           {/* Play button */}
           <button
@@ -146,7 +146,7 @@ export function TimelineFloatingControl({
             className={`flex w-7 h-7 items-center justify-center rounded-md border transition-all duration-200 ${
               isPlaying
                 ? (isRedAccent ? 'bg-red-500/20 border-red-500 text-red-300' : 'bg-amber-500/20 border-amber-500 text-amber-300')
-                : (isRedAccent ? 'bg-[#0a0a0a]/70 border-[#333] text-zinc-200 hover:border-red-500/60' : 'bg-[#0a0a0a]/70 border-[#333] text-zinc-200 hover:border-amber-500/60')
+                : (isRedAccent ? 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-primary)] hover:border-red-500/60' : 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-primary)] hover:border-amber-500/60')
             }`}
           >
             <span className="relative block w-3 h-3">
@@ -170,7 +170,7 @@ export function TimelineFloatingControl({
             </span>
           </button>
 
-          <span className="inline-flex items-center justify-center h-7 text-[11px] text-zinc-100 font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-md px-1.5 shadow-sm">
+          <span className="inline-flex items-center justify-center h-7 text-[11px] text-[var(--text-primary)] font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-md px-1.5 shadow-sm">
             {firstYear}
           </span>
 
@@ -234,7 +234,7 @@ export function TimelineFloatingControl({
             />
           </div>
 
-          <span className="inline-flex items-center justify-center h-7 text-[11px] text-zinc-100 font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-md px-1.5 shadow-sm">
+          <span className="inline-flex items-center justify-center h-7 text-[11px] text-[var(--text-primary)] font-semibold tabular-nums bg-black/60 border border-zinc-400/35 rounded-md px-1.5 shadow-sm">
             {lastYear}
           </span>
         </div>

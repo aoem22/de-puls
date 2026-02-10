@@ -1,12 +1,73 @@
 @import 'tailwindcss';
 
+/* ============================================
+   THEME VARIABLES — Light (default) / Dark
+   ============================================ */
+
 :root {
+  color-scheme: light;
+
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-elevated: #f4f4f5;
+  --card-inner: #f9fafb;
+  --card-border: #e4e4e7;
+  --border: #d4d4d8;
+  --border-subtle: #e2e2e5;
+  --border-inner: #e5e7eb;
+  --muted: #71717a;
+  --accent: #0891b2;
+
+  --text-primary: #18181b;
+  --text-secondary: #3f3f46;
+  --text-tertiary: #52525b;
+  --text-muted: #71717a;
+  --text-faint: #a1a1aa;
+
+  --scrollbar-thumb: #c4c4cc;
+  --scrollbar-thumb-hover: #a1a1aa;
+  --popup-shadow: rgba(0, 0, 0, 0.12);
+  --slider-track: #d4d4d8;
+  --slider-thumb-border: #ffffff;
+
+  --panel-flash-border: #e4e4e7;
+  --attribution-bg: rgba(255, 255, 255, 0.8);
+  --loading-skeleton: #e4e4e7;
+  --map-bg: #e6e5e3; /* matches CARTO Positron tile background */
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
   --background: #0a0a0a;
   --foreground: #fafafa;
   --card: #141414;
+  --card-elevated: #1a1a1a;
+  --card-inner: #111111;
   --card-border: #262626;
+  --border: #333333;
+  --border-subtle: #2a2a2a;
+  --border-inner: #222222;
   --muted: #a1a1aa;
   --accent: #22d3ee;
+
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-tertiary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-faint: #52525b;
+
+  --scrollbar-thumb: #404040;
+  --scrollbar-thumb-hover: #525252;
+  --popup-shadow: rgba(0, 0, 0, 0.7);
+  --slider-track: #333333;
+  --slider-thumb-border: #0a0a0a;
+
+  --panel-flash-border: #1a1a1a;
+  --attribution-bg: rgba(20, 20, 20, 0.8);
+  --loading-skeleton: #27272a;
+  --map-bg: #0e0e0e; /* matches CARTO Dark Matter tile background */
 }
 
 * {
@@ -15,15 +76,24 @@
 }
 
 html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--map-bg);
   overscroll-behavior: none;
   touch-action: manipulation;
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
   font-size: 16px;
   line-height: 1.45;
+}
+
+/* iOS Safari chrome-collapse workaround: create a 1px scroll range. */
+html.ios-safari-chrome-hack,
+body.ios-safari-chrome-hack {
+  min-height: calc(100% + 1px);
 }
 
 /* MapLibre GL map container */
@@ -31,31 +101,31 @@ body {
   width: 100%;
   height: 100%;
   font-family: var(--font-space-grotesk), system-ui, sans-serif;
-  background: var(--background);
+  background: var(--map-bg);
   outline: none;
 }
 
-/* MapLibre popup styling — dark theme */
+/* MapLibre popup styling */
 .maplibregl-popup-content {
-  background: #1a1a1a !important;
-  border: 1px solid #333 !important;
+  background: var(--card-elevated) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 10px !important;
-  box-shadow: 0 8px 32px rgb(0 0 0 / 0.7) !important;
+  box-shadow: 0 8px 32px var(--popup-shadow) !important;
   padding: 0 !important;
   font-family: var(--font-space-grotesk), system-ui, sans-serif !important;
-  color: #ffffff !important;
+  color: var(--foreground) !important;
 }
 
 .maplibregl-popup-tip {
-  border-top-color: #1a1a1a !important;
+  border-top-color: var(--card-elevated) !important;
 }
 
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
-  border-top-color: #1a1a1a !important;
+  border-top-color: var(--card-elevated) !important;
 }
 
 .maplibregl-popup-anchor-top .maplibregl-popup-tip {
-  border-bottom-color: #1a1a1a !important;
+  border-bottom-color: var(--card-elevated) !important;
 }
 
 /* Hide default close button on popups */
@@ -63,7 +133,7 @@ body {
   display: none;
 }
 
-/* Custom scrollbar for controls - dark mode */
+/* Custom scrollbar for controls */
 .overflow-y-auto::-webkit-scrollbar {
   width: 6px;
 }
@@ -74,12 +144,12 @@ body {
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #404040;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #525252;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Thin scrollbar variant */
@@ -92,28 +162,28 @@ body {
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: var(--scrollbar-thumb);
   border-radius: 2px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: var(--scrollbar-thumb-hover);
 }
 
-/* Minimize map attribution for cleaner look - dark mode */
+/* Minimize map attribution for cleaner look */
 .maplibregl-ctrl-attrib {
   font-size: 8px !important;
-  background: rgba(20, 20, 20, 0.8) !important;
-  color: #52525b !important;
+  background: var(--attribution-bg) !important;
+  color: var(--text-faint) !important;
   padding: 0 4px !important;
   border-radius: 4px 0 0 0;
 }
 
 .maplibregl-ctrl-attrib a {
-  color: #71717a !important;
+  color: var(--text-muted) !important;
 }
 
-/* Select dropdown dark mode fix */
+/* Select dropdown fix */
 select option {
   background: var(--card);
   color: var(--foreground);
@@ -148,7 +218,7 @@ select option {
   }
 }
 
-/* Ensure popup text is always white and readable */
+/* Ensure popup text is always readable */
 .maplibregl-popup-content * {
   color: inherit;
 }
@@ -163,12 +233,12 @@ select option {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #262626;
+  background: var(--card-border);
   border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #404040;
+  background: var(--scrollbar-thumb);
 }
 
 /* Tailwind animate-in utilities for panel transitions */
@@ -273,9 +343,9 @@ select option {
 
 /* Landscape phone orientation */
 @media (max-height: 500px) and (orientation: landscape) {
-  /* Reduce panel heights in landscape */
+  /* Cap sheet height in landscape */
   .mobile-bottom-sheet {
-    max-height: 60vh !important;
+    height: 60vh !important;
   }
 
   /* Side-by-side layout for controls */
@@ -302,7 +372,7 @@ input[type="range"] {
 }
 
 input[type="range"]::-webkit-slider-runnable-track {
-  background: #333;
+  background: var(--slider-track);
   height: 6px;
   border-radius: 3px;
 }
@@ -314,7 +384,7 @@ input[type="range"]::-webkit-slider-thumb {
   height: 24px;
   border-radius: 50%;
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  border: 2px solid #0a0a0a;
+  border: 2px solid var(--slider-thumb-border);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   margin-top: -9px;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -327,7 +397,7 @@ input[type="range"]::-webkit-slider-thumb:active {
 
 /* Firefox range slider */
 input[type="range"]::-moz-range-track {
-  background: #333;
+  background: var(--slider-track);
   height: 6px;
   border-radius: 3px;
 }
@@ -337,7 +407,7 @@ input[type="range"]::-moz-range-thumb {
   height: 24px;
   border-radius: 50%;
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  border: 2px solid #0a0a0a;
+  border: 2px solid var(--slider-thumb-border);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
@@ -437,19 +507,24 @@ input[type="range"].timeline-slider-red::-moz-range-thumb {
 }
 
 /* Bottom sheet drag indicator animation */
-@keyframes pulse-drag {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-
 .drag-handle {
-  animation: pulse-drag 2s ease-in-out infinite;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
 }
 
 .drag-handle:active {
-  animation: none;
   opacity: 1;
-  background: #71717a !important;
+  background: #a1a1aa !important;
+}
+
+/* Prevent browser scroll/pan on drag handle */
+.touch-action-none {
+  touch-action: none;
+}
+
+/* GPU-accelerated sheet positioning */
+.mobile-bottom-sheet {
+  will-change: transform;
 }
 
 /* Smooth backdrop transitions */
@@ -471,22 +546,23 @@ input[type="range"].timeline-slider-red::-moz-range-thumb {
   to { opacity: 0; }
 }
 
-/* Improved slide animations with spring-like easing */
-@keyframes slide-up-spring {
+/* Sheet entry: slides from off-screen to preview position (55% down) */
+@keyframes sheet-enter {
   0% {
     transform: translateY(100%);
     opacity: 0;
   }
-  60% {
-    transform: translateY(-3%);
-    opacity: 1;
-  }
   100% {
-    transform: translateY(0);
+    transform: translateY(55%);
     opacity: 1;
   }
 }
 
+.animate-sheet-enter {
+  animation: sheet-enter 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Legacy slide animations (desktop panel) */
 @keyframes slide-down {
   from {
     transform: translateY(0);
@@ -496,10 +572,6 @@ input[type="range"].timeline-slider-red::-moz-range-thumb {
     transform: translateY(100%);
     opacity: 0;
   }
-}
-
-.animate-slide-up-spring {
-  animation: slide-up-spring 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
 
 .animate-slide-down {
@@ -520,6 +592,15 @@ input[type="range"].timeline-slider-red::-moz-range-thumb {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Hidden scrollbar (keeps scroll, hides bar) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 /* iOS momentum scrolling */
@@ -605,7 +686,7 @@ input[type="range"].timeline-slider-red::-moz-range-thumb {
 }
 
 /* Dark-mode calendar picker icon */
-input[type="date"].date-filter-input::-webkit-calendar-picker-indicator {
+[data-theme="dark"] input[type="date"].date-filter-input::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
   cursor: pointer;
 }
@@ -627,7 +708,7 @@ input[type="range"].blaulicht-slider::-moz-range-thumb {
 @keyframes blaulicht-panel-flash {
   0% {
     box-shadow: 0 0 0 0 rgba(96, 165, 250, 0), 0 0 0 rgba(96, 165, 250, 0);
-    border-color: #1a1a1a;
+    border-color: var(--panel-flash-border);
   }
   30% {
     box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.45), 0 0 34px rgba(59, 130, 246, 0.45);
@@ -635,7 +716,7 @@ input[type="range"].blaulicht-slider::-moz-range-thumb {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(96, 165, 250, 0), 0 0 0 rgba(96, 165, 250, 0);
-    border-color: #1a1a1a;
+    border-color: var(--panel-flash-border);
   }
 }
 
@@ -656,4 +737,18 @@ input[type="range"].blaulicht-slider::-moz-range-thumb {
   .blaulicht-panel-flash-b {
     animation: none !important;
   }
+}
+
+/* ============================================
+   MOBILE CATEGORY BAR — Light mode overrides
+   ============================================ */
+:root:not([data-theme="dark"]) .mobile-cat-btn {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: transparent;
+}
+
+:root:not([data-theme="dark"]) .mobile-cat-btn--active {
+  background: #ffffff !important;
+  border-color: var(--cat-accent) !important;
+  box-shadow: 0 1px 6px color-mix(in srgb, var(--cat-accent) 25%, transparent);
 }
