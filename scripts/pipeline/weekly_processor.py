@@ -168,12 +168,13 @@ def process_week(
     print(f"Incident grouping: {len(multi_groups)} groups with {grouped_count} articles")
 
     # ── Step 4: Enrich ──
-    print(f"\n--- Step 4: Enrich (3-round AI) ---")
+    # Rule-based grouping already ran in Step 3, so skip it inside enrich_all
+    print(f"\n--- Step 4: Enrich (1-round AI) ---")
     cache_dir = str(CACHE_DIR / f"week_{year}_w{week:02d}")
     enricher = FastEnricher(cache_dir=cache_dir, no_geocode=no_geocode, model=model)
 
     try:
-        enriched, triage_removed = enricher.enrich_all(kept, skip_clustering=skip_clustering)
+        enriched, triage_removed = enricher.enrich_all(kept, skip_clustering=True)
     except KeyboardInterrupt:
         print("\nInterrupted — saving caches")
         enricher.save_caches()

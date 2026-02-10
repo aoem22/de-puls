@@ -212,7 +212,7 @@ def cmd_list_chunks(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Blaulicht Pipeline - 3-year police report scraping",
+        description="Blaulicht Pipeline - police report scraping and enrichment",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -383,7 +383,7 @@ def main():
     )
     week_parser.add_argument(
         "--skip-clustering", action="store_true",
-        help="Skip Round 3 (clustering) — push enriched data without incident groups",
+        help="Skip rule-based incident grouping (articles get solo group IDs)",
     )
     week_parser.set_defaults(func=cmd_week)
 

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-Multi-round AI enrichment for Blaulicht articles.
+Single-round AI enrichment for Blaulicht articles.
 
-Three rounds:
-  Round 1 — Triage: classify articles (single/multi/junk/feuerwehr)
-  Round 2 — Enrichment: extract structured data + clean title
-  Round 3 — Clustering: group related articles about the same incident
+One unified LLM call per batch:
+  - Classifies articles (crime / junk / feuerwehr) inline
+  - Extracts structured data (location, crime, details, clean_title)
+  - Multi-incident splitting for digest articles
+
+Rule-based junk filter and incident grouping run upstream (weekly_processor)
+or optionally inside enrich_all().
 
 Usage:
     python -m scripts.pipeline.fast_enricher --input data.json --output enriched.json
@@ -18,8 +21,7 @@ import re
 import sys
 import time
 import uuid
-from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import certifi
@@ -38,95 +40,28 @@ MODEL = "x-ai/grok-4-fast"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 API_DELAY = 0.2  # Seconds between API calls
 
-# Batch sizes per round
-TRIAGE_BATCH_SIZE = 25      # Round 1: cheap classification
-SINGLE_BATCH_SIZE = 10      # Round 2: normal enrichment
-MULTI_BATCH_SIZE = 3        # Round 2: multi-incident enrichment
-CLUSTER_BATCH_SIZE = 20     # Round 3: clustering
+# Batch sizes
+UNIFIED_BATCH_SIZE = 8      # Articles per LLM call (unified enrichment + classification)
+UNIFIED_MAX_TOKENS = 10000  # Max tokens for unified prompt response
 
 
-# ── Round 1: Triage Prompt ──────────────────────────────────────
+# ── Unified Prompt (classification + enrichment in 1 round) ──────
 
-TRIAGE_PROMPT = """
-Klassifiziere diese {count} deutschen Polizeipressemeldungen.
+UNIFIED_PROMPT = """
+Analysiere diese {count} deutschen Polizeipressemeldungen. Klassifiziere und extrahiere strukturierte Daten in EINEM Schritt.
 
-Kategorien:
-- "single": Normaler Polizeibericht mit EINEM Vorfall
-- "multi": Sammelartikel mit MEHREREN separaten Vorfällen (z.B. PP Heilbronn Digest mit 5+ Vorfällen)
-- "junk": Kein Straftatbericht (Verkehrshinweise, Spendenaufrufe, Erreichbarkeitshinweise, Kontrollaktionen, Warnmeldungen, Tag der offenen Tür, Blitzerstandorte, Bilanzberichte)
-- "feuerwehr": Feuerwehr-/Brandmeldung ohne Polizeibezug
+=== REGEL 0: KLASSIFIKATION ===
+Prüfe ZUERST ob der Artikel ein Straftatbericht ist:
 
-ARTIKEL:
-{articles_json}
+KEIN Straftatbericht ("junk") — NUR diese Antwort zurückgeben:
+  {{"article_index": N, "classification": "junk", "reason": "Verkehrshinweis/Bilanz/etc."}}
+Beispiele: Verkehrshinweise, Spendenaufrufe, Erreichbarkeitshinweise, Kontrollaktionen, Warnmeldungen, Tag der offenen Tür, Blitzerstandorte, Bilanzberichte, Präventionshinweise, Stellenangebote, Veranstaltungen
 
-Antworte NUR mit JSON-Array:
-[
-  {{"article_index": 0, "classification": "single", "incident_count": 1}},
-  {{"article_index": 1, "classification": "junk", "reason": "Verkehrshinweis"}},
-  {{"article_index": 2, "classification": "multi", "incident_count": 5}},
-  {{"article_index": 3, "classification": "feuerwehr", "reason": "Feuerwehreinsatz"}}
-]
-"""
+Feuerwehr ohne Polizeibezug ("feuerwehr") — NUR diese Antwort zurückgeben:
+  {{"article_index": N, "classification": "feuerwehr", "reason": "Feuerwehreinsatz ohne Straftat"}}
+Erkenne Feuerwehr an: Quelle enthält "Feuerwehr"/"Brandschutz"/"Rettungsdienst", Inhalt nur Brand/Rettung ohne Straftatverdacht
 
-
-# ── Round 2: Enrichment Prompt ──────────────────────────────────
-
-ENRICHMENT_PROMPT = """
-Analysiere diese {count} deutschen Polizeiberichte und extrahiere strukturierte Daten.
-
-WICHTIG: Viele Pressemeldungen enthalten MEHRERE separate Vorfälle. Erstelle für JEDEN einzelnen Vorfall ein eigenes JSON-Objekt. Verwende den gleichen article_index für alle Vorfälle aus demselben Artikel.
-
-Für JEDEN Vorfall, extrahiere:
-1. STANDORT: street, house_number, district, city, confidence (0-1)
-2. TATZEIT: date (YYYY-MM-DD), time (HH:MM), precision (exact/approximate/unknown)
-3. DELIKT (PKS): pks_code (4-stellig), pks_category, sub_type, confidence (0-1)
-4. DETAILS: weapon_type, drug_type, victim_count, suspect_count, victim_age, suspect_age, victim_gender, suspect_gender, victim_herkunft, suspect_herkunft, severity, motive
-5. TITEL: Erstelle einen kurzen, sachlichen Titel (max 80 Zeichen).
-   Kein Polizeikürzel (POL-MA, etc.), keine PM-Nummern, kein reißerischer Stil.
-   Beispiel: "Messerangriff in Mannheimer Innenstadt — Mann schwer verletzt"
-
-PKS-Kategorien:
-- 0100: Mord/Totschlag, 0200: Tötungsdelikt
-- 1100: Vergewaltigung/sexuelle Nötigung, 1300: Sexueller Missbrauch
-- 2100: Raub, 2200: Körperverletzung, 2340: Bedrohung
-- 3000/4000: Diebstahl, 4350: Wohnungseinbruch, 4780: Kfz-Diebstahl
-- 5100: Betrug, 6740: Brandstiftung, 6750: Sachbeschädigung
-- 7100: Verkehrsunfall, 7200: Fahrerflucht, 7300: Trunkenheit
-- 8910: Drogen
-
-Feldwerte (nur diese verwenden):
-- weapon_type: knife|gun|blunt|explosive|vehicle|none|unknown
-- drug_type: cannabis|cocaine|amphetamine|heroin|ecstasy|meth|other|null
-- severity: minor|serious|critical|fatal|property_only|unknown
-- motive: domestic|robbery|hate|drugs|road_rage|dispute|unknown|null
-- victim_age/suspect_age: Alter als String oder null wenn unbekannt
-- victim_gender/suspect_gender: male|female|unknown|null
-- victim_herkunft/suspect_herkunft: Staatsangehörigkeit falls EXPLIZIT im Text erwähnt (z.B. "syrisch", "polnisch", "deutsch"), sonst null. NUR extrahieren wenn im Text genannt.
-
-ARTIKEL:
-{articles_json}
-
-Antworte NUR mit JSON-Array. Ein Objekt pro VORFALL (nicht pro Artikel — ein Artikel kann mehrere Vorfälle haben):
-[
-  {{
-    "article_index": 0,
-    "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt",
-    "location": {{"street": "...", "house_number": null, "district": null, "city": "...", "confidence": 0.8}},
-    "incident_time": {{"date": "YYYY-MM-DD", "time": "HH:MM", "precision": "exact"}},
-    "crime": {{"pks_code": "XXXX", "pks_category": "...", "sub_type": "...", "confidence": 0.9}},
-    "details": {{"weapon_type": "knife", "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "severity": "serious", "motive": "dispute"}}
-  }},
-  ...
-]
-"""
-
-
-# ── Round 2b: Enrichment Prompt V2 (quality fix) ─────────────────
-
-ENRICHMENT_PROMPT_V2 = """
-Analysiere diese {count} deutschen Polizeiberichte und extrahiere strukturierte Daten.
-
-WICHTIG: Viele Pressemeldungen enthalten MEHRERE separate Vorfälle. Erstelle für JEDEN einzelnen Vorfall ein eigenes JSON-Objekt. Verwende den gleichen article_index für alle Vorfälle aus demselben Artikel.
+IST ein Straftatbericht → Vollständige Enrichment-Daten extrahieren (siehe unten), mit "classification": "crime"
 
 === REGEL 1: MULTI-INCIDENT ERKENNUNG ===
 Erkenne Sammelartikel an diesen Markern:
@@ -167,8 +102,10 @@ Extrahiere IMMER eine Tatzeit wenn der Text Zeitangaben enthält. Mappings:
 KRITISCH: Wenn IRGENDEIN Zeithinweis im Text steht, darf precision NICHT "unknown" sein!
 precision="unknown" NUR wenn wirklich KEINE Zeitangabe im gesamten Text vorkommt.
 
-Für JEDEN Vorfall, extrahiere:
-1. STANDORT: street, house_number, district, city, confidence (0-1)
+Für JEDEN Straftat-Vorfall, extrahiere:
+1. STANDORT: street, house_number, district, city, location_hint, cross_street, confidence (0-1)
+   - location_hint: Gebäude/Objekt am Tatort falls im Text erwähnt (z.B. "Tankstelle", "Studentenwohnheim", "Hauptbahnhof", "Marktplatz", "Supermarkt", "Parkhaus"). null wenn kein besonderes Objekt.
+   - cross_street: Bei Kreuzungen die zweite Straße (z.B. bei "Kreuzung A-Straße / B-Straße" → street="A-Straße", cross_street="B-Straße"). null wenn keine Kreuzung.
 2. TATZEIT: date (YYYY-MM-DD), time (HH:MM), precision (exact/approximate/unknown)
 3. DELIKT (PKS): pks_code (4-stellig), pks_category, sub_type, confidence (0-1)
 4. DETAILS: weapon_type, drug_type, victim_count, suspect_count, victim_age, suspect_age, victim_gender, suspect_gender, victim_herkunft, suspect_herkunft, severity, motive
@@ -197,19 +134,16 @@ Feldwerte (nur diese verwenden):
 ARTIKEL:
 {articles_json}
 
-Antworte NUR mit JSON-Array. Ein Objekt pro VORFALL (nicht pro Artikel — ein Artikel kann mehrere Vorfälle haben):
+Antworte NUR mit JSON-Array. Mische junk/feuerwehr-Objekte und crime-Objekte:
 [
-  {{
-    "article_index": 0,
-    "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt",
-    "location": {{"street": "...", "house_number": null, "district": null, "city": "...", "confidence": 0.8}},
-    "incident_time": {{"date": "YYYY-MM-DD", "time": "HH:MM", "precision": "exact"}},
-    "crime": {{"pks_code": "XXXX", "pks_category": "...", "sub_type": "...", "confidence": 0.9}},
-    "details": {{"weapon_type": "knife", "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "severity": "serious", "motive": "dispute"}}
-  }},
-  ...
+  {{"article_index": 0, "classification": "junk", "reason": "Verkehrshinweis"}},
+  {{"article_index": 1, "classification": "crime", "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt", "location": {{"street": "...", "house_number": null, "district": null, "city": "...", "location_hint": "Tankstelle", "cross_street": null, "confidence": 0.8}}, "incident_time": {{"date": "YYYY-MM-DD", "time": "HH:MM", "precision": "exact"}}, "crime": {{"pks_code": "XXXX", "pks_category": "...", "sub_type": "...", "confidence": 0.9}}, "details": {{"weapon_type": "knife", "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "severity": "serious", "motive": "dispute"}}}},
+  {{"article_index": 2, "classification": "feuerwehr", "reason": "Feuerwehreinsatz"}}
 ]
 """
+
+# Backwards-compat alias (quality_fix.py imports ENRICHMENT_PROMPT_V2)
+ENRICHMENT_PROMPT_V2 = UNIFIED_PROMPT
 
 
 # Germany bounding box for coordinate validation
@@ -231,31 +165,8 @@ def is_in_germany(lat: float, lon: float) -> bool:
     )
 
 
-# ── Round 3: Clustering Prompt ──────────────────────────────────
-
-CLUSTER_PROMPT = """
-Sind diese Polizeimeldungen über denselben Vorfall? Gruppiere sie.
-
-Regeln:
-- Nur Meldungen mit gleicher Stadt, ähnlichem Datum (max 7 Tage) und ähnlichem Delikt gruppieren
-- Nachtragsmeldungen, Folgemeldungen und Updates gehören zur Erstmeldung
-- Verschiedene Vorfälle in der gleichen Stadt sind NICHT dasselbe
-- "primary" ist die früheste/ausführlichste Meldung der Gruppe
-
-MELDUNGEN:
-{summaries_json}
-
-Antworte NUR mit JSON-Array:
-[
-  {{"group": [0, 2, 5], "primary": 0, "roles": {{"0": "primary", "2": "update", "5": "resolution"}}}},
-  {{"group": [1], "primary": 1, "roles": {{"1": "primary"}}}},
-  {{"group": [3, 4], "primary": 3, "roles": {{"3": "primary", "4": "follow_up"}}}}
-]
-"""
-
-
 class FastEnricher:
-    """Multi-round article enricher with Google Maps geocoding."""
+    """Single-round article enricher with Google Maps geocoding."""
 
     def __init__(self, cache_dir: str = ".cache", no_geocode: bool = False, model: str = None):
         api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -270,10 +181,8 @@ class FastEnricher:
         self.model = model or MODEL
         self.cache_dir = Path(cache_dir)
         self.cache_file = self.cache_dir / "enrichment_cache.json"
-        self.triage_cache_file = self.cache_dir / "triage_cache.json"
         self.geocode_file = self.cache_dir / "geocode_cache.json"
         self.cache = self._load_cache(self.cache_file)
-        self.triage_cache = self._load_cache(self.triage_cache_file)
         self.geocode_cache = self._load_cache(self.geocode_file) if not no_geocode else {}
         self.no_geocode = no_geocode
 
@@ -322,121 +231,10 @@ class FastEnricher:
             print(f"    LLM error: {e}")
             return []
 
-    # ── Round 1: Triage ──────────────────────────────────────────
+    # ── Enrichment ─────────────────────────────────────────────────
 
-    def _triage_batch(self, articles: list[dict]) -> list[dict]:
-        """Classify a batch of articles (Round 1)."""
-        articles_data = []
-        for i, art in enumerate(articles):
-            articles_data.append({
-                "index": i,
-                "title": art.get("title", "")[:200],
-                "body": art.get("body", "")[:1000],  # Only need first 1000 chars for triage
-                "source": art.get("source", ""),
-            })
-
-        prompt = TRIAGE_PROMPT.format(
-            count=len(articles),
-            articles_json=json.dumps(articles_data, ensure_ascii=False, indent=2)
-        )
-
-        return self._call_llm(prompt, max_tokens=2000)
-
-    def _triage_all(self, articles: list[dict]) -> list[dict]:
-        """Run triage on all articles. Returns list of triage results."""
-        results = [None] * len(articles)
-        uncached_indices = []
-        uncached_articles = []
-
-        # Check cache
-        for i, art in enumerate(articles):
-            key = self._cache_key(art.get("url", ""), art.get("body", ""))
-            triage_key = f"triage:{key}"
-            if triage_key in self.triage_cache:
-                results[i] = self.triage_cache[triage_key]
-            else:
-                uncached_indices.append(i)
-                uncached_articles.append(art)
-
-        cached_count = len(articles) - len(uncached_articles)
-        if cached_count > 0:
-            print(f"  Triage: {cached_count} cached, {len(uncached_articles)} to classify")
-
-        if not uncached_articles:
-            return results
-
-        # Process uncached in batches
-        batches = [uncached_articles[i:i + TRIAGE_BATCH_SIZE]
-                    for i in range(0, len(uncached_articles), TRIAGE_BATCH_SIZE)]
-
-        print(f"  Triage: classifying {len(uncached_articles)} articles in {len(batches)} batches...")
-
-        batch_offset = 0
-        for batch_num, batch in enumerate(batches, 1):
-            llm_results = self._triage_batch(batch)
-
-            # Map results back
-            for r in llm_results:
-                idx = r.get("article_index", -1)
-                if 0 <= idx < len(batch):
-                    global_idx = uncached_indices[batch_offset + idx]
-                    classification = r.get("classification", "single")
-                    triage_result = {
-                        "classification": classification,
-                        "incident_count": r.get("incident_count", 1),
-                        "reason": r.get("reason"),
-                    }
-                    results[global_idx] = triage_result
-
-                    # Cache it
-                    art = batch[idx]
-                    key = self._cache_key(art.get("url", ""), art.get("body", ""))
-                    self.triage_cache[f"triage:{key}"] = triage_result
-
-            batch_offset += len(batch)
-            print(f"    Triage batch {batch_num}/{len(batches)}: done")
-
-            if batch_num < len(batches):
-                time.sleep(API_DELAY)
-
-        # Default uncategorized articles to "single"
-        for i in range(len(results)):
-            if results[i] is None:
-                results[i] = {"classification": "single", "incident_count": 1}
-
-        return results
-
-    def _apply_triage(self, articles: list[dict], triage_results: list[dict]) -> tuple[list[dict], list[dict]]:
-        """Split articles into kept and removed based on triage."""
-        kept = []
-        removed = []
-
-        counts = defaultdict(int)
-        for i, (art, triage) in enumerate(zip(articles, triage_results)):
-            classification = triage["classification"]
-            counts[classification] += 1
-
-            if classification in ("junk", "feuerwehr"):
-                removed.append({
-                    **art,
-                    "_removal_reason": f"triage:{classification}",
-                    "_triage_reason": triage.get("reason", ""),
-                })
-            else:
-                kept.append({
-                    **art,
-                    "_triage": classification,
-                    "_incident_count": triage.get("incident_count", 1),
-                })
-
-        print(f"  Triage results: {dict(counts)}")
-        print(f"  Kept: {len(kept)}, Removed: {len(removed)}")
-        return kept, removed
-
-    # ── Round 2: Enrichment ──────────────────────────────────────
-
-    def _enrich_batch(self, articles: list[dict], max_tokens: int = 8000) -> list[dict]:
-        """Enrich a batch of articles (Round 2)."""
+    def _enrich_batch(self, articles: list[dict], max_tokens: int = UNIFIED_MAX_TOKENS) -> list[dict]:
+        """Enrich a batch of articles with unified classification + enrichment."""
         articles_data = []
         for i, art in enumerate(articles):
             articles_data.append({
@@ -445,21 +243,25 @@ class FastEnricher:
                 "body": art.get("body", ""),  # Full body — no truncation
                 "date": art.get("date", ""),
                 "city": art.get("city", ""),
+                "source": art.get("source", ""),  # Needed for feuerwehr detection
             })
 
-        prompt = ENRICHMENT_PROMPT_V2.format(
+        prompt = UNIFIED_PROMPT.format(
             count=len(articles),
             articles_json=json.dumps(articles_data, ensure_ascii=False, indent=2)
         )
 
         return self._call_llm(prompt, max_tokens=max_tokens)
 
-    def _enrich_articles(self, articles: list[dict], batch_size: int, max_tokens: int, label: str) -> list[dict]:
-        """Enrich a set of articles with given batch size and token limit."""
-        # Split into cached and uncached
+    def _enrich_articles(self, articles: list[dict]) -> tuple[list[dict], list[dict]]:
+        """Enrich articles with unified classification + enrichment.
+
+        Returns (enriched_records, removed_records).
+        """
         uncached = []
         uncached_indices = []
         results_by_idx: dict[int, list[dict]] = {}
+        removed_by_idx: dict[int, dict] = {}
 
         regeocode_count = 0
         for i, art in enumerate(articles):
@@ -467,6 +269,16 @@ class FastEnricher:
             if key in self.cache:
                 cached = self.cache[key]
                 entries = cached if isinstance(cached, list) else [cached]
+
+                # Check for classification sentinel (junk/feuerwehr from previous run)
+                if len(entries) == 1 and entries[0].get("_classification"):
+                    cls = entries[0]["_classification"]
+                    removed_by_idx[i] = {
+                        **art,
+                        "_removal_reason": f"llm:{cls}",
+                        "_triage_reason": entries[0].get("reason", ""),
+                    }
+                    continue
 
                 # Re-geocode cached entries missing coordinates
                 if not self.no_geocode:
@@ -479,6 +291,8 @@ class FastEnricher:
                                 city=loc.get("city") or art.get("city"),
                                 district=loc.get("district"),
                                 bundesland=art.get("bundesland"),
+                                location_hint=loc.get("location_hint"),
+                                cross_street=loc.get("cross_street"),
                             )
                             loc["lat"] = lat
                             loc["lon"] = lon
@@ -494,14 +308,18 @@ class FastEnricher:
                 uncached.append(art)
                 uncached_indices.append(i)
 
-        cached_count = len(articles) - len(uncached)
-        if cached_count > 0:
+        cached_count = len(articles) - len(uncached) - len(removed_by_idx)
+        cached_removed = len(removed_by_idx)
+        if cached_count > 0 or cached_removed > 0:
             geo_msg = f", {regeocode_count} re-geocoded" if regeocode_count else ""
-            print(f"  {label}: {cached_count} cached{geo_msg}, {len(uncached)} to enrich")
+            removed_msg = f", {cached_removed} cached-removed" if cached_removed else ""
+            print(f"  Enrichment: {cached_count} cached{geo_msg}{removed_msg}, {len(uncached)} to enrich")
 
         if uncached:
+            batch_size = UNIFIED_BATCH_SIZE
+            max_tokens = UNIFIED_MAX_TOKENS
             batches = [uncached[i:i + batch_size] for i in range(0, len(uncached), batch_size)]
-            print(f"  {label}: enriching {len(uncached)} articles in {len(batches)} batches (max_tokens={max_tokens})...")
+            print(f"  Enrichment: processing {len(uncached)} articles in {len(batches)} batches...")
 
             batch_offset = 0
             for batch_num, batch in enumerate(batches, 1):
@@ -514,12 +332,28 @@ class FastEnricher:
                     if 0 <= idx < len(batch):
                         incidents_by_idx.setdefault(idx, []).append(llm_result)
 
-                # Process each article's incidents
+                # Process each article's results
                 for idx, incidents in incidents_by_idx.items():
                     art = batch[idx]
                     orig_idx = uncached_indices[batch_offset + idx]
-                    enrichments = []
+                    key = self._cache_key(art.get("url", ""), art.get("body", ""))
 
+                    # Check if LLM classified as junk/feuerwehr
+                    first = incidents[0]
+                    classification = first.get("classification", "crime")
+
+                    if classification in ("junk", "feuerwehr"):
+                        # Store sentinel in enrichment cache
+                        self.cache[key] = [{"_classification": classification, "reason": first.get("reason", "")}]
+                        removed_by_idx[orig_idx] = {
+                            **art,
+                            "_removal_reason": f"llm:{classification}",
+                            "_triage_reason": first.get("reason", ""),
+                        }
+                        continue
+
+                    # Crime — extract enrichment data
+                    enrichments = []
                     for llm_result in incidents:
                         loc = llm_result.get("location") or {}
                         enrichment = {
@@ -537,6 +371,8 @@ class FastEnricher:
                                 city=loc.get("city") or art.get("city"),
                                 district=loc.get("district"),
                                 bundesland=art.get("bundesland"),
+                                location_hint=loc.get("location_hint"),
+                                cross_street=loc.get("cross_street"),
                             )
                             enrichment["location"]["lat"] = lat
                             enrichment["location"]["lon"] = lon
@@ -545,8 +381,6 @@ class FastEnricher:
 
                         enrichments.append(enrichment)
 
-                    # Cache all incidents for this article
-                    key = self._cache_key(art.get("url", ""), art.get("body", ""))
                     self.cache[key] = enrichments
                     results_by_idx[orig_idx] = [{**art, **e} for e in enrichments]
 
@@ -557,162 +391,45 @@ class FastEnricher:
                     for r in records if r.get("location", {}).get("lat")
                 )
                 total_records = sum(len(records) for records in results_by_idx.values())
+                batch_removed = len(removed_by_idx)
                 print(
-                    f"    {label} batch {batch_num}/{len(batches)}: "
-                    f"{total_records} records, {geocoded} geocoded",
+                    f"    Batch {batch_num}/{len(batches)}: "
+                    f"{total_records} enriched, {geocoded} geocoded, {batch_removed} removed",
                     flush=True,
                 )
 
                 if batch_num < len(batches):
                     time.sleep(API_DELAY)
 
-        # Build flat output list, preserving article order
-        results = []
+        # Build flat output lists
+        enriched = []
         for i in range(len(articles)):
             if i in results_by_idx:
-                results.extend(results_by_idx[i])
-            else:
-                results.append(articles[i])
+                enriched.extend(results_by_idx[i])
 
-        return results
+        removed = list(removed_by_idx.values())
 
-    # ── Round 3: Clustering ──────────────────────────────────────
-
-    def _cluster_incidents(self, enriched: list[dict]) -> list[dict]:
-        """Group related articles about the same incident (Round 3)."""
-        # Pre-filter: group by (source_agency, city, 7-day window)
-        buckets: dict[str, list[int]] = defaultdict(list)
-        for i, art in enumerate(enriched):
-            source = (art.get("source") or "").strip()
-            city = (art.get("location", {}).get("city") or art.get("city") or "").strip()
-            date_str = art.get("date", "")
-
-            if not source or not city or not date_str:
-                continue
-
-            # Parse date for week bucketing
-            try:
-                if "T" in date_str:
-                    dt = datetime.fromisoformat(date_str.replace("Z", "+00:00")).replace(tzinfo=None)
-                else:
-                    dt = datetime.fromisoformat(date_str)
-                week_key = f"{dt.year}-W{dt.isocalendar()[1]:02d}"
-            except (ValueError, TypeError):
-                continue
-
-            bucket_key = f"{source}|{city}|{week_key}"
-            buckets[bucket_key].append(i)
-
-        # Only process buckets with 2+ articles
-        candidate_buckets = {k: v for k, v in buckets.items() if len(v) >= 2}
-
-        if not candidate_buckets:
-            print("  Clustering: no candidate groups found")
-            # Assign solo group IDs
-            for art in enriched:
-                if not art.get("incident_group_id"):
-                    art["incident_group_id"] = uuid.uuid4().hex[:12]
-                    art["group_role"] = "primary"
-            return enriched
-
-        # Flatten candidate indices for batch processing
-        all_candidate_indices = set()
-        for indices in candidate_buckets.values():
-            all_candidate_indices.update(indices)
-
-        print(f"  Clustering: {len(candidate_buckets)} candidate buckets, {len(all_candidate_indices)} articles to compare")
-
-        # Process each bucket through LLM
-        cluster_batch = []
-        cluster_batch_indices = []
-
-        for bucket_key, indices in candidate_buckets.items():
-            # Build summaries for this bucket
-            summaries = []
-            for local_idx, global_idx in enumerate(indices):
-                art = enriched[global_idx]
-                summaries.append({
-                    "index": local_idx,
-                    "clean_title": art.get("clean_title") or art.get("title", ""),
-                    "date": art.get("date", ""),
-                    "city": art.get("location", {}).get("city") or art.get("city", ""),
-                    "crime_type": art.get("crime", {}).get("pks_category", ""),
-                })
-
-            cluster_batch.append(summaries)
-            cluster_batch_indices.append(indices)
-
-            # Process when batch is large enough
-            if len(cluster_batch) >= 3 or sum(len(s) for s in cluster_batch) >= CLUSTER_BATCH_SIZE:
-                self._process_cluster_batch(enriched, cluster_batch, cluster_batch_indices)
-                cluster_batch = []
-                cluster_batch_indices = []
-                time.sleep(API_DELAY)
-
-        # Process remaining
-        if cluster_batch:
-            self._process_cluster_batch(enriched, cluster_batch, cluster_batch_indices)
-
-        # Assign solo group IDs to ungrouped articles
-        for art in enriched:
-            if not art.get("incident_group_id"):
-                art["incident_group_id"] = uuid.uuid4().hex[:12]
-                art["group_role"] = "primary"
-
-        # Count groups
-        groups = defaultdict(list)
-        for art in enriched:
-            groups[art.get("incident_group_id", "")].append(art)
-        multi_groups = sum(1 for g in groups.values() if len(g) > 1)
-        multi_articles = sum(len(g) for g in groups.values() if len(g) > 1)
-        print(f"  Clustering: {multi_groups} groups with {multi_articles} articles")
-
-        return enriched
-
-    def _process_cluster_batch(
-        self,
-        enriched: list[dict],
-        summaries_list: list[list[dict]],
-        indices_list: list[list[int]],
-    ) -> None:
-        """Process a batch of cluster candidate groups through LLM."""
-        for summaries, indices in zip(summaries_list, indices_list):
-            if len(summaries) < 2:
-                continue
-
-            prompt = CLUSTER_PROMPT.format(
-                summaries_json=json.dumps(summaries, ensure_ascii=False, indent=2)
-            )
-
-            llm_results = self._call_llm(prompt, max_tokens=2000)
-
-            for group_info in llm_results:
-                group_indices = group_info.get("group", [])
-                primary_local = group_info.get("primary", 0)
-                roles = group_info.get("roles", {})
-
-                if len(group_indices) < 1:
-                    continue
-
-                group_id = uuid.uuid4().hex[:12]
-
-                for local_idx in group_indices:
-                    if 0 <= local_idx < len(indices):
-                        global_idx = indices[local_idx]
-                        enriched[global_idx]["incident_group_id"] = group_id
-                        role = roles.get(str(local_idx), "related")
-                        if local_idx == primary_local:
-                            role = "primary"
-                        enriched[global_idx]["group_role"] = role
+        return enriched, removed
 
     # ── Geocoding ────────────────────────────────────────────────
 
-    def _geocode(self, street: str, city: str, district: str = None, bundesland: str = None) -> tuple[float, float, str]:
+    def _geocode(self, street: str, city: str, district: str = None, bundesland: str = None,
+                 location_hint: str = None, cross_street: str = None) -> tuple[float, float, str]:
         """Geocode an address using Google Maps API."""
         if self.no_geocode:
             return None, None, "none"
 
-        parts = [p for p in [street, district, city, bundesland, "Germany"] if p]
+        # Build street part with cross_street / location_hint for better precision
+        if cross_street and street:
+            street_part = f"{street} & {cross_street}"
+        elif location_hint and street:
+            street_part = f"{location_hint}, {street}"
+        elif location_hint and not street:
+            street_part = location_hint
+        else:
+            street_part = street
+
+        parts = [p for p in [street_part, district, city, bundesland, "Germany"] if p]
         address = ", ".join(parts)
 
         if address in self.geocode_cache:
@@ -728,6 +445,8 @@ class FastEnricher:
             "region": "de",
             "language": "de",
         }
+        if city:
+            params["components"] = f"locality:{city}|country:DE"
 
         try:
             response = requests.get(url, params=params, timeout=10)
@@ -771,82 +490,75 @@ class FastEnricher:
     # ── Main Entry Point ─────────────────────────────────────────
 
     def enrich_all(self, articles: list[dict], skip_clustering: bool = False) -> tuple[list[dict], list[dict]]:
-        """Enrich all articles through 2-3 rounds.
+        """Enrich all articles in a single LLM round.
+
+        The unified prompt classifies (crime/junk/feuerwehr) and extracts
+        structured data in one call. Optional rule-based incident grouping
+        runs after enrichment.
 
         Args:
             articles: Raw articles to enrich.
-            skip_clustering: If True, skip Round 3 (clustering).
+            skip_clustering: If True, skip rule-based incident grouping.
 
         Returns (enriched_articles, removed_articles).
         """
         total = len(articles)
         print(f"\n{'='*60}")
-        print(f"Multi-round AI enrichment: {total} articles")
+        print(f"Single-round AI enrichment: {total} articles")
         print(f"{'='*60}")
 
-        # ── Round 1: Triage ──
-        print(f"\n--- Round 1: Triage ---")
-        triage_results = self._triage_all(articles)
-        kept, removed = self._apply_triage(articles, triage_results)
+        if not articles:
+            return [], []
 
-        if not kept:
-            print("  No articles to enrich after triage")
-            return [], removed
+        # ── Unified enrichment + classification ──
+        print(f"\n--- Enrichment (unified classification + extraction) ---")
+        enriched, removed = self._enrich_articles(articles)
 
-        # ── Round 2: Enrichment (smart batching) ──
-        print(f"\n--- Round 2: Enrichment ---")
-        singles = [a for a in kept if a.get("_triage") == "single"]
-        multis = [a for a in kept if a.get("_triage") == "multi"]
+        print(f"  Total enriched records: {len(enriched)} (from {total} articles)")
+        print(f"  Removed by LLM: {len(removed)}")
 
-        enriched = []
-        if singles:
-            enriched.extend(
-                self._enrich_articles(singles, SINGLE_BATCH_SIZE, 8000, "Singles")
-            )
-        if multis:
-            enriched.extend(
-                self._enrich_articles(multis, MULTI_BATCH_SIZE, 12000, "Multis")
-            )
-
-        print(f"  Total enriched records: {len(enriched)} (from {len(kept)} articles)")
-
-        # ── Round 3: Clustering ──
+        # ── Rule-based incident grouping ──
         if skip_clustering:
-            print(f"\n--- Round 3: Clustering [SKIPPED] ---")
+            print(f"\n--- Incident grouping [SKIPPED] ---")
+            # Assign solo group IDs
+            for art in enriched:
+                if not art.get("incident_group_id"):
+                    art["incident_group_id"] = uuid.uuid4().hex[:12]
+                    art["group_role"] = "primary"
         else:
-            print(f"\n--- Round 3: Clustering ---")
-            enriched = self._cluster_incidents(enriched)
-
-        # Clean up internal triage fields
-        for art in enriched:
-            art.pop("_triage", None)
-            art.pop("_incident_count", None)
+            print(f"\n--- Incident grouping (rule-based) ---")
+            from .filter_articles import group_incidents
+            enriched = group_incidents(enriched)
 
         print(f"\n{'='*60}")
         geocoded = sum(1 for r in enriched if isinstance(r.get("location"), dict) and r["location"].get("lat"))
         classified = sum(1 for r in enriched if isinstance(r.get("crime"), dict) and r["crime"].get("pks_code"))
         print(f"Final: {len(enriched)} records, {geocoded} geocoded, {classified} classified")
-        print(f"Removed: {len(removed)} articles (triage)")
+        print(f"Removed: {len(removed)} articles (LLM classification)")
         print(f"{'='*60}\n")
 
         return enriched, removed
 
     def save_caches(self):
         self._save_cache(self.cache, self.cache_file)
-        self._save_cache(self.triage_cache, self.triage_cache_file)
         if not self.no_geocode:
             self._save_cache(self.geocode_cache, self.geocode_file)
 
 
 def main():
     import argparse
+    from .filter_articles import is_junk_article
 
-    parser = argparse.ArgumentParser(description="Multi-round AI article enrichment")
+    parser = argparse.ArgumentParser(description="Single-round AI article enrichment")
     parser.add_argument("--input", "-i", required=True, help="Input JSON file")
     parser.add_argument("--output", "-o", required=True, help="Output JSON file")
     parser.add_argument("--no-geocode", action="store_true", help="Skip geocoding")
     parser.add_argument("--cache-dir", default=".cache", help="Cache directory")
     parser.add_argument("--removed", help="Path for removed articles log")
+    parser.add_argument("--skip-clustering", action="store_true",
+                        help="Skip rule-based incident grouping")
+    parser.add_argument("--no-prefilter", action="store_true",
+                        help="Skip regex pre-filter (send all articles to LLM)")
 
     args = parser.parse_args()
 
@@ -865,11 +577,30 @@ def main():
 
     print(f"Loaded {len(articles)} articles from {args.input}", flush=True)
 
+    # Optional regex pre-filter (saves LLM tokens)
+    prefilter_removed = []
+    if not args.no_prefilter:
+        kept = []
+        for art in articles:
+            reason = is_junk_article(art)
+            if reason:
+                prefilter_removed.append({
+                    **art,
+                    "_removal_reason": f"prefilter:{reason}",
+                })
+            else:
+                kept.append(art)
+        if prefilter_removed:
+            print(f"Pre-filter: removed {len(prefilter_removed)}, kept {len(kept)}")
+        articles = kept
+
     # Enrich
     enricher = FastEnricher(cache_dir=args.cache_dir, no_geocode=args.no_geocode)
 
     try:
-        enriched, removed = enricher.enrich_all(articles)
+        enriched, removed = enricher.enrich_all(
+            articles, skip_clustering=args.skip_clustering
+        )
     except KeyboardInterrupt:
         print("\nInterrupted")
         enricher.save_caches()
@@ -877,17 +608,20 @@ def main():
 
     enricher.save_caches()
 
+    # Combine all removed
+    all_removed = prefilter_removed + removed
+
     # Save enriched output
     output_data = {"articles": enriched} if isinstance(data, dict) else enriched
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
 
     # Save removed log
-    if removed:
+    if all_removed:
         removed_path = args.removed or str(Path(args.output).with_suffix("")) + "_removed.json"
         with open(removed_path, "w", encoding="utf-8") as f:
-            json.dump(removed, f, ensure_ascii=False, indent=2)
-        print(f"Saved {len(removed)} removed articles to {removed_path}")
+            json.dump(all_removed, f, ensure_ascii=False, indent=2)
+        print(f"Saved {len(all_removed)} removed articles to {removed_path}")
 
     # Stats
     geocoded = sum(1 for r in enriched if r.get("location", {}).get("lat"))
