@@ -352,7 +352,7 @@ export function BlaulichtPlaybackControl({
         </div>
       )}
 
-      <div className="w-[calc(100vw-1.5rem)] max-w-[520px] bg-[var(--card)]/60 backdrop-blur-md border border-[var(--border-subtle)]/70 rounded-xl shadow-xl px-2 py-1.5">
+      <div className="w-[calc(100vw-1.5rem)] max-w-[520px] rounded-xl border px-2 py-1.5 glass-panel glass-panel-soft">
         {/* Row 1: Scrollable category pills */}
         <div className="overflow-x-auto scrollbar-hide -mx-2 px-2 mb-1 pb-1 border-b border-[var(--border-subtle)]/70">
           <div className="flex gap-1 w-max">
@@ -360,10 +360,10 @@ export function BlaulichtPlaybackControl({
             <button
               type="button"
               onClick={() => onCategoryChange(null)}
-              className={`flex items-center gap-1 text-[11px] h-[26px] px-2 rounded-full border font-medium whitespace-nowrap transition-colors duration-150 ${
+              className={`glass-button flex items-center gap-1 text-[11px] h-[26px] px-2 rounded-full border font-medium whitespace-nowrap transition-colors duration-150 ${
                 selectedCategory === null
                   ? 'border-white/60 text-[var(--text-primary)]'
-                  : 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-tertiary)] active:bg-[var(--card-elevated)]'
+                  : 'text-[var(--text-tertiary)]'
               }`}
               style={selectedCategory === null ? { backgroundColor: '#3b82f620', borderColor: '#3b82f699' } : undefined}
             >
@@ -390,10 +390,10 @@ export function BlaulichtPlaybackControl({
                   key={cat.key}
                   type="button"
                   onClick={() => onCategoryChange(isSelected ? null : cat.key)}
-                  className={`flex items-center gap-1 text-[11px] h-[26px] px-2 rounded-full border font-medium whitespace-nowrap transition-colors duration-150 ${
+                  className={`glass-button flex items-center gap-1 text-[11px] h-[26px] px-2 rounded-full border font-medium whitespace-nowrap transition-colors duration-150 ${
                     isSelected
                       ? 'border-white/60 text-[var(--text-primary)]'
-                      : 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-tertiary)] active:bg-[var(--card-elevated)]'
+                      : 'text-[var(--text-tertiary)]'
                   }`}
                   style={isSelected ? { backgroundColor: `${cat.color}20`, borderColor: `${cat.color}99` } : undefined}
                 >
@@ -421,10 +421,10 @@ export function BlaulichtPlaybackControl({
                 key={wt}
                 type="button"
                 onClick={() => onWeaponTypeChange(isSelected ? null : wt)}
-                className={`flex items-center justify-center gap-1 text-[11px] h-8 min-w-[2.25rem] px-1.5 rounded-lg border font-medium transition-all duration-200 ease-out ${
+                className={`glass-button flex items-center justify-center gap-1 text-[11px] h-8 min-w-[2.25rem] px-1.5 rounded-lg border font-medium transition-all duration-200 ease-out ${
                   isSelected
                     ? 'bg-blue-500/20 border-blue-500/60 text-[var(--text-primary)]'
-                    : 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-tertiary)] active:bg-[var(--card-elevated)]'
+                    : 'text-[var(--text-tertiary)]'
                 }`}
               >
                 <span
@@ -453,10 +453,10 @@ export function BlaulichtPlaybackControl({
           <button
             type="button"
             onClick={() => togglePanel('search')}
-            className={`flex items-center gap-1 text-[11px] h-8 px-1.5 sm:px-2 rounded-lg border font-medium transition-colors duration-150 ${
+            className={`glass-button flex items-center gap-1 text-[11px] h-8 px-1.5 sm:px-2 rounded-lg border font-medium transition-colors duration-150 ${
               expandedPanel === 'search' || searchLocationName
                 ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-300'
-                : 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-tertiary)] hover:border-[var(--text-muted)]'
+                : 'text-[var(--text-tertiary)]'
             }`}
           >
             <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -469,10 +469,10 @@ export function BlaulichtPlaybackControl({
           <button
             type="button"
             onClick={() => togglePanel('time')}
-            className={`flex items-center gap-1 text-[11px] h-8 px-1.5 sm:px-2 rounded-lg border font-medium transition-colors duration-150 ${
+            className={`glass-button flex items-center gap-1 text-[11px] h-8 px-1.5 sm:px-2 rounded-lg border font-medium transition-colors duration-150 ${
               expandedPanel === 'time' || hasTimeFilter
                 ? 'bg-blue-500/20 border-blue-500/60 text-blue-300'
-                : 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-tertiary)] hover:border-[var(--text-muted)]'
+                : 'text-[var(--text-tertiary)]'
             }`}
           >
             <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -527,10 +527,10 @@ export function BlaulichtPlaybackControl({
                     key={preset.key}
                     type="button"
                     onClick={() => handlePresetClick(preset.key)}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors duration-150 ${
+                    className={`glass-button text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors duration-150 ${
                       isActive
                         ? 'bg-blue-500/25 border-blue-500 text-blue-300'
-                        : 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-tertiary)] hover:border-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                        : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     {lang === 'de' ? preset.labelDe : preset.labelEn}
@@ -542,10 +542,10 @@ export function BlaulichtPlaybackControl({
               <button
                 type="button"
                 onClick={() => setPeriodOpen((v) => !v)}
-                className={`ml-auto flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors duration-150 ${
+                className={`glass-button ml-auto flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors duration-150 ${
                   periodOpen || isCustomRange
                     ? 'bg-blue-500/25 border-blue-500 text-blue-300'
-                    : 'bg-[var(--background)]/70 border-[var(--border)] text-[var(--text-tertiary)] hover:border-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

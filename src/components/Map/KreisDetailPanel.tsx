@@ -22,6 +22,7 @@ interface KreisDetailPanelProps {
   onClose: () => void;
   auslaenderData?: Record<string, AuslaenderRow>;
   deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
+  mobileOnly?: boolean;
 }
 
 const Icons = {
@@ -292,6 +293,7 @@ export function KreisDetailPanel({
   onClose,
   auslaenderData,
   deutschlandatlasData,
+  mobileOnly,
 }: KreisDetailPanelProps) {
   const { sheetRef, scrollRef, isExpanded, handlers } = useDraggableSheet(onClose);
   const { lang } = useTranslation();
@@ -349,38 +351,41 @@ export function KreisDetailPanel({
 
   return (
     <>
-      {/* Desktop: backdrop */}
-      <div
-        className="hidden md:block fixed inset-0 z-[1001] bg-black/30"
-        onClick={onClose}
-      />
+      {/* Desktop: backdrop + panel (hidden when mobileOnly) */}
+      {!mobileOnly && (
+        <>
+          <div
+            className="hidden md:block fixed inset-0 z-[1001] bg-black/30"
+            onClick={onClose}
+          />
 
-      {/* Desktop: Right-side panel */}
-      <div className="hidden md:block fixed top-4 right-4 bottom-4 z-[1002] w-[380px] max-w-[calc(100vw-2rem)] pointer-events-none">
-        <div className="bg-[var(--background)] rounded-xl border border-[var(--card-border)] shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200 h-full">
-          {/* Header */}
-          <div className="px-5 py-4 border-b border-[var(--card-border)] flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[var(--text-tertiary)]">{Icons.mapPin}</span>
-              <span className="text-[11px] font-medium tracking-wide text-[var(--text-secondary)] uppercase">
-                {headerLabel}
-              </span>
+          <div className="hidden md:block fixed top-4 right-4 bottom-4 z-[1002] w-[380px] max-w-[calc(100vw-2rem)] pointer-events-none">
+            <div className="bg-[var(--background)] rounded-xl border border-[var(--card-border)] shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right-4 duration-200 h-full">
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-[var(--card-border)] flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[var(--text-tertiary)]">{Icons.mapPin}</span>
+                  <span className="text-[11px] font-medium tracking-wide text-[var(--text-secondary)] uppercase">
+                    {headerLabel}
+                  </span>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--card-elevated)] transition-colors"
+                  aria-label={lang === 'de' ? 'Schließen' : 'Close'}
+                >
+                  {Icons.close}
+                </button>
+              </div>
+
+              {/* Content - scrollable */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {renderContent(false)}
+              </div>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--card-elevated)] transition-colors"
-              aria-label={lang === 'de' ? 'Schließen' : 'Close'}
-            >
-              {Icons.close}
-            </button>
           </div>
-
-          {/* Content - scrollable */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {renderContent(false)}
-          </div>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* Mobile: Bottom sheet */}
       <div

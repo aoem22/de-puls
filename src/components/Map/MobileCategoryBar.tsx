@@ -47,10 +47,10 @@ export function MobileCategoryBar({
               type="button"
               onClick={() => onIndicatorChange(indicatorKey)}
               style={{ '--cat-accent': INDICATOR_ACCENT[indicatorKey] } as React.CSSProperties}
-              className={`mobile-cat-btn flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium whitespace-nowrap backdrop-blur-sm transition-all touch-feedback active:scale-95 scroll-snap-start ${
+              className={`mobile-cat-btn glass-button flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-all scroll-snap-start ${
                 isSelected
-                  ? `mobile-cat-btn--active ${meta.activeClassName} bg-[var(--card)]/95 shadow-lg`
-                  : 'border-[var(--border)] bg-[var(--card)]/80 text-[var(--text-secondary)] active:bg-[var(--card-elevated)]'
+                  ? `mobile-cat-btn--active ${meta.activeClassName} text-[var(--text-primary)]`
+                  : 'text-[var(--text-secondary)]'
               }`}
             >
               <span
@@ -60,12 +60,12 @@ export function MobileCategoryBar({
               </span>
               <span className="leading-none">{label}</span>
               <span
-                className={`ml-1 -mr-1.5 self-stretch aspect-square rounded-full border-2 flex items-center justify-center transition-colors ${
+                className={`ml-1 -mr-1.5 self-stretch aspect-square rounded-full border-2 flex items-center justify-center transition-all glass-button ${
                   isSelected && isSettingsOpen
-                    ? 'border-[var(--cat-accent)] bg-[var(--cat-accent)] text-white'
-                    : isSelected
-                      ? `border-[var(--cat-accent)] ${CHEVRON_ACTIVE_COLOR[indicatorKey]}`
-                      : 'border-[var(--border)] text-[var(--text-tertiary)]'
+                    ? 'border-[var(--cat-accent)] bg-[var(--cat-accent)]/85 text-white'
+                  : isSelected
+                      ? `border-[var(--cat-accent)] bg-[var(--cat-accent)]/12 ${CHEVRON_ACTIVE_COLOR[indicatorKey]}`
+                      : 'text-[var(--text-tertiary)]'
                 }`}
                 onClick={(e) => {
                   e.stopPropagation();

@@ -5,7 +5,7 @@ import { Source, Layer, Popup, useMap } from 'react-map-gl/maplibre';
 import type { LayerProps, MapLayerMouseEvent } from 'react-map-gl/maplibre';
 import type { FeatureCollection } from 'geojson';
 import { scaleSequential } from 'd3-scale';
-import * as turf from '@turf/turf';
+import bbox from '@turf/bbox';
 import type maplibregl from 'maplibre-gl';
 
 import type { CityData, CrimeTypeKey } from '../../../lib/types/cityCrime';
@@ -96,6 +96,7 @@ export function CityCrimeLayer({
 }: CityCrimeLayerProps) {
   const { current: mapRef } = useMap();
   const hoveredAgsRef = useRef<string | null>(null);
+  const isZoomedIn = currentZoom !== undefined && currentZoom >= 9;
 
   // Popup state
   const [popupInfo, setPopupInfo] = useState<{
@@ -187,8 +188,6 @@ export function CityCrimeLayer({
     const map = mapRef?.getMap();
     if (!map || !map.getSource('city-crime-source')) return;
 
-    const isZoomedIn = currentZoom !== undefined && currentZoom >= 9;
-
     for (const feature of enrichedGeoJson.features) {
       const ags = (feature.properties as Record<string, unknown>)?.ags as string | undefined;
       if (!ags) continue;
@@ -200,7 +199,7 @@ export function CityCrimeLayer({
         }
       );
     }
-  }, [selectedCity, currentZoom, enrichedGeoJson, mapRef]);
+  }, [selectedCity, isZoomedIn, enrichedGeoJson, mapRef]);
 
   const handleMouseMove = useCallback((e: MapLayerMouseEvent) => {
     const feature = e.features?.[0];
@@ -244,9 +243,9 @@ export function CityCrimeLayer({
     setPopupInfo(null);
 
     if (feature.geometry) {
-      const bbox = turf.bbox(feature.geometry);
+      const bounds = bbox(feature.geometry);
       mapRef?.fitBounds(
-        [bbox[0], bbox[1], bbox[2], bbox[3]] as [number, number, number, number],
+        [bounds[0], bounds[1], bounds[2], bounds[3]] as [number, number, number, number],
         { padding: 50, maxZoom: 12 }
       );
     }
@@ -261,18 +260,27 @@ export function CityCrimeLayer({
       handleMouseMove(e as unknown as MapLayerMouseEvent);
     };
     const onLeave = () => handleMouseLeave();
-    const onClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-      handleClick(e as unknown as MapLayerMouseEvent);
+    // Use padded hit-testing for reliable mobile taps around city polygons.
+    const TAP_PADDING = 12;
+    const onClick = (e: maplibregl.MapMouseEvent) => {
+      const { x, y } = e.point;
+      const features = map.queryRenderedFeatures(
+        [[x - TAP_PADDING, y - TAP_PADDING], [x + TAP_PADDING, y + TAP_PADDING]],
+        { layers: ['city-crime-fill'] },
+      );
+      if (features.length === 0) return;
+      e.originalEvent.stopPropagation();
+      handleClick({ ...(e as unknown as MapLayerMouseEvent), features } as MapLayerMouseEvent);
     };
 
     map.on('mousemove', 'city-crime-fill', onMove);
     map.on('mouseleave', 'city-crime-fill', onLeave);
-    map.on('click', 'city-crime-fill', onClick);
+    map.on('click', onClick);
 
     return () => {
       map.off('mousemove', 'city-crime-fill', onMove);
       map.off('mouseleave', 'city-crime-fill', onLeave);
-      map.off('click', 'city-crime-fill', onClick);
+      map.off('click', onClick);
     };
   }, [mapRef, handleMouseMove, handleMouseLeave, handleClick]);
 

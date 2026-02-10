@@ -68,6 +68,7 @@ export function ChoroplethMap() {
   const [isMobileRankingOpen, setIsMobileRankingOpen] = useState(false);
   const [shouldRenderRankingPanel, setShouldRenderRankingPanel] = useState(true);
   const [isRankingPanelVisible, setIsRankingPanelVisible] = useState(true);
+  const kreisSelectTimestampRef = useRef(0);
 
   // Fetch dataset metadata (available years) from Supabase
   const { data: datasetMeta } = useAllDatasetMeta();
@@ -335,12 +336,13 @@ export function ChoroplethMap() {
     previousSelectedKreisRef.current = selectedKreis;
   }, [showKreisLayer, selectedKreis]);
 
-  // Reset view when closing mobile ranking panel
+  // Reset view when closing mobile ranking panel (only when nothing is selected)
   useEffect(() => {
     const wasOpen = previousMobileRankingRef.current;
     const justClosed = wasOpen && !isMobileRankingOpen;
+    const hasActiveSelection = Boolean(selectedKreis || selectedCity);
 
-    if (justClosed && mapRef.current) {
+    if (justClosed && !hasActiveSelection && mapRef.current) {
       const container = mapRef.current.getContainer();
       const isMobile = container.clientWidth < 768;
       if (isMobile) {
@@ -352,7 +354,7 @@ export function ChoroplethMap() {
     }
 
     previousMobileRankingRef.current = isMobileRankingOpen;
-  }, [isMobileRankingOpen]);
+  }, [isMobileRankingOpen, selectedKreis, selectedCity]);
 
   // ── Playback timers (identical logic) ───────────────────────────
 
@@ -427,8 +429,10 @@ export function ChoroplethMap() {
 
   const handleZoom = useCallback((e: ViewStateChangeEvent) => {
     const zoom = e.viewState.zoom;
-    setCurrentZoom(zoom);
-    if (zoom <= KREIS_DESELECT_ZOOM_THRESHOLD) {
+    const quantizedZoom = Math.round(zoom * 10) / 10;
+    setCurrentZoom((previous) => (previous === quantizedZoom ? previous : quantizedZoom));
+    // Skip deselection during programmatic fitBounds (e.g. after clicking a Kreis on the map)
+    if (zoom <= KREIS_DESELECT_ZOOM_THRESHOLD && Date.now() - kreisSelectTimestampRef.current > 800) {
       setSelectedKreis((prev) => (prev ? null : prev));
     }
   }, []);
@@ -704,7 +708,7 @@ export function ChoroplethMap() {
             hoveredKreis={hoveredKreis}
             onHoverKreis={setHoveredKreis}
             onHoverInfo={setKreisHoverInfo}
-            onClickKreis={setSelectedKreis}
+            onClickKreis={(ags) => { setSelectedKreis(ags); if (ags) kreisSelectTimestampRef.current = Date.now(); }}
             selectedKreis={selectedKreis}
             currentZoom={currentZoom}
             auslaenderData={ausData}
@@ -877,7 +881,7 @@ export function ChoroplethMap() {
           onHoverAgs={showCityCrimeLayer ? setHoveredCity : setHoveredKreis}
           onSelectAgs={showCityCrimeLayer ? setSelectedCity : setSelectedKreis}
           isMobileOpen={isMobileRankingOpen}
-          onMobileToggle={() => setIsMobileRankingOpen(!isMobileRankingOpen)}
+          onMobileToggle={() => setIsMobileRankingOpen((prev) => !prev)}
           auslaenderData={ausData}
           deutschlandatlasData={datlasData}
           cityCrimeData={cityCrimeData}
@@ -905,8 +909,8 @@ export function ChoroplethMap() {
         />
       )}
 
-      {/* Kreis detail panel (mobile bottom sheet + desktop side panel) */}
-      {showKreisLayer && selectedKreis && (
+      {/* Kreis detail panel — only when ranking panel is NOT rendered (it has its own rich detail view) */}
+      {showKreisLayer && selectedKreis && !shouldRenderRankingPanel && (
         <KreisDetailPanel
           ags={selectedKreis}
           kreisName={selectedKreisName}

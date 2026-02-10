@@ -48,6 +48,10 @@ export function CrimeLayer({
   const onClickRef = useRef(onCrimeClick);
   const onHoverRef = useRef(onCrimeHover);
   const crimeByIdRef = useRef<Map<string, CrimeRecord>>(new Map());
+  const previousVisibleCrimeIdsRef = useRef<Set<string> | null>(null);
+  const previousSelectedCrimeIdRef = useRef<string | null>(null);
+  const previousHoveredCrimeIdRef = useRef<string | null>(null);
+  const previousFlashingCrimeIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     onClickRef.current = onCrimeClick;
@@ -55,8 +59,9 @@ export function CrimeLayer({
   }, [onCrimeClick, onCrimeHover]);
 
   // Build GeoJSON FeatureCollection from crimes array
-  const geojson = useMemo(() => {
+  const { geojson, crimeById, featureIdByCrimeId } = useMemo(() => {
     const crimeById = new Map<string, CrimeRecord>();
+    const featureIdByCrimeId = new Map<string, number>();
     const features = [];
 
     for (const crime of crimes) {
@@ -75,9 +80,12 @@ export function CrimeLayer({
           ? (filterCategory !== null ? (categoryColorMap.get(category) ?? DEFAULT_BLUE) : DEFAULT_BLUE)
           : (categoryColorMap.get(category) ?? '#94a3b8');
 
+      const featureId = hashId(crime.id);
+      featureIdByCrimeId.set(crime.id, featureId);
+
       features.push({
         type: 'Feature' as const,
-        id: hashId(crime.id),
+        id: featureId,
         geometry: {
           type: 'Point' as const,
           coordinates: [crime.longitude, crime.latitude],
@@ -89,42 +97,148 @@ export function CrimeLayer({
       });
     }
 
-    crimeByIdRef.current = crimeById;
-    return { type: 'FeatureCollection' as const, features };
+    return {
+      geojson: { type: 'FeatureCollection' as const, features },
+      crimeById,
+      featureIdByCrimeId,
+    };
   }, [crimes, monochrome, filterCategory, favoriteIds]);
 
-  // Sync feature-state for visibility, selection, hover, flash
+  useEffect(() => {
+    crimeByIdRef.current = crimeById;
+  }, [crimeById]);
+
+  // Reset local diff-tracking when source data changes.
+  useEffect(() => {
+    previousVisibleCrimeIdsRef.current = null;
+    previousSelectedCrimeIdRef.current = null;
+    previousHoveredCrimeIdRef.current = null;
+    previousFlashingCrimeIdsRef.current = new Set();
+  }, [geojson]);
+
+  // Sync feature-state for visibility.
   useEffect(() => {
     const map = mapRef?.getMap();
     if (!map || !map.getSource('crime-points')) return;
 
-    for (const feature of geojson.features) {
-      const crimeId = feature.properties._crimeId;
-      const numId = feature.id as number;
-      const isVisible = visibleCrimeIds === null || visibleCrimeIds.has(crimeId);
-      const isSelected = crimeId === selectedCrimeId;
-      const isHovered = crimeId === hoveredCrimeId;
-      const isFlashing = flashingCrimeIds?.has(crimeId) ?? false;
+    const previousVisibleCrimeIds = previousVisibleCrimeIdsRef.current;
 
-      map.setFeatureState(
-        { source: 'crime-points', id: numId },
-        {
-          visible: isVisible,
-          selected: isSelected,
-          hovered: isHovered,
-          flashing: isFlashing,
+    if (visibleCrimeIds === null) {
+      if (previousVisibleCrimeIds !== null) {
+        for (const featureId of featureIdByCrimeId.values()) {
+          map.setFeatureState({ source: 'crime-points', id: featureId }, { visible: true });
         }
-      );
+      }
+      previousVisibleCrimeIdsRef.current = null;
+      return;
     }
-  }, [geojson, visibleCrimeIds, selectedCrimeId, hoveredCrimeId, flashingCrimeIds, mapRef]);
 
-  const handleClick = useCallback((e: MapLayerMouseEvent) => {
-    const feature = e.features?.[0];
-    if (!feature) return;
-    const crimeId = (feature.properties as { _crimeId: string })._crimeId;
-    const crime = crimeByIdRef.current.get(crimeId);
-    if (crime && onClickRef.current) onClickRef.current(crime);
-  }, []);
+    if (previousVisibleCrimeIds === null) {
+      for (const [crimeId, featureId] of featureIdByCrimeId.entries()) {
+        map.setFeatureState(
+          { source: 'crime-points', id: featureId },
+          { visible: visibleCrimeIds.has(crimeId) }
+        );
+      }
+      previousVisibleCrimeIdsRef.current = new Set(visibleCrimeIds);
+      return;
+    }
+
+    for (const crimeId of visibleCrimeIds) {
+      if (previousVisibleCrimeIds.has(crimeId)) continue;
+      const featureId = featureIdByCrimeId.get(crimeId);
+      if (featureId !== undefined) {
+        map.setFeatureState({ source: 'crime-points', id: featureId }, { visible: true });
+      }
+    }
+
+    for (const crimeId of previousVisibleCrimeIds) {
+      if (visibleCrimeIds.has(crimeId)) continue;
+      const featureId = featureIdByCrimeId.get(crimeId);
+      if (featureId !== undefined) {
+        map.setFeatureState({ source: 'crime-points', id: featureId }, { visible: false });
+      }
+    }
+
+    previousVisibleCrimeIdsRef.current = new Set(visibleCrimeIds);
+  }, [geojson, visibleCrimeIds, mapRef, featureIdByCrimeId]);
+
+  // Sync feature-state for selected crime.
+  useEffect(() => {
+    const map = mapRef?.getMap();
+    if (!map || !map.getSource('crime-points')) return;
+
+    const previousSelectedCrimeId = previousSelectedCrimeIdRef.current;
+    const nextSelectedCrimeId = selectedCrimeId ?? null;
+
+    if (previousSelectedCrimeId && previousSelectedCrimeId !== nextSelectedCrimeId) {
+      const previousFeatureId = featureIdByCrimeId.get(previousSelectedCrimeId);
+      if (previousFeatureId !== undefined) {
+        map.setFeatureState({ source: 'crime-points', id: previousFeatureId }, { selected: false });
+      }
+    }
+
+    if (nextSelectedCrimeId && previousSelectedCrimeId !== nextSelectedCrimeId) {
+      const nextFeatureId = featureIdByCrimeId.get(nextSelectedCrimeId);
+      if (nextFeatureId !== undefined) {
+        map.setFeatureState({ source: 'crime-points', id: nextFeatureId }, { selected: true });
+      }
+    }
+
+    previousSelectedCrimeIdRef.current = nextSelectedCrimeId;
+  }, [geojson, selectedCrimeId, mapRef, featureIdByCrimeId]);
+
+  // Sync feature-state for hovered crime.
+  useEffect(() => {
+    const map = mapRef?.getMap();
+    if (!map || !map.getSource('crime-points')) return;
+
+    const previousHoveredCrimeId = previousHoveredCrimeIdRef.current;
+    const nextHoveredCrimeId = hoveredCrimeId ?? null;
+
+    if (previousHoveredCrimeId && previousHoveredCrimeId !== nextHoveredCrimeId) {
+      const previousFeatureId = featureIdByCrimeId.get(previousHoveredCrimeId);
+      if (previousFeatureId !== undefined) {
+        map.setFeatureState({ source: 'crime-points', id: previousFeatureId }, { hovered: false });
+      }
+    }
+
+    if (nextHoveredCrimeId && previousHoveredCrimeId !== nextHoveredCrimeId) {
+      const nextFeatureId = featureIdByCrimeId.get(nextHoveredCrimeId);
+      if (nextFeatureId !== undefined) {
+        map.setFeatureState({ source: 'crime-points', id: nextFeatureId }, { hovered: true });
+      }
+    }
+
+    previousHoveredCrimeIdRef.current = nextHoveredCrimeId;
+  }, [geojson, hoveredCrimeId, mapRef, featureIdByCrimeId]);
+
+  // Sync feature-state for flashing crimes.
+  useEffect(() => {
+    const map = mapRef?.getMap();
+    if (!map || !map.getSource('crime-points')) return;
+
+    const nextFlashingCrimeIds = flashingCrimeIds ?? new Set<string>();
+    const previousFlashingCrimeIds = previousFlashingCrimeIdsRef.current;
+
+    for (const crimeId of previousFlashingCrimeIds) {
+      if (nextFlashingCrimeIds.has(crimeId)) continue;
+      const featureId = featureIdByCrimeId.get(crimeId);
+      if (featureId !== undefined) {
+        map.setFeatureState({ source: 'crime-points', id: featureId }, { flashing: false });
+      }
+    }
+
+    for (const crimeId of nextFlashingCrimeIds) {
+      if (previousFlashingCrimeIds.has(crimeId)) continue;
+      const featureId = featureIdByCrimeId.get(crimeId);
+      if (featureId !== undefined) {
+        map.setFeatureState({ source: 'crime-points', id: featureId }, { flashing: true });
+      }
+    }
+
+    previousFlashingCrimeIdsRef.current = new Set(nextFlashingCrimeIds);
+  }, [geojson, flashingCrimeIds, mapRef, featureIdByCrimeId]);
 
   const handleMouseMove = useCallback((e: MapLayerMouseEvent) => {
     const feature = e.features?.[0];

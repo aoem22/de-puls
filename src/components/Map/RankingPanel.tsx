@@ -5,10 +5,25 @@ import type { IndicatorKey, SubMetricKey, AuslaenderRegionKey, DeutschlandatlasK
 import {
   AUSLAENDER_REGION_META,
   DEUTSCHLANDATLAS_META,
+  DEUTSCHLANDATLAS_KEYS,
   isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
 import { getCrimeTypeConfig, type CrimeTypeKey } from '../../../lib/types/cityCrime';
-import { formatNumber, formatDetailValue, calcPercent } from '../../../lib/utils/formatters';
+import { formatNumber, formatValue, formatDetailValue, calcPercent, calcPercentParens } from '../../../lib/utils/formatters';
+
+// Continent-level region keys for summary breakdown
+const CONTINENT_KEYS: AuslaenderRegionKey[] = ['europa', 'asien', 'afrika', 'amerika', 'ozeanien'];
+
+// Sub-region keys grouped by continent for expanded detail
+const SUB_REGIONS: Record<string, AuslaenderRegionKey[]> = {
+  europa: ['eu27', 'drittstaaten'],
+  afrika: ['nordafrika', 'westafrika', 'zentralafrika', 'ostafrika', 'suedafrika'],
+  amerika: ['nordamerika', 'mittelamerika', 'suedamerika'],
+  asien: ['vorderasien', 'suedostasien', 'ostasien'],
+};
+
+// Historical group keys (separate from continent breakdown)
+const HISTORICAL_KEYS: AuslaenderRegionKey[] = ['gastarbeiter', 'exjugoslawien', 'exsowjetunion'];
 import { useTranslation, translations, tNested, type Language } from '@/lib/i18n';
 import type { AuslaenderRow, DeutschlandatlasRow, CityCrimeRow } from '@/lib/supabase';
 
@@ -195,91 +210,142 @@ function AuslaenderDetailContent({
   lang: Language;
 }) {
   const total = record.regions.total?.total;
+  const selectedMeta = AUSLAENDER_REGION_META[selectedRegion];
   const selectedValue = record.regions[selectedRegion]?.total;
   const selectedData = record.regions[selectedRegion];
 
-  const continents = ['europa', 'asien', 'afrika', 'amerika', 'ozeanien'] as const;
-  const specialRegions = ['eu27', 'drittstaaten', 'gastarbeiter', 'exjugoslawien', 'exsowjetunion'] as const;
-
-  const t = translations;
-
   return (
     <>
-      {/* Total */}
-      <div className="flex items-baseline justify-between">
-        <span className="text-[var(--text-tertiary)] text-sm uppercase tracking-wide">{t.totalForeigners[lang]}</span>
-        <span className="text-2xl font-bold text-red-400">{formatNumber(total)}</span>
-      </div>
-
       {/* Selected region highlight */}
-      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-red-400 text-xs font-medium">{t.current[lang]}: {getRegionLabel(selectedRegion, lang)}</span>
-          <span className="text-[var(--text-tertiary)] text-xs">{calcPercent(selectedValue, total)}</span>
-        </div>
-        <div className="text-[var(--foreground)] text-xl font-semibold">{formatNumber(selectedValue)}</div>
-        {selectedData && (
-          <div className="flex gap-4 mt-2 text-xs">
-            <div className="flex items-center gap-1">
-              <span className="text-blue-400">&#9794;</span>
-              <span className="text-[var(--text-secondary)]">{formatNumber(selectedData.male)}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-pink-400">&#9792;</span>
-              <span className="text-[var(--text-secondary)]">{formatNumber(selectedData.female)}</span>
-            </div>
+      {selectedRegion !== 'total' && (
+        <div className="bg-red-500/8 border border-red-500/25 rounded-lg p-3">
+          <div className="text-red-400 text-[11px] mb-1">
+            {lang === 'de' ? 'Aktuell' : 'Current'}: <span className="font-bold">{selectedMeta.labelDe}</span>
           </div>
-        )}
+          <div className="text-2xl font-bold text-red-400">
+            {formatNumber(selectedValue)}
+            <span className="text-[var(--text-muted)] text-sm ml-1.5">{calcPercentParens(selectedValue, total)}</span>
+          </div>
+          {selectedData && (
+            <div className="flex gap-4 mt-2">
+              <div>
+                <span className="text-blue-400 text-sm">&#9794;</span>
+                <span className="text-[var(--text-secondary)] text-sm ml-1">{formatNumber(selectedData.male)}</span>
+              </div>
+              <div>
+                <span className="text-pink-400 text-sm">&#9792;</span>
+                <span className="text-[var(--text-secondary)] text-sm ml-1">{formatNumber(selectedData.female)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Total */}
+      <div className="flex justify-between items-baseline">
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
+          {lang === 'de' ? 'Gesamt' : 'Total'}
+        </span>
+        <span className="text-xl font-bold text-red-400">{formatNumber(total)}</span>
       </div>
 
-      {/* Continent breakdown */}
-      <div>
-        <h4 className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">{t.byContinent[lang]}</h4>
+      {/* Gender split for total */}
+      {record.regions.total && (
+        <div className="flex gap-6">
+          <div>
+            <span className="text-blue-400 text-sm">&#9794;</span>
+            <span className="text-[var(--text-secondary)] text-sm ml-1">{formatNumber(record.regions.total.male)}</span>
+            <span className="text-[var(--text-faint)] text-xs ml-1">{calcPercentParens(record.regions.total.male, total)}</span>
+          </div>
+          <div>
+            <span className="text-pink-400 text-sm">&#9792;</span>
+            <span className="text-[var(--text-secondary)] text-sm ml-1">{formatNumber(record.regions.total.female)}</span>
+            <span className="text-[var(--text-faint)] text-xs ml-1">{calcPercentParens(record.regions.total.female, total)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Continent breakdown with sub-regions */}
+      <div className="border-t border-[var(--card-border)] pt-3">
+        <div className="text-[10px] font-semibold tracking-widest text-[var(--text-muted)] uppercase mb-2">
+          {lang === 'de' ? 'Nach Kontinent' : 'By Continent'}
+        </div>
         <div className="space-y-1">
-          {continents.map((continent) => {
+          {CONTINENT_KEYS.map((continent) => {
             const val = record.regions[continent]?.total;
+            const meta = AUSLAENDER_REGION_META[continent];
             const isSelected = selectedRegion === continent;
-            const pct = calcPercent(val, total);
+            const pct = calcPercentParens(val, total);
+            const subRegions = SUB_REGIONS[continent];
 
             return (
-              <div
-                key={continent}
-                className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-red-500/15' : ''}`}
-              >
-                <span className={`text-xs ${isSelected ? 'text-red-400' : 'text-[var(--text-tertiary)]'}`}>
-                  {getRegionLabel(continent, lang)}
-                </span>
-                <span className={`text-xs ${isSelected ? 'text-red-400 font-medium' : 'text-[var(--foreground)]'}`}>
-                  {formatNumber(val)}
-                  {pct && <span className="text-[var(--text-tertiary)] ml-1.5 text-xs">{pct}</span>}
-                </span>
+              <div key={continent}>
+                <div
+                  className={`flex justify-between py-1 px-2 rounded ${
+                    isSelected ? 'bg-red-500/15' : ''
+                  }`}
+                >
+                  <span className={`text-xs ${isSelected ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}`}>
+                    {meta.labelDe}
+                  </span>
+                  <span className={`text-xs tabular-nums ${isSelected ? 'text-red-400 font-semibold' : 'text-[var(--text-primary)]'}`}>
+                    {formatNumber(val)}
+                    {pct && <span className="text-[var(--text-faint)] text-[10px] ml-1">{pct}</span>}
+                  </span>
+                </div>
+                {/* Sub-regions */}
+                {subRegions && subRegions.map((subKey) => {
+                  const subVal = record.regions[subKey]?.total;
+                  if (subVal === null || subVal === undefined || subVal === 0) return null;
+                  const subMeta = AUSLAENDER_REGION_META[subKey];
+                  const isSubSelected = selectedRegion === subKey;
+                  return (
+                    <div
+                      key={subKey}
+                      className={`flex justify-between py-0.5 px-2 ml-4 rounded ${
+                        isSubSelected ? 'bg-red-500/15' : ''
+                      }`}
+                    >
+                      <span className={`text-[11px] ${isSubSelected ? 'text-red-400' : 'text-[var(--text-tertiary)]'}`}>
+                        {subMeta.labelDe}
+                      </span>
+                      <span className={`text-[11px] tabular-nums ${isSubSelected ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]'}`}>
+                        {formatNumber(subVal)}
+                        <span className="text-[var(--text-faint)] text-[10px] ml-1">{calcPercentParens(subVal, total)}</span>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Special groups */}
-      <div>
-        <h4 className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">{t.otherGroups[lang]}</h4>
+      {/* Historical groups */}
+      <div className="border-t border-[var(--card-border)] pt-3">
+        <div className="text-[10px] font-semibold tracking-widest text-[var(--text-muted)] uppercase mb-2">
+          {lang === 'de' ? 'Historische Gruppen' : 'Historical Groups'}
+        </div>
         <div className="space-y-1">
-          {specialRegions.map((region) => {
-            const val = record.regions[region]?.total;
-            if (val === null || val === undefined) return null;
-            const isSelected = selectedRegion === region;
-            const pct = calcPercent(val, total);
-
+          {HISTORICAL_KEYS.map((key) => {
+            const val = record.regions[key]?.total;
+            if (val === null || val === undefined || val === 0) return null;
+            const meta = AUSLAENDER_REGION_META[key];
+            const isSelected = selectedRegion === key;
             return (
               <div
-                key={region}
-                className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-red-500/15' : ''}`}
+                key={key}
+                className={`flex justify-between py-1 px-2 rounded ${
+                  isSelected ? 'bg-red-500/15' : ''
+                }`}
               >
-                <span className={`text-xs ${isSelected ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>
-                  {getRegionLabel(region, lang)}
-                </span>
                 <span className={`text-xs ${isSelected ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}`}>
+                  {meta.labelDe}
+                </span>
+                <span className={`text-xs tabular-nums ${isSelected ? 'text-red-400 font-semibold' : 'text-[var(--text-primary)]'}`}>
                   {formatNumber(val)}
-                  {pct && <span className="text-[var(--text-tertiary)] ml-1.5 text-xs">{pct}</span>}
+                  <span className="text-[var(--text-faint)] text-[10px] ml-1">{calcPercentParens(val, total)}</span>
                 </span>
               </div>
             );
@@ -301,114 +367,69 @@ function DeutschlandatlasDetailContent({
 }) {
   const meta = DEUTSCHLANDATLAS_META[selectedIndicator];
   const value = record.indicators[selectedIndicator];
-  const t = translations;
 
-  const getAtlasLabel = (key: DeutschlandatlasKey) => {
-    const translated = tNested('atlasIndicators', key, lang);
-    return translated !== key ? translated : DEUTSCHLANDATLAS_META[key].labelDe;
-  };
-
-  const indicatorsByCategory = useMemo(() => {
-    const grouped = new Map<string, { key: DeutschlandatlasKey; value: number | null; meta: typeof meta }[]>();
-
-    for (const [key, val] of Object.entries(record.indicators)) {
-      if (!isDeutschlandatlasKey(key)) continue;
-      const indicatorMeta = DEUTSCHLANDATLAS_META[key];
-      const category = indicatorMeta.categoryDe;
-
-      if (!grouped.has(category)) {
-        grouped.set(category, []);
-      }
-      grouped.get(category)!.push({ key: key as DeutschlandatlasKey, value: val, meta: indicatorMeta });
+  // Group all indicators by category using canonical DEUTSCHLANDATLAS_KEYS order
+  const byCategory = useMemo(() => {
+    const grouped = new Map<string, { key: DeutschlandatlasKey; meta: typeof meta; value: number | null }[]>();
+    for (const key of DEUTSCHLANDATLAS_KEYS) {
+      const indMeta = DEUTSCHLANDATLAS_META[key];
+      const cat = indMeta.categoryDe;
+      if (!grouped.has(cat)) grouped.set(cat, []);
+      grouped.get(cat)!.push({ key, meta: indMeta, value: record.indicators[key] });
     }
-
     return grouped;
   }, [record.indicators]);
-
-  const priorityIndicators: DeutschlandatlasKey[] = [
-    'kinder_bg', 'alq', 'sozsich', 'hh_veink', 'bev_ausl', 'straft', 'schule_oabschl', 'wahl_beteil'
-  ];
 
   return (
     <>
       {/* Selected indicator highlight */}
-      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-amber-400 text-xs font-medium">{getAtlasLabel(selectedIndicator)}</span>
-          <span className="text-[var(--text-tertiary)] text-xs">{meta.categoryDe}</span>
+      <div className="bg-amber-500/8 border border-amber-500/25 rounded-lg p-3">
+        <div className="text-amber-400 text-[11px] mb-1">{meta.labelDe}</div>
+        <div className="text-2xl font-bold text-[var(--text-primary)]">
+          {formatValue(value)}
+          {meta.unitDe && <span className="text-[var(--text-tertiary)] text-sm ml-1.5">{meta.unitDe}</span>}
         </div>
-        <div className="text-[var(--foreground)] text-xl font-semibold">
-          {formatDetailValue(value)}
-          {meta.unitDe && <span className="text-[var(--text-tertiary)] text-sm ml-1">{meta.unitDe}</span>}
-        </div>
-        <p className="text-[var(--text-tertiary)] text-xs mt-1">{meta.descriptionDe}</p>
+        {meta.descriptionDe && (
+          <div className="text-[11px] text-[var(--text-tertiary)] mt-1">{meta.descriptionDe}</div>
+        )}
         {meta.higherIsBetter !== undefined && (
-          <div className={`text-xs mt-1 ${meta.higherIsBetter ? 'text-green-400' : 'text-orange-400'}`}>
-            {meta.higherIsBetter ? `↑ ${t.higherIsBetter[lang]}` : `↓ ${t.lowerIsBetter[lang]}`}
+          <div className={`text-[10px] mt-1 ${meta.higherIsBetter ? 'text-green-400' : 'text-orange-400'}`}>
+            {meta.higherIsBetter
+              ? (lang === 'de' ? '↑ Höher ist besser' : '↑ Higher is better')
+              : (lang === 'de' ? '↓ Niedriger ist besser' : '↓ Lower is better')}
           </div>
         )}
       </div>
 
-      {/* Priority indicators overview */}
-      <div>
-        <h4 className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">{t.importantIndicators[lang]}</h4>
-        <div className="space-y-1">
-          {priorityIndicators.map((key) => {
-            const val = record.indicators[key];
-            const indMeta = DEUTSCHLANDATLAS_META[key];
-            const isSelected = selectedIndicator === key;
-
-            return (
-              <div
-                key={key}
-                className={`flex justify-between py-1.5 px-2 rounded ${isSelected ? 'bg-amber-500/15' : ''}`}
-              >
-                <span className={`text-xs ${isSelected ? 'text-amber-400' : 'text-[var(--text-tertiary)]'}`}>
-                  {getAtlasLabel(key)}
-                </span>
-                <span className={`text-xs ${isSelected ? 'text-amber-400 font-medium' : 'text-[var(--foreground)]'}`}>
-                  {formatDetailValue(val)}
-                  {indMeta.unitDe && <span className="text-[var(--text-tertiary)] ml-1 text-xs">{indMeta.unitDe}</span>}
-                </span>
-              </div>
-            );
-          })}
+      {/* All indicators by category — expanded by default */}
+      {Array.from(byCategory.entries()).map(([category, indicators]) => (
+        <div key={category} className="border-t border-[var(--card-border)] pt-3">
+          <div className="text-[10px] font-semibold tracking-widest text-[var(--text-muted)] uppercase mb-2">
+            {category}
+          </div>
+          <div className="space-y-0.5">
+            {indicators.map(({ key, meta: indMeta, value: val }) => {
+              const isSelected = key === selectedIndicator;
+              return (
+                <div
+                  key={key}
+                  className={`flex justify-between py-1 px-2 rounded ${
+                    isSelected ? 'bg-amber-500/15' : ''
+                  }`}
+                >
+                  <span className={`text-[11px] flex-1 mr-2 ${isSelected ? 'text-amber-400 font-medium' : 'text-[var(--text-tertiary)]'}`}>
+                    {indMeta.labelDe}
+                  </span>
+                  <span className={`text-[11px] tabular-nums whitespace-nowrap ${isSelected ? 'text-amber-400 font-semibold' : 'text-[var(--text-primary)]'}`}>
+                    {formatValue(val)}
+                    {indMeta.unitDe && <span className="text-[var(--text-faint)] ml-0.5">{indMeta.unitDe}</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
-
-      {/* All indicators by category (collapsed by default) */}
-      <details className="group">
-        <summary className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider cursor-pointer hover:text-[var(--text-primary)] list-none flex items-center gap-1">
-          <span className="group-open:rotate-90 transition-transform">&#9654;</span>
-          {t.allIndicators[lang]} ({Object.keys(record.indicators).length})
-        </summary>
-        <div className="mt-2 space-y-3 max-h-60 overflow-y-auto">
-          {Array.from(indicatorsByCategory.entries()).map(([category, indicators]) => (
-            <div key={category}>
-              <h5 className="text-[var(--text-tertiary)] text-[11px] uppercase tracking-wider mb-1">{category}</h5>
-              <div className="space-y-0.5">
-                {indicators.map(({ key, value: val, meta: indMeta }) => {
-                  const isSelected = selectedIndicator === key;
-                  return (
-                    <div
-                      key={key}
-                      className={`flex justify-between py-1 px-1.5 rounded text-xs ${isSelected ? 'bg-amber-500/15' : ''}`}
-                    >
-                      <span className={isSelected ? 'text-amber-400' : 'text-[var(--text-secondary)]'}>
-                        {getAtlasLabel(key)}
-                      </span>
-                      <span className={isSelected ? 'text-amber-400' : 'text-[var(--text-secondary)]'}>
-                        {formatDetailValue(val)}
-                        {indMeta.unitDe && <span className="text-[var(--text-tertiary)] ml-0.5">{indMeta.unitDe}</span>}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </details>
+      ))}
     </>
   );
 }
@@ -1091,7 +1112,8 @@ export function RankingPanel({
       {/* Mobile ranking toggle button */}
       <button
         onClick={onMobileToggle}
-        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-[var(--card)]/95 backdrop-blur-sm rounded-full shadow-xl border border-[var(--card-border)] px-5 py-3 flex items-center justify-center gap-2 touch-feedback active:scale-95 transition-all safe-area-pb"
+        className="mobile-ranking-toggle md:hidden fixed left-1/2 -translate-x-1/2 z-[1000] rounded-full border px-5 py-3 inline-flex items-center justify-center gap-2 transition-all glass-button"
+        style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
         aria-label={t.openRanking[lang]}
       >
         <svg
@@ -1104,7 +1126,7 @@ export function RankingPanel({
           <rect x="10" y="8" width="4" height="13" rx="0.5" />
           <rect x="17" y="3" width="4" height="18" rx="0.5" />
         </svg>
-        <span className="text-[var(--text-primary)] text-[15px] font-medium leading-none no-select">{t.ranking[lang]}</span>
+        <span className="inline-flex h-[18px] items-center text-[var(--text-primary)] text-[15px] font-medium leading-[18px] no-select">{t.ranking[lang]}</span>
         <svg
           className="w-[18px] h-[18px] shrink-0 text-[var(--text-tertiary)]"
           viewBox="0 0 24 24"
