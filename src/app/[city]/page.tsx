@@ -6,9 +6,12 @@ import { fetchKreisPageData, fetchCrimeRecordsByBbox, fetchCrimeCountsByBbox } f
 import { Breadcrumbs } from '@/components/seo/Breadcrumbs';
 import { StatsCard } from '@/components/seo/StatsCard';
 import { CrimeTypeGrid } from '@/components/seo/CrimeTypeGrid';
-import { BlaulichtFeed } from '@/components/seo/BlaulichtFeed';
 import { IndicatorRow } from '@/components/seo/IndicatorRow';
 import { BackToMap } from '@/components/seo/BackToMap';
+import { CityBoundaryPreview } from '@/components/seo/CityBoundaryPreview';
+import { BlaulichtCardCarousel } from '@/components/seo/BlaulichtCardCarousel';
+import { AuslaenderSnapshot } from '@/components/seo/AuslaenderSnapshot';
+import { KriminalitaetSnapshot } from '@/components/seo/KriminalitaetSnapshot';
 
 export const revalidate = 86400; // 24h ISR
 export const dynamicParams = true;
@@ -84,8 +87,8 @@ export default async function CityPage(
   // Fetch blaulicht data if bbox available
   const [blaulichtRecords, crimeCounts] = pageData.bbox
     ? await Promise.all([
-        fetchCrimeRecordsByBbox(pageData.bbox, undefined, 10),
-        fetchCrimeCountsByBbox(pageData.bbox),
+        fetchCrimeRecordsByBbox(pageData.bbox, undefined, 12, pageData.boundaryGeometry),
+        fetchCrimeCountsByBbox(pageData.bbox, pageData.boundaryGeometry),
       ])
     : [[], {}];
 
@@ -182,6 +185,10 @@ export default async function CityPage(
         )}
       </section>
 
+      <KriminalitaetSnapshot crimes={crimes} />
+
+      <AuslaenderSnapshot record={pageData.auslaender} />
+
       {/* Deutschlandatlas Snapshot */}
       {indicators && (
         <section className="mb-10">
@@ -204,8 +211,23 @@ export default async function CityPage(
       {/* Crime Type Grid */}
       <CrimeTypeGrid citySlug={city} counts={crimeCounts} />
 
-      {/* Blaulicht Feed */}
-      <BlaulichtFeed records={blaulichtRecords} />
+      {/* Polizeimeldungen section */}
+      <section className="mb-10">
+        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">
+          Polizeimeldungen (geocodiert im Kreis)
+        </h2>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start">
+          <CityBoundaryPreview
+            cityName={kreis.name}
+            boundaryGeometry={pageData.boundaryGeometry}
+            records={blaulichtRecords}
+          />
+          <BlaulichtCardCarousel
+            records={blaulichtRecords}
+            title="Vollkartenansicht"
+          />
+        </div>
+      </section>
 
       {/* Nachbar-Kreise (same Bundesland) */}
       <section className="mb-10">

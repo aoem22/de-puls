@@ -4,9 +4,20 @@ import type {
   AuslaenderRow,
   DeutschlandatlasRow,
   CityCrimeRow,
-  GeoBoundaryRow,
 } from './types';
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
+
+type BoundaryPosition = [number, number];
+
+export type BoundaryGeometry =
+  | {
+      type: 'Polygon';
+      coordinates: BoundaryPosition[][];
+    }
+  | {
+      type: 'MultiPolygon';
+      coordinates: BoundaryPosition[][][];
+    };
 
 // ---------------------------------------------------------------------------
 // Row → CrimeRecord transform (same as queries.ts)
@@ -51,6 +62,101 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
   };
 }
 
+function parsePosition(value: unknown): BoundaryPosition | null {
+  if (!Array.isArray(value) || value.length < 2) return null;
+  const lon = value[0];
+  const lat = value[1];
+  if (typeof lon !== 'number' || typeof lat !== 'number') return null;
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  return [lon, lat];
+}
+
+function parseRing(value: unknown): BoundaryPosition[] | null {
+  if (!Array.isArray(value)) return null;
+  const ring = value
+    .map(parsePosition)
+    .filter((pos): pos is BoundaryPosition => pos !== null);
+  return ring.length >= 3 ? ring : null;
+}
+
+function normalizeBoundaryGeometry(geometry: unknown): BoundaryGeometry | null {
+  if (!geometry || typeof geometry !== 'object') return null;
+
+  const rawType = (geometry as { type?: unknown }).type;
+  const rawCoordinates = (geometry as { coordinates?: unknown }).coordinates;
+
+  if (rawType === 'Polygon') {
+    if (!Array.isArray(rawCoordinates)) return null;
+    const rings = rawCoordinates
+      .map(parseRing)
+      .filter((ring): ring is BoundaryPosition[] => ring !== null);
+    return rings.length > 0
+      ? { type: 'Polygon', coordinates: rings }
+      : null;
+  }
+
+  if (rawType === 'MultiPolygon') {
+    if (!Array.isArray(rawCoordinates)) return null;
+    const polygons = rawCoordinates
+      .map((polygon) => {
+        if (!Array.isArray(polygon)) return null;
+        const rings = polygon
+          .map(parseRing)
+          .filter((ring): ring is BoundaryPosition[] => ring !== null);
+        return rings.length > 0 ? rings : null;
+      })
+      .filter((polygon): polygon is BoundaryPosition[][] => polygon !== null);
+
+    return polygons.length > 0
+      ? { type: 'MultiPolygon', coordinates: polygons }
+      : null;
+  }
+
+  return null;
+}
+
+function pointInRing(lon: number, lat: number, ring: BoundaryPosition[]): boolean {
+  let inside = false;
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const yCrosses = (yi > lat) !== (yj > lat);
+    if (!yCrosses) continue;
+
+    const denominator = yj - yi;
+    if (denominator === 0) continue;
+
+    const xCross = ((xj - xi) * (lat - yi)) / denominator + xi;
+    if (lon < xCross) inside = !inside;
+  }
+
+  return inside;
+}
+
+function pointInPolygon(lon: number, lat: number, rings: BoundaryPosition[][]): boolean {
+  if (rings.length === 0) return false;
+  if (!pointInRing(lon, lat, rings[0])) return false;
+
+  for (let i = 1; i < rings.length; i++) {
+    if (pointInRing(lon, lat, rings[i])) return false;
+  }
+
+  return true;
+}
+
+function isPointInBoundary(lon: number, lat: number, boundary: BoundaryGeometry): boolean {
+  if (boundary.type === 'Polygon') {
+    return pointInPolygon(lon, lat, boundary.coordinates);
+  }
+
+  for (const polygon of boundary.coordinates) {
+    if (pointInPolygon(lon, lat, polygon)) return true;
+  }
+
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Kreis page data (overview page)
 // ---------------------------------------------------------------------------
@@ -60,6 +166,7 @@ export interface KreisPageData {
   deutschlandatlas: DeutschlandatlasRow | null;
   cityCrime: CityCrimeRow | null;
   bbox: number[] | null;
+  boundaryGeometry: BoundaryGeometry | null;
 }
 
 export async function fetchKreisPageData(ags: string): Promise<KreisPageData> {
@@ -67,14 +174,17 @@ export async function fetchKreisPageData(ags: string): Promise<KreisPageData> {
     supabase.from('auslaender_data').select('*').eq('ags', ags).limit(1).maybeSingle(),
     supabase.from('deutschlandatlas_data').select('*').eq('ags', ags).limit(1).maybeSingle(),
     supabase.from('city_crime_data').select('*').eq('ags', ags).order('year', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('geo_boundaries').select('bbox').eq('ags', ags).eq('level', 'kreis').limit(1).maybeSingle(),
+    supabase.from('geo_boundaries').select('bbox, geometry').eq('ags', ags).eq('level', 'kreis').limit(1).maybeSingle(),
   ]);
+
+  const geo = geoRes.data as { bbox?: number[]; geometry?: unknown } | null;
 
   return {
     auslaender: (ausRes.data as unknown as AuslaenderRow) ?? null,
     deutschlandatlas: (atlasRes.data as unknown as DeutschlandatlasRow) ?? null,
     cityCrime: (crimeRes.data as unknown as CityCrimeRow) ?? null,
-    bbox: (geoRes.data as { bbox: number[] } | null)?.bbox ?? null,
+    bbox: geo?.bbox ?? null,
+    boundaryGeometry: normalizeBoundaryGeometry(geo?.geometry),
   };
 }
 
@@ -86,32 +196,76 @@ export async function fetchCrimeRecordsByBbox(
   bbox: number[],
   category?: CrimeCategory,
   limit = 10,
+  boundaryGeometry?: BoundaryGeometry | null,
 ): Promise<CrimeRecord[]> {
   const [minLon, minLat, maxLon, maxLat] = bbox;
 
-  let query = supabase
-    .from('crime_records')
-    .select('*')
-    .eq('hidden', false)
-    .gte('latitude', minLat)
-    .lte('latitude', maxLat)
-    .gte('longitude', minLon)
-    .lte('longitude', maxLon)
-    .order('published_at', { ascending: false })
-    .limit(limit);
+  if (!boundaryGeometry) {
+    let query = supabase
+      .from('crime_records')
+      .select('*')
+      .eq('hidden', false)
+      .gte('latitude', minLat)
+      .lte('latitude', maxLat)
+      .gte('longitude', minLon)
+      .lte('longitude', maxLon)
+      .order('published_at', { ascending: false })
+      .limit(limit);
 
-  if (category) {
-    query = query.contains('categories', [category]);
+    if (category) {
+      query = query.contains('categories', [category]);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching crime records by bbox:', error);
+      return [];
+    }
+
+    return ((data ?? []) as CrimeRecordRow[]).map(rowToCrimeRecord);
   }
 
-  const { data, error } = await query;
+  const PAGE_SIZE = Math.max(50, limit * 4);
+  const filtered: CrimeRecord[] = [];
+  let from = 0;
 
-  if (error) {
-    console.error('Error fetching crime records by bbox:', error);
-    return [];
+  while (filtered.length < limit) {
+    let query = supabase
+      .from('crime_records')
+      .select('*')
+      .eq('hidden', false)
+      .gte('latitude', minLat)
+      .lte('latitude', maxLat)
+      .gte('longitude', minLon)
+      .lte('longitude', maxLon)
+      .order('published_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (category) {
+      query = query.contains('categories', [category]);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching boundary-filtered crime records:', error);
+      return filtered;
+    }
+
+    const rows = (data ?? []) as CrimeRecordRow[];
+    for (const row of rows) {
+      if (row.latitude == null || row.longitude == null) continue;
+      if (!isPointInBoundary(row.longitude, row.latitude, boundaryGeometry)) continue;
+      filtered.push(rowToCrimeRecord(row));
+      if (filtered.length >= limit) break;
+    }
+
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
 
-  return ((data ?? []) as CrimeRecordRow[]).map(rowToCrimeRecord);
+  return filtered;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +274,7 @@ export async function fetchCrimeRecordsByBbox(
 
 export async function fetchCrimeCountsByBbox(
   bbox: number[],
+  boundaryGeometry?: BoundaryGeometry | null,
 ): Promise<Partial<Record<CrimeCategory, number>>> {
   const [minLon, minLat, maxLon, maxLat] = bbox;
   const PAGE_SIZE = 1000;
@@ -127,9 +282,12 @@ export async function fetchCrimeCountsByBbox(
   let from = 0;
 
   while (true) {
+    const selectFields = boundaryGeometry
+      ? 'categories, latitude, longitude'
+      : 'categories';
     const { data, error } = await supabase
       .from('crime_records')
-      .select('categories')
+      .select(selectFields)
       .eq('hidden', false)
       .gte('latitude', minLat)
       .lte('latitude', maxLat)
@@ -142,8 +300,20 @@ export async function fetchCrimeCountsByBbox(
       break;
     }
 
-    const rows = (data ?? []) as Array<{ categories: CrimeCategory[] }>;
+    const rows = (data ?? []) as Array<{
+      categories: CrimeCategory[];
+      latitude?: number | null;
+      longitude?: number | null;
+    }>;
+
     for (const row of rows) {
+      if (boundaryGeometry) {
+        const lat = row.latitude;
+        const lon = row.longitude;
+        if (lat == null || lon == null) continue;
+        if (!isPointInBoundary(lon, lat, boundaryGeometry)) continue;
+      }
+
       for (const cat of row.categories) {
         counts[cat] = (counts[cat] || 0) + 1;
       }

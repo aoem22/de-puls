@@ -82,7 +82,7 @@ export default async function CrimeTypePage(
 
   // Fetch blaulicht filtered by this crime category
   const blaulichtRecords = pageData.bbox
-    ? await fetchCrimeRecordsByBbox(pageData.bbox, crime.key as CrimeCategory, 15)
+    ? await fetchCrimeRecordsByBbox(pageData.bbox, crime.key as CrimeCategory, 15, pageData.boundaryGeometry)
     : [];
 
   // Fetch city ranking for this crime type
