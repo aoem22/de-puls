@@ -11,7 +11,7 @@ import { IndicatorRow } from '@/components/seo/IndicatorRow';
 import { BackToMap } from '@/components/seo/BackToMap';
 
 export const revalidate = 86400; // 24h ISR
-export const dynamicParams = false;
+export const dynamicParams = true;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de';
 

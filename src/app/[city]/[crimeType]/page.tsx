@@ -11,17 +11,18 @@ import { BlaulichtFeed } from '@/components/seo/BlaulichtFeed';
 import { BackToMap } from '@/components/seo/BackToMap';
 
 export const revalidate = 86400;
-export const dynamicParams = false;
+export const dynamicParams = true;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de';
 
 // ---------------------------------------------------------------------------
-// Static params: 400 cities x 14 crime types = 5,600
+// Static params: pre-render top 20 cities only; rest generated on-demand via ISR
 // ---------------------------------------------------------------------------
 
 export function generateStaticParams() {
+  const topCities = ALL_CITY_SLUGS.slice(0, 20);
   const params: Array<{ city: string; crimeType: string }> = [];
-  for (const city of ALL_CITY_SLUGS) {
+  for (const city of topCities) {
     for (const crimeSlug of ALL_CRIME_SLUGS) {
       params.push({ city, crimeType: crimeSlug });
     }
