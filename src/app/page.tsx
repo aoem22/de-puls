@@ -123,7 +123,7 @@ export default function Home() {
   return (
     <>
       <JsonLd />
-      <main className="h-screen w-screen bg-[#0a0a0a] overflow-hidden relative">
+      <main className="fixed inset-0 overflow-hidden">
         <SeoContent />
         <MapWrapper />
       </main>
