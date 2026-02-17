@@ -205,6 +205,30 @@ def cmd_week(args):
     )
 
 
+def cmd_live(args):
+    """Run the live pipeline (automated scrape → enrich → push)."""
+    if args.status:
+        from .live_pipeline import show_status
+        show_status(args.cache_dir)
+        return
+
+    import asyncio
+    from .live_pipeline import run_once, run_daemon
+
+    if args.mode == "daemon":
+        asyncio.run(run_daemon(
+            dry_run=args.dry_run,
+            interval_minutes=args.interval,
+            cache_dir=args.cache_dir,
+        ))
+    else:
+        asyncio.run(run_once(
+            dry_run=args.dry_run,
+            source=args.source,
+            cache_dir=args.cache_dir,
+        ))
+
+
 def cmd_list_chunks(args):
     """List all chunks."""
     manifest = get_or_create_manifest()
@@ -453,6 +477,36 @@ def main():
         help="Skip rule-based incident grouping (articles get solo group IDs)",
     )
     week_parser.set_defaults(func=cmd_week)
+
+    # live command (automated scrape → enrich → push)
+    live_parser = subparsers.add_parser(
+        "live",
+        help="Automated live pipeline (scrape → enrich → push)",
+    )
+    live_parser.add_argument(
+        "--mode", choices=["once", "daemon"], default="once",
+        help="Run mode: 'once' for single cycle, 'daemon' for continuous (default: once)",
+    )
+    live_parser.add_argument(
+        "--source", help="Only poll this source (e.g. 'berlin', 'hessen')",
+    )
+    live_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Scrape and enrich but don't push to Supabase",
+    )
+    live_parser.add_argument(
+        "--interval", type=int, default=15,
+        help="Poll interval in minutes for daemon mode (default: 15)",
+    )
+    live_parser.add_argument(
+        "--cache-dir", default=".cache",
+        help="Cache directory (default: .cache)",
+    )
+    live_parser.add_argument(
+        "--status", action="store_true",
+        help="Show current poll state and exit",
+    )
+    live_parser.set_defaults(func=cmd_live)
 
     # list command
     list_parser = subparsers.add_parser("list", help="List chunks")

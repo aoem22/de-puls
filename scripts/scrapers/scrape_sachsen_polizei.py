@@ -1008,5 +1008,19 @@ Institution IDs (Polizeidirektionen):
         sys.exit(1)
 
 
+async def scrape_new(start_date: str, end_date: str,
+                     cache_dir: str = ".cache", concurrent: int = 5) -> list[dict]:
+    """Return new articles as dicts. Used by live pipeline."""
+    scraper = AsyncSachsenPolizeiScraper(
+        start_date=start_date,
+        end_date=end_date,
+        output=os.devnull,
+        cache_dir=cache_dir,
+        concurrent=concurrent,
+    )
+    await scraper.run_async()
+    return [asdict(a) for a in scraper.articles]
+
+
 if __name__ == "__main__":
     main()

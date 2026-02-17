@@ -77,6 +77,12 @@ STATE_SCRAPER_SCRIPTS = {
     "sachsen": SCRAPERS_DIR / "scrape_sachsen_polizei.py",
 }
 
+# Live pipeline settings
+LIVE_POLL_INTERVAL_MINUTES = 15
+LIVE_MAX_ARTICLES_PER_SOURCE = 50
+LIVE_CONCURRENT_REQUESTS = 5
+LIVE_PIPELINE_RUN_NAME = "live"
+
 # Rate limiting and delays
 DELAY_BETWEEN_CHUNKS_SECONDS = 5
 MAX_RETRIES = 3
