@@ -41,7 +41,7 @@ from .push_to_supabase import transform_article
 
 # Live pipeline constants
 LIVE_POLL_INTERVAL_MINUTES = 15
-LIVE_MAX_ARTICLES_PER_SOURCE = 50
+LIVE_MAX_ARTICLES_PER_SOURCE = 200
 LIVE_CONCURRENT_REQUESTS = 5
 LIVE_PIPELINE_RUN_NAME = "v1_2026"
 PUSH_QUEUE_FILE = CACHE_DIR / "push_queue.json"
@@ -72,6 +72,8 @@ class LivePipeline:
         self.enricher = None  # Lazy-init on first use
         self.supabase = None  # Lazy-init on first use
 
+        self._start_date = None  # Cached start date for this cycle
+
         # Cycle metrics
         self.cycle_start = None
         self.total_scraped = 0
@@ -96,6 +98,34 @@ class LivePipeline:
         if not url or not key:
             raise ValueError("Missing Supabase credentials")
         self.supabase = create_client(url, key)
+
+    def _get_start_date(self) -> str:
+        """Query Supabase for latest published_at, fall back to yesterday.
+
+        Result is cached so all sources in a cycle use the same start date.
+        """
+        if self._start_date is not None:
+            return self._start_date
+
+        try:
+            self._init_supabase()
+            if self.supabase:
+                result = self.supabase.table("crime_records") \
+                    .select("published_at") \
+                    .eq("pipeline_run", LIVE_PIPELINE_RUN_NAME) \
+                    .order("published_at", desc=True) \
+                    .limit(1) \
+                    .execute()
+                if result.data:
+                    self._start_date = result.data[0]["published_at"][:10]
+                    print(f"  Start date from Supabase: {self._start_date}")
+                    return self._start_date
+        except Exception as e:
+            print(f"  Could not query start date from Supabase: {e}")
+
+        self._start_date = _yesterday_iso()
+        print(f"  Start date fallback: {self._start_date}")
+        return self._start_date
 
     def _get_sources(self) -> list[dict]:
         """Build list of sources to poll."""
@@ -132,7 +162,7 @@ class LivePipeline:
 
     async def _scrape_source(self, source: dict) -> list[dict]:
         """Scrape a single source and return new articles as dicts."""
-        start_date = _yesterday_iso()
+        start_date = self._get_start_date()
         end_date = _today_iso()
 
         if source["type"] == "presseportal":
