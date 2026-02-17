@@ -856,10 +856,11 @@ Examples:
 async def scrape_new(start_date: str, end_date: str,
                      cache_dir: str = ".cache", concurrent: int = 5) -> list[dict]:
     """Return new articles as dicts. Used by live pipeline."""
+    out = os.path.join(cache_dir, "_live_berlin.json")
     scraper = AsyncBerlinPolizeiScraper(
         start_date=start_date,
         end_date=end_date,
-        output=os.devnull,
+        output=out,
         cache_dir=cache_dir,
         concurrent_requests=concurrent,
     )
