@@ -15,7 +15,7 @@ import {
   DEUTSCHLANDATLAS_META,
   isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
-import { CRIME_CATEGORIES, WEAPON_LABELS, type CrimeCategory } from '@/lib/types/crime';
+import { CRIME_CATEGORIES, WEAPON_LABELS, DRUG_LABELS, type CrimeCategory } from '@/lib/types/crime';
 import { WeaponIcon } from './BlaulichtPlaybackControl';
 import { useTranslation, translations, tNested } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
@@ -45,6 +45,10 @@ export interface LayerControlProps {
   weaponCounts?: Record<string, number>;
   selectedWeaponType?: string | null;
   onWeaponTypeChange?: (weaponType: string | null) => void;
+  // Blaulicht drug type filter (visible only when drugs category selected)
+  drugCounts?: Record<string, number>;
+  selectedDrugType?: string | null;
+  onDrugTypeChange?: (drugType: string | null) => void;
   // Favorites filter
   favoritesCount?: number;
   showFavoritesOnly?: boolean;
@@ -56,6 +60,14 @@ export interface LayerControlProps {
   pipelineRuns?: Array<{ run: string; count: number }>;
   selectedPipelineRun?: string;
   onPipelineRunChange?: (run: string | undefined) => void;
+  // Data quality filters (enriched / geotagged)
+  filterEnrichedOnly?: boolean;
+  onFilterEnrichedChange?: () => void;
+  filterGeotaggedOnly?: boolean;
+  onFilterGeotaggedChange?: () => void;
+  enrichedCount?: number;
+  geotaggedCount?: number;
+  totalCrimeCount?: number;
   // Data props for legend computation
   auslaenderData?: Record<string, AuslaenderRow>;
   deutschlandatlasData?: Record<string, DeutschlandatlasRow>;
@@ -135,6 +147,9 @@ export function LayerControl({
   weaponCounts,
   selectedWeaponType,
   onWeaponTypeChange,
+  drugCounts,
+  selectedDrugType,
+  onDrugTypeChange,
   favoritesCount,
   showFavoritesOnly,
   onToggleFavoritesOnly,
@@ -143,6 +158,13 @@ export function LayerControl({
   pipelineRuns,
   selectedPipelineRun,
   onPipelineRunChange,
+  filterEnrichedOnly,
+  onFilterEnrichedChange,
+  filterGeotaggedOnly,
+  onFilterGeotaggedChange,
+  enrichedCount,
+  geotaggedCount,
+  totalCrimeCount,
   indicatorYears,
   onYearChange,
   isPlaying,
@@ -178,7 +200,10 @@ export function LayerControl({
   };
 
   return (
-    <div className="bg-[var(--card)]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[var(--card-border)] p-3 space-y-3 max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-thin">
+    <div
+      className="bg-[var(--card)]/95 backdrop-blur-sm rounded-lg shadow-xl border border-[var(--card-border)] p-3 space-y-3 max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-thin"
+      data-total-crime-count={totalCrimeCount}
+    >
       {/* Primary indicator selector (hidden on mobile — MobileCategoryBar handles it) */}
       {!hideIndicatorSelector && (
       <div>
@@ -430,6 +455,43 @@ export function LayerControl({
         </div>
       )}
 
+      {/* Data quality filters (Enriched / Geotagged) */}
+      {selectedIndicator === 'blaulicht' && onFilterEnrichedChange && onFilterGeotaggedChange && (
+        <div className="pt-2 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">
+              {lang === 'de' ? 'Datenqualität' : 'Data Quality'}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={onFilterEnrichedChange}
+              className={`px-2 py-1.5 md:py-1 text-xs rounded-md border transition-colors touch-feedback ${
+                filterEnrichedOnly
+                  ? 'bg-green-500/20 border-green-500/60 text-green-300'
+                  : 'bg-transparent border-[var(--border)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {lang === 'de' ? 'Angereichert' : 'Enriched'}{' '}
+              <span className="text-[var(--text-muted)]">({enrichedCount?.toLocaleString('de-DE') ?? '…'})</span>
+            </button>
+            <button
+              type="button"
+              onClick={onFilterGeotaggedChange}
+              className={`px-2 py-1.5 md:py-1 text-xs rounded-md border transition-colors touch-feedback ${
+                filterGeotaggedOnly
+                  ? 'bg-orange-500/20 border-orange-500/60 text-orange-300'
+                  : 'bg-transparent border-[var(--border)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {lang === 'de' ? 'Geolokalisiert' : 'Geotagged'}{' '}
+              <span className="text-[var(--text-muted)]">({geotaggedCount?.toLocaleString('de-DE') ?? '…'})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Blaulicht view mode toggle (Punkte / Dichte / Beides) */}
       {selectedIndicator === 'blaulicht' && blaulichtViewMode && onBlaulichtViewModeChange && (
         <div className="pt-2 border-t border-[var(--border)]">
@@ -551,6 +613,41 @@ export function LayerControl({
                     }`}
                   >
                     <WeaponIcon type={wt} className="text-base" />
+                    <span className={`text-sm md:text-xs flex-1 text-left no-select ${isSelected ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
+                      {label[lang]}
+                    </span>
+                    <span className="text-xs text-[var(--text-tertiary)] tabular-nums">{count}</span>
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Drug type sub-filters — only when drugs category is selected */}
+      {selectedIndicator === 'blaulicht' && selectedBlaulichtCategory === 'drugs' && drugCounts && onDrugTypeChange && Object.keys(drugCounts).length > 0 && (
+        <div className="hidden md:block pt-2 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">{lang === 'de' ? 'Drogenart' : 'Drug Type'}</span>
+          </div>
+          <div className="space-y-1">
+            {Object.entries(drugCounts)
+              .sort(([, a], [, b]) => b - a)
+              .map(([dt, count]) => {
+                const label = DRUG_LABELS[dt];
+                if (!label) return null;
+                const isSelected = selectedDrugType === dt;
+                return (
+                  <button
+                    key={dt}
+                    onClick={() => onDrugTypeChange(isSelected ? null : dt)}
+                    className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
+                      isSelected
+                        ? 'bg-[var(--card-elevated)] border border-[var(--foreground)]/80'
+                        : 'hover:bg-[var(--card-elevated)] active:bg-[var(--card-elevated)] border border-transparent'
+                    }`}
+                  >
+                    <span className="w-4 text-center text-sm flex-shrink-0">{label.icon}</span>
                     <span className={`text-sm md:text-xs flex-1 text-left no-select ${isSelected ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
                       {label[lang]}
                     </span>

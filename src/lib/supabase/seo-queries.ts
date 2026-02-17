@@ -6,18 +6,13 @@ import type {
   CityCrimeRow,
 } from './types';
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
+import {
+  normalizeBoundaryGeometry,
+  isPointInBoundary,
+  type BoundaryGeometry,
+} from '../geo-utils';
 
-type BoundaryPosition = [number, number];
-
-export type BoundaryGeometry =
-  | {
-      type: 'Polygon';
-      coordinates: BoundaryPosition[][];
-    }
-  | {
-      type: 'MultiPolygon';
-      coordinates: BoundaryPosition[][][];
-    };
+export type { BoundaryGeometry };
 
 // ---------------------------------------------------------------------------
 // Row → CrimeRecord transform (same as queries.ts)
@@ -43,6 +38,8 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
     incidentDate: row.incident_date,
     incidentTime: row.incident_time,
     incidentTimePrecision: row.incident_time_precision,
+    incidentEndDate: row.incident_end_date,
+    incidentEndTime: row.incident_end_time,
     crimeSubType: row.crime_sub_type,
     crimeConfidence: row.crime_confidence,
     drugType: row.drug_type,
@@ -54,107 +51,14 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
     suspectGender: row.suspect_gender,
     victimHerkunft: row.victim_herkunft,
     suspectHerkunft: row.suspect_herkunft,
+    victimDescription: row.victim_description,
+    suspectDescription: row.suspect_description,
     severity: row.severity,
     motive: row.motive,
     incidentGroupId: row.incident_group_id,
     groupRole: row.group_role,
     pipelineRun: row.pipeline_run,
   };
-}
-
-function parsePosition(value: unknown): BoundaryPosition | null {
-  if (!Array.isArray(value) || value.length < 2) return null;
-  const lon = value[0];
-  const lat = value[1];
-  if (typeof lon !== 'number' || typeof lat !== 'number') return null;
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-  return [lon, lat];
-}
-
-function parseRing(value: unknown): BoundaryPosition[] | null {
-  if (!Array.isArray(value)) return null;
-  const ring = value
-    .map(parsePosition)
-    .filter((pos): pos is BoundaryPosition => pos !== null);
-  return ring.length >= 3 ? ring : null;
-}
-
-function normalizeBoundaryGeometry(geometry: unknown): BoundaryGeometry | null {
-  if (!geometry || typeof geometry !== 'object') return null;
-
-  const rawType = (geometry as { type?: unknown }).type;
-  const rawCoordinates = (geometry as { coordinates?: unknown }).coordinates;
-
-  if (rawType === 'Polygon') {
-    if (!Array.isArray(rawCoordinates)) return null;
-    const rings = rawCoordinates
-      .map(parseRing)
-      .filter((ring): ring is BoundaryPosition[] => ring !== null);
-    return rings.length > 0
-      ? { type: 'Polygon', coordinates: rings }
-      : null;
-  }
-
-  if (rawType === 'MultiPolygon') {
-    if (!Array.isArray(rawCoordinates)) return null;
-    const polygons = rawCoordinates
-      .map((polygon) => {
-        if (!Array.isArray(polygon)) return null;
-        const rings = polygon
-          .map(parseRing)
-          .filter((ring): ring is BoundaryPosition[] => ring !== null);
-        return rings.length > 0 ? rings : null;
-      })
-      .filter((polygon): polygon is BoundaryPosition[][] => polygon !== null);
-
-    return polygons.length > 0
-      ? { type: 'MultiPolygon', coordinates: polygons }
-      : null;
-  }
-
-  return null;
-}
-
-function pointInRing(lon: number, lat: number, ring: BoundaryPosition[]): boolean {
-  let inside = false;
-
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    const yCrosses = (yi > lat) !== (yj > lat);
-    if (!yCrosses) continue;
-
-    const denominator = yj - yi;
-    if (denominator === 0) continue;
-
-    const xCross = ((xj - xi) * (lat - yi)) / denominator + xi;
-    if (lon < xCross) inside = !inside;
-  }
-
-  return inside;
-}
-
-function pointInPolygon(lon: number, lat: number, rings: BoundaryPosition[][]): boolean {
-  if (rings.length === 0) return false;
-  if (!pointInRing(lon, lat, rings[0])) return false;
-
-  for (let i = 1; i < rings.length; i++) {
-    if (pointInRing(lon, lat, rings[i])) return false;
-  }
-
-  return true;
-}
-
-function isPointInBoundary(lon: number, lat: number, boundary: BoundaryGeometry): boolean {
-  if (boundary.type === 'Polygon') {
-    return pointInPolygon(lon, lat, boundary.coordinates);
-  }
-
-  for (const polygon of boundary.coordinates) {
-    if (pointInPolygon(lon, lat, polygon)) return true;
-  }
-
-  return false;
 }
 
 // ---------------------------------------------------------------------------

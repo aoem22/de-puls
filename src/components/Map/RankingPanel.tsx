@@ -9,7 +9,17 @@ import {
   isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
 import { getCrimeTypeConfig, type CrimeTypeKey } from '../../../lib/types/cityCrime';
-import { formatNumber, formatValue, formatDetailValue, calcPercent, calcPercentParens } from '../../../lib/utils/formatters';
+import { formatNumber, formatValue, formatDetailValue, calcPercentParens } from '../../../lib/utils/formatters';
+import { useTranslation, translations, tNested, type Language } from '@/lib/i18n';
+import type { AuslaenderRow, DeutschlandatlasRow, CityCrimeRow } from '@/lib/supabase';
+import {
+  buildRankings,
+  filterRankings,
+  getRankingDisplayYear,
+  getSelectedRecord,
+  type RankingDetailRecord,
+  type RankingItem,
+} from './ranking-panel-utils';
 
 // Continent-level region keys for summary breakdown
 const CONTINENT_KEYS: AuslaenderRegionKey[] = ['europa', 'asien', 'afrika', 'amerika', 'ozeanien'];
@@ -24,16 +34,6 @@ const SUB_REGIONS: Record<string, AuslaenderRegionKey[]> = {
 
 // Historical group keys (separate from continent breakdown)
 const HISTORICAL_KEYS: AuslaenderRegionKey[] = ['gastarbeiter', 'exjugoslawien', 'exsowjetunion'];
-import { useTranslation, translations, tNested, type Language } from '@/lib/i18n';
-import type { AuslaenderRow, DeutschlandatlasRow, CityCrimeRow } from '@/lib/supabase';
-
-interface RankingItem {
-  ags: string;
-  name: string;
-  value: number;
-  rank: number;
-  percentage: number;
-}
 
 interface RankingPanelProps {
   indicatorKey: IndicatorKey;
@@ -169,11 +169,6 @@ function getIndicatorLabel(indicatorKey: IndicatorKey, subMetric: SubMetricKey, 
   return tNested('indicators', indicatorKey, lang);
 }
 
-function getRegionLabel(region: AuslaenderRegionKey, lang: Language): string {
-  const translated = tNested('regions', region, lang);
-  return translated !== region ? translated : (AUSLAENDER_REGION_META[region]?.labelDe ?? region);
-}
-
 function getRankingBarGradient(indicatorKey: IndicatorKey, isActive: boolean): string {
   const gradients: Record<IndicatorKey, { idle: string; active: string }> = {
     auslaender: {
@@ -205,7 +200,7 @@ function AuslaenderDetailContent({
   selectedRegion,
   lang,
 }: {
-  record: { name: string; ags: string; regions: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }> };
+  record: AuslaenderRow;
   selectedRegion: AuslaenderRegionKey;
   lang: Language;
 }) {
@@ -361,7 +356,7 @@ function DeutschlandatlasDetailContent({
   selectedIndicator,
   lang,
 }: {
-  record: { name: string; ags: string; indicators: Record<string, number | null> };
+  record: DeutschlandatlasRow;
   selectedIndicator: DeutschlandatlasKey;
   lang: Language;
 }) {
@@ -440,7 +435,7 @@ function CityCrimeDetailContent({
   metric,
   lang,
 }: {
-  record: { name: string; ags: string; crimes: Record<string, { cases: number; hz: number; aq: number }> };
+  record: CityCrimeRow;
   selectedCrimeType: CrimeTypeKey;
   metric: 'hz' | 'aq';
   lang: Language;
@@ -544,6 +539,49 @@ function CityCrimeDetailContent({
   );
 }
 
+function RankingDetailContent({
+  record,
+  indicatorKey,
+  subMetric,
+  cityCrimeMetric,
+  lang,
+}: {
+  record: RankingDetailRecord;
+  indicatorKey: IndicatorKey;
+  subMetric: SubMetricKey;
+  cityCrimeMetric: 'hz' | 'aq';
+  lang: Language;
+}) {
+  if (indicatorKey === 'auslaender') {
+    return (
+      <AuslaenderDetailContent
+        record={record as AuslaenderRow}
+        selectedRegion={subMetric as AuslaenderRegionKey}
+        lang={lang}
+      />
+    );
+  }
+
+  if (indicatorKey === 'deutschlandatlas') {
+    return (
+      <DeutschlandatlasDetailContent
+        record={record as DeutschlandatlasRow}
+        selectedIndicator={subMetric as DeutschlandatlasKey}
+        lang={lang}
+      />
+    );
+  }
+
+  return (
+    <CityCrimeDetailContent
+      record={record as CityCrimeRow}
+      selectedCrimeType={subMetric as CrimeTypeKey}
+      metric={cityCrimeMetric}
+      lang={lang}
+    />
+  );
+}
+
 // ============ Mobile Sheet Components ============
 
 function MobileDetailSheet({
@@ -553,23 +591,17 @@ function MobileDetailSheet({
   subMetric,
   cityCrimeMetric,
   isAuslaenderAccent,
-  selectedYear,
+  displayYear,
   onClose,
   lang,
 }: {
-  selectedRecord: {
-    name: string;
-    ags: string;
-    regions?: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }>;
-    indicators?: Record<string, number | null>;
-    crimes?: Record<string, { cases: number; hz: number; aq: number }>;
-  };
+  selectedRecord: RankingDetailRecord;
   selectedRank: number | null;
   indicatorKey: IndicatorKey;
   subMetric: SubMetricKey;
   cityCrimeMetric: 'hz' | 'aq';
   isAuslaenderAccent: boolean;
-  selectedYear: string;
+  displayYear: string;
   onClose: () => void;
   lang: Language;
 }) {
@@ -607,7 +639,7 @@ function MobileDetailSheet({
               <h3 className="text-[var(--foreground)] font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
             </div>
             <span className="text-[var(--text-tertiary)] text-sm">
-              {selectedYear}
+              {displayYear}
             </span>
           </div>
           <button
@@ -623,26 +655,13 @@ function MobileDetailSheet({
 
         {/* Scrollable content */}
         <div className="overflow-y-auto scroll-touch flex-1 p-4 space-y-4">
-          {indicatorKey === 'auslaender' ? (
-            <AuslaenderDetailContent
-              record={selectedRecord as { name: string; ags: string; regions: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }> }}
-              selectedRegion={subMetric as AuslaenderRegionKey}
-              lang={lang}
-            />
-          ) : indicatorKey === 'deutschlandatlas' ? (
-            <DeutschlandatlasDetailContent
-              record={selectedRecord as { name: string; ags: string; indicators: Record<string, number | null> }}
-              selectedIndicator={subMetric as DeutschlandatlasKey}
-              lang={lang}
-            />
-          ) : (
-            <CityCrimeDetailContent
-              record={selectedRecord as { name: string; ags: string; crimes: Record<string, { cases: number; hz: number; aq: number }> }}
-              selectedCrimeType={subMetric as CrimeTypeKey}
-              metric={cityCrimeMetric}
-              lang={lang}
-            />
-          )}
+          <RankingDetailContent
+            record={selectedRecord}
+            indicatorKey={indicatorKey}
+            subMetric={subMetric}
+            cityCrimeMetric={cityCrimeMetric}
+            lang={lang}
+          />
         </div>
       </div>
     </>
@@ -657,7 +676,7 @@ function MobileRankingSheet({
   subMetric,
   cityCrimeMetric,
   isAuslaenderAccent,
-  selectedYear,
+  displayYear,
   locationLabel,
   searchQuery,
   onSearchChange,
@@ -672,7 +691,7 @@ function MobileRankingSheet({
   subMetric: SubMetricKey;
   cityCrimeMetric: 'hz' | 'aq';
   isAuslaenderAccent: boolean;
-  selectedYear: string;
+  displayYear: string;
   locationLabel: string;
   searchQuery: string;
   onSearchChange: (value: string) => void;
@@ -711,7 +730,7 @@ function MobileRankingSheet({
               </h3>
             </div>
             <div className="text-[var(--text-tertiary)] text-xs">
-              {rankings.length} {locationLabel} · {selectedYear}
+              {rankings.length} {locationLabel} · {displayYear}
             </div>
           </div>
           <button
@@ -829,71 +848,32 @@ export function RankingPanel({
   const hoverScrollRafRef = useRef<number | null>(null);
   const t = translations;
 
+  const displayYear = getRankingDisplayYear(indicatorKey, selectedYear, deutschlandatlasYear);
+
   // Compute rankings from indicator data
-  const rankings = useMemo((): RankingItem[] => {
-    const items: { ags: string; name: string; value: number }[] = [];
-
-    if (indicatorKey === 'auslaender') {
-      if (!ausData) return [];
-
-      for (const [ags, record] of Object.entries(ausData)) {
-        const regionData = record.regions[subMetric as AuslaenderRegionKey];
-        const value = regionData?.total;
-        if (value !== null && value !== undefined && value > 0) {
-          items.push({ ags, name: record.name, value });
-        }
-      }
-    } else if (indicatorKey === 'deutschlandatlas') {
-      if (!datlasData) return [];
-
-      for (const [ags, record] of Object.entries(datlasData)) {
-        const value = record.indicators[subMetric];
-        if (value !== null && value !== undefined) {
-          items.push({ ags, name: record.name, value });
-        }
-      }
-    } else if (indicatorKey === 'kriminalstatistik') {
-      if (!cityCrimeData) return [];
-      const yearData = cityCrimeData[selectedYear];
-      if (!yearData) return [];
-
-      for (const [ags, record] of Object.entries(yearData)) {
-        const stats = record.crimes[subMetric];
-        if (!stats) continue;
-        const value = cityCrimeMetric === 'hz' ? stats.hz : stats.aq;
-        if (Number.isFinite(value)) {
-          items.push({ ags, name: record.name, value });
-        }
-      }
-    }
-
-    if (items.length === 0) return [];
-
-    items.sort((a, b) => b.value - a.value);
-    const maxValue = items[0].value;
-
-    return items.map((item, index) => ({
-      ...item,
-      rank: index + 1,
-      percentage: maxValue > 0 ? (item.value / maxValue) * 100 : 0,
-    }));
-  }, [indicatorKey, subMetric, selectedYear, cityCrimeMetric, ausData, datlasData, cityCrimeData]);
+  const rankings = useMemo((): RankingItem[] => (
+    buildRankings({
+      indicatorKey,
+      subMetric,
+      selectedYear,
+      cityCrimeMetric,
+      ausData,
+      deutschlandatlasData: datlasData,
+      cityCrimeData,
+    })
+  ), [indicatorKey, subMetric, selectedYear, cityCrimeMetric, ausData, datlasData, cityCrimeData]);
 
   // Get selected record for detail view
-  const selectedRecord = useMemo(() => {
-    if (!selectedAgs) return null;
-
-    if (indicatorKey === 'auslaender') {
-      if (!ausData) return null;
-      return ausData[selectedAgs] ?? null;
-    }
-    if (indicatorKey === 'deutschlandatlas') {
-      if (!datlasData) return null;
-      return datlasData[selectedAgs] ?? null;
-    }
-    if (!cityCrimeData) return null;
-    return cityCrimeData[selectedYear]?.[selectedAgs] ?? null;
-  }, [selectedAgs, indicatorKey, selectedYear, ausData, datlasData, cityCrimeData]);
+  const selectedRecord = useMemo(() => (
+    getSelectedRecord({
+      selectedAgs,
+      indicatorKey,
+      selectedYear,
+      ausData,
+      deutschlandatlasData: datlasData,
+      cityCrimeData,
+    })
+  ), [selectedAgs, indicatorKey, selectedYear, ausData, datlasData, cityCrimeData]);
 
   // Get rank of selected item
   const selectedRank = useMemo(() => {
@@ -903,14 +883,10 @@ export function RankingPanel({
   }, [selectedAgs, rankings]);
 
   // Filter rankings by search query
-  const filteredRankings = useMemo(() => {
-    if (!searchQuery.trim()) return rankings;
-    const query = searchQuery.toLowerCase();
-    return rankings.filter((item) =>
-      item.name.toLowerCase().includes(query) ||
-      item.ags.includes(query)
-    );
-  }, [rankings, searchQuery]);
+  const filteredRankings = useMemo(
+    () => filterRankings(rankings, searchQuery),
+    [rankings, searchQuery],
+  );
 
   const markManualInput = useCallback(() => {
     lastManualInputRef.current = Date.now();
@@ -1029,7 +1005,7 @@ export function RankingPanel({
                 <h3 className="text-[var(--foreground)] font-bold text-base leading-tight truncate">{selectedRecord.name}</h3>
               </div>
               <span className="text-[var(--text-tertiary)] text-sm">
-                AGS: {selectedRecord.ags} · {indicatorKey === 'deutschlandatlas' ? (deutschlandatlasYear || '2022') : selectedYear}
+                AGS: {selectedRecord.ags} · {displayYear}
               </span>
             </div>
             <button
@@ -1045,26 +1021,13 @@ export function RankingPanel({
 
           {/* Scrollable detail content */}
           <div className="overflow-y-auto flex-1 p-4 space-y-4 scrollbar-thin">
-            {indicatorKey === 'auslaender' ? (
-              <AuslaenderDetailContent
-                record={selectedRecord as { name: string; ags: string; regions: Record<AuslaenderRegionKey, { male: number | null; female: number | null; total: number | null }> }}
-                selectedRegion={subMetric as AuslaenderRegionKey}
-                lang={lang}
-              />
-            ) : indicatorKey === 'deutschlandatlas' ? (
-              <DeutschlandatlasDetailContent
-                record={selectedRecord as { name: string; ags: string; indicators: Record<string, number | null> }}
-                selectedIndicator={subMetric as DeutschlandatlasKey}
-                lang={lang}
-              />
-            ) : (
-              <CityCrimeDetailContent
-                record={selectedRecord as { name: string; ags: string; crimes: Record<string, { cases: number; hz: number; aq: number }> }}
-                selectedCrimeType={subMetric as CrimeTypeKey}
-                metric={cityCrimeMetric}
-                lang={lang}
-              />
-            )}
+            <RankingDetailContent
+              record={selectedRecord}
+              indicatorKey={indicatorKey}
+              subMetric={subMetric}
+              cityCrimeMetric={cityCrimeMetric}
+              lang={lang}
+            />
           </div>
 
           {/* Footer - back to ranking */}
@@ -1089,7 +1052,7 @@ export function RankingPanel({
           subMetric={subMetric}
           cityCrimeMetric={cityCrimeMetric}
           isAuslaenderAccent={isAuslaenderAccent}
-          selectedYear={selectedYear}
+          displayYear={displayYear}
           onClose={() => onSelectAgs(null)}
           lang={lang}
         />
@@ -1149,7 +1112,7 @@ export function RankingPanel({
           subMetric={subMetric}
           cityCrimeMetric={cityCrimeMetric}
           isAuslaenderAccent={isAuslaenderAccent}
-          selectedYear={selectedYear}
+          displayYear={displayYear}
           locationLabel={locationLabel}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -1173,7 +1136,7 @@ export function RankingPanel({
             </h3>
           </div>
           <div className="text-[var(--text-tertiary)] text-xs">
-            {rankings.length} {locationLabel} · {indicatorKey === 'deutschlandatlas' ? (deutschlandatlasYear || '2022') : selectedYear}
+            {rankings.length} {locationLabel} · {displayYear}
             {unit && <span className="ml-1">· {unit}</span>}
           </div>
         </div>

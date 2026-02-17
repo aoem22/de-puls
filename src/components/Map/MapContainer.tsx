@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 
 // Dynamically import the map component with SSR disabled
@@ -20,5 +21,9 @@ const ChoroplethMap = dynamic(
 );
 
 export function MapWrapper() {
-  return <ChoroplethMap />;
+  return (
+    <Suspense>
+      <ChoroplethMap />
+    </Suspense>
+  );
 }

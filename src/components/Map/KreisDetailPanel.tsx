@@ -5,10 +5,8 @@ import { useTranslation } from '@/lib/i18n';
 import type { IndicatorKey, AuslaenderRegionKey, DeutschlandatlasKey } from '../../../lib/indicators/types';
 import {
   AUSLAENDER_REGION_META,
-  AUSLAENDER_REGION_KEYS,
   DEUTSCHLANDATLAS_META,
   DEUTSCHLANDATLAS_KEYS,
-  isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
 import { formatNumber, formatValue, calcPercentParens } from '../../../lib/utils/formatters';
 import type { AuslaenderRow, DeutschlandatlasRow } from '@/lib/supabase';

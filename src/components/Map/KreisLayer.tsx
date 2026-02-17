@@ -272,25 +272,29 @@ export function KreisLayer({
     return values;
   }, [indicatorKey, subMetric, ausData, datlasData]);
 
-  const colorScale = useMemo(() => {
-    if (allValues.length === 0) return () => '#333';
-    if (indicatorKey === 'deutschlandatlas' && isDeutschlandatlasKey(subMetric)) {
-      const meta = DEUTSCHLANDATLAS_META[subMetric];
-      if (meta.higherIsBetter !== undefined) {
-        return createSemanticColorScale(allValues, meta.higherIsBetter);
-      }
-    }
-    return createSequentialColorScale(allValues);
-  }, [allValues, indicatorKey, subMetric]);
-
   // Build GeoJSON with pre-computed fill colors injected into properties
   const enrichedGeoJson = useMemo(() => {
+    let getFillColor: (value: number | null) => string = (value) =>
+      (value === null ? '#333' : '#333');
+    if (allValues.length > 0) {
+      if (indicatorKey === 'deutschlandatlas' && isDeutschlandatlasKey(subMetric)) {
+        const meta = DEUTSCHLANDATLAS_META[subMetric];
+        if (meta.higherIsBetter !== undefined) {
+          getFillColor = createSemanticColorScale(allValues, meta.higherIsBetter);
+        } else {
+          getFillColor = createSequentialColorScale(allValues);
+        }
+      } else {
+        getFillColor = createSequentialColorScale(allValues);
+      }
+    }
+
     const features = kreise.features.map((feature) => {
       const ags = (feature.properties as Record<string, unknown>)?.ags as string | undefined;
       const value = ags
         ? getValue(indicatorKey, subMetric, ags, selectedYear, ausData, datlasData)
         : null;
-      const fillColor = colorScale(value);
+      const fillColor = getFillColor(value);
       return {
         ...feature,
         id: ags ? parseInt(ags, 10) : undefined,
@@ -301,7 +305,7 @@ export function KreisLayer({
       };
     });
     return { type: 'FeatureCollection' as const, features };
-  }, [kreise, indicatorKey, subMetric, selectedYear, ausData, datlasData, colorScale]);
+  }, [allValues, indicatorKey, subMetric, selectedYear, ausData, datlasData]);
 
   // Sync feature-state for hover
   useEffect(() => {

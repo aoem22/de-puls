@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import MapGL, { Marker } from 'react-map-gl/maplibre';
 import type { MapRef, ViewStateChangeEvent } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -78,9 +79,18 @@ export function ChoroplethMap() {
   const deutschlandatlasYear = datasetMeta?.deutschlandatlas?.years?.[0] ?? '2022';
   const crimeDataYears = datasetMeta?.kriminalstatistik?.years ?? FALLBACK_CRIME_YEARS;
 
-  // Unified indicator state
-  const [selectedIndicator, setSelectedIndicator] = useState<IndicatorKey>('blaulicht');
-  const [selectedSubMetric, setSelectedSubMetric] = useState<SubMetricKey>('all');
+  // URL query param handling (?layer=safety, ?id=...)
+  const searchParams = useSearchParams();
+
+  // Unified indicator state — default varies based on URL params
+  const urlLayer = searchParams.get('layer');
+  const urlCrimeId = searchParams.get('id');
+  const [selectedIndicator, setSelectedIndicator] = useState<IndicatorKey>(() =>
+    urlCrimeId ? 'blaulicht' : (urlLayer === 'safety' ? 'deutschlandatlas' : 'blaulicht')
+  );
+  const [selectedSubMetric, setSelectedSubMetric] = useState<SubMetricKey>(() =>
+    urlLayer === 'safety' && !urlCrimeId ? 'straft' : 'all'
+  );
   const [selectedIndicatorYear, setSelectedIndicatorYear] = useState<string>('2024');
   const [isIndicatorPlaying, setIsIndicatorPlaying] = useState(false);
 
@@ -129,6 +139,7 @@ export function ChoroplethMap() {
   const [hoveredCrime, setHoveredCrime] = useState<CrimeRecord | null>(null);
   const [selectedBlaulichtCategory, setSelectedBlaulichtCategory] = useState<CrimeCategory | null>(null);
   const [selectedWeaponType, setSelectedWeaponType] = useState<string | null>(null);
+  const [selectedDrugType, setSelectedDrugType] = useState<string | null>(null);
   const [selectedPipelineRun, setSelectedPipelineRun] = useState<string | undefined>(undefined);
   const [isBlaulichtPlaying, setIsBlaulichtPlaying] = useState(false);
   const [blaulichtPlaybackIndex, setBlaulichtPlaybackIndex] = useState<number | null>(null);
@@ -138,8 +149,18 @@ export function ChoroplethMap() {
   const { favoriteIds, toggleFavorite, isFavorite, count: favoritesCount, getComment, setComment } = useFavorites();
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [blaulichtViewMode, setBlaulichtViewMode] = useState<BlaulichtViewMode>('dots');
-  const [dateFilterFrom, setDateFilterFrom] = useState<string | null>(null);
-  const [dateFilterTo, setDateFilterTo] = useState<string | null>(null);
+  const [filterEnrichedOnly, setFilterEnrichedOnly] = useState(false);
+  const [filterGeotaggedOnly, setFilterGeotaggedOnly] = useState(false);
+  const [dateFilterFrom, setDateFilterFrom] = useState<string | null>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [dateFilterTo, setDateFilterTo] = useState<string | null>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [searchPin, setSearchPin] = useState<{ lng: number; lat: number } | null>(null);
 
   // ID of the first symbol (label) layer in the basemap style.
@@ -221,22 +242,41 @@ export function ChoroplethMap() {
   const { data: blaulichtCrimes = [] } = useCrimes(undefined, selectedPipelineRun);
   const { data: pipelineRuns } = usePipelineRuns();
 
-  // Compute stats from the fetched crimes (already filtered by pipeline run)
+  // Counts for data quality filter pills (before filtering)
+  const qualityCounts = useMemo(() => ({
+    enriched: blaulichtCrimes.filter((c) => c.categories.length > 0).length,
+    geotagged: blaulichtCrimes.filter((c) => c.latitude != null && c.longitude != null).length,
+    total: blaulichtCrimes.length,
+  }), [blaulichtCrimes]);
+
+  // Apply enriched/geotagged quality filters
+  const filteredBlaulichtCrimes = useMemo(() => {
+    let crimes = blaulichtCrimes;
+    if (filterEnrichedOnly) {
+      crimes = crimes.filter((c) => c.categories.length > 0);
+    }
+    if (filterGeotaggedOnly) {
+      crimes = crimes.filter((c) => c.latitude != null && c.longitude != null);
+    }
+    return crimes;
+  }, [blaulichtCrimes, filterEnrichedOnly, filterGeotaggedOnly]);
+
+  // Compute stats from the filtered crimes (already filtered by pipeline run + quality)
   const stats = useMemo(() => {
     const byCategory: Partial<Record<CrimeCategory, number>> = {};
     let geocoded = 0;
-    for (const crime of blaulichtCrimes) {
+    for (const crime of filteredBlaulichtCrimes) {
       if (crime.latitude != null) geocoded++;
       for (const cat of crime.categories) {
         byCategory[cat] = (byCategory[cat] || 0) + 1;
       }
     }
-    return { total: blaulichtCrimes.length, geocoded, byCategory };
-  }, [blaulichtCrimes]);
+    return { total: filteredBlaulichtCrimes.length, geocoded, byCategory };
+  }, [filteredBlaulichtCrimes]);
 
   const weaponCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const crime of blaulichtCrimes) {
+    for (const crime of filteredBlaulichtCrimes) {
       if (crime.latitude == null || crime.longitude == null) continue;
       if (selectedBlaulichtCategory && !crime.categories.includes(selectedBlaulichtCategory)) continue;
       const wt = crime.weaponType;
@@ -245,13 +285,28 @@ export function ChoroplethMap() {
       }
     }
     return counts;
-  }, [blaulichtCrimes, selectedBlaulichtCategory]);
+  }, [filteredBlaulichtCrimes, selectedBlaulichtCategory]);
+
+  const drugCounts = useMemo(() => {
+    if (selectedBlaulichtCategory !== 'drugs') return {};
+    const counts: Record<string, number> = {};
+    for (const crime of filteredBlaulichtCrimes) {
+      if (crime.latitude == null || crime.longitude == null) continue;
+      if (!crime.categories.includes('drugs')) continue;
+      const dt = crime.drugType;
+      if (dt) {
+        counts[dt] = (counts[dt] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [filteredBlaulichtCrimes, selectedBlaulichtCategory]);
 
   const orderedBlaulichtCrimes = useMemo(() => {
-    const filtered = blaulichtCrimes
+    const filtered = filteredBlaulichtCrimes
       .filter((crime) => crime.latitude != null && crime.longitude != null)
       .filter((crime) => !selectedBlaulichtCategory || crime.categories.includes(selectedBlaulichtCategory))
       .filter((crime) => !selectedWeaponType || crime.weaponType === selectedWeaponType)
+      .filter((crime) => !selectedDrugType || crime.drugType === selectedDrugType)
       .filter((crime) => !showFavoritesOnly || favoriteIds.has(crime.id))
       .filter((crime) => {
         if (!dateFilterFrom && !dateFilterTo) return true;
@@ -263,7 +318,7 @@ export function ChoroplethMap() {
       });
     filtered.sort((left, right) => getCrimeTimestamp(left) - getCrimeTimestamp(right));
     return filtered;
-  }, [blaulichtCrimes, selectedBlaulichtCategory, selectedWeaponType, showFavoritesOnly, favoriteIds, dateFilterFrom, dateFilterTo]);
+  }, [filteredBlaulichtCrimes, selectedBlaulichtCategory, selectedWeaponType, selectedDrugType, showFavoritesOnly, favoriteIds, dateFilterFrom, dateFilterTo]);
 
   const clampedBlaulichtIndex = useMemo(() => {
     if (orderedBlaulichtCrimes.length === 0) return -1;
@@ -284,6 +339,26 @@ export function ChoroplethMap() {
     for (const crime of orderedBlaulichtCrimes) m.set(crime.id, crime);
     return m;
   }, [orderedBlaulichtCrimes]);
+
+  // Auto-select crime from URL ?id= param (e.g. from live feed click)
+  const urlCrimeHandled = useRef(false);
+  useEffect(() => {
+    if (urlCrimeHandled.current || !urlCrimeId || blaulichtCrimes.length === 0) return;
+    const match = blaulichtCrimes.find((c) => c.id === urlCrimeId);
+    if (!match) return;
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      setSelectedCrime(match);
+      urlCrimeHandled.current = true;
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [urlCrimeId, blaulichtCrimes]);
 
   const flashingCrimes = useMemo(() => {
     const items: CrimeRecord[] = [];
@@ -453,6 +528,7 @@ export function ChoroplethMap() {
   const handleBlaulichtCategoryChange = useCallback((category: CrimeCategory | null) => {
     setSelectedBlaulichtCategory(category);
     setSelectedWeaponType(null);
+    setSelectedDrugType(null);
     setIsBlaulichtPlaying(false);
     setBlaulichtPlaybackIndex(null);
     setSelectedCrime(null);
@@ -472,6 +548,15 @@ export function ChoroplethMap() {
 
   const handleWeaponTypeChange = useCallback((weaponType: string | null) => {
     setSelectedWeaponType(weaponType);
+    setIsBlaulichtPlaying(false);
+    setBlaulichtPlaybackIndex(null);
+    setSelectedCrime(null);
+    setHoveredCrime(null);
+    setFlashingCrimeIds(new Set());
+  }, []);
+
+  const handleDrugTypeChange = useCallback((drugType: string | null) => {
+    setSelectedDrugType(drugType);
     setIsBlaulichtPlaying(false);
     setBlaulichtPlaybackIndex(null);
     setSelectedCrime(null);
@@ -620,6 +705,7 @@ export function ChoroplethMap() {
       setHoveredCrime(null);
       setSelectedBlaulichtCategory(null);
       setSelectedWeaponType(null);
+      setSelectedDrugType(null);
       setBlaulichtPlaybackIndex(null);
       setFlashingCrimeIds(new Set());
       setDateFilterFrom(null);
@@ -638,6 +724,9 @@ export function ChoroplethMap() {
     weaponCounts,
     selectedWeaponType,
     onWeaponTypeChange: handleWeaponTypeChange,
+    drugCounts,
+    selectedDrugType,
+    onDrugTypeChange: handleDrugTypeChange,
     favoritesCount,
     showFavoritesOnly,
     onToggleFavoritesOnly: () => setShowFavoritesOnly((prev) => !prev),
@@ -646,6 +735,13 @@ export function ChoroplethMap() {
     pipelineRuns,
     selectedPipelineRun,
     onPipelineRunChange: setSelectedPipelineRun,
+    filterEnrichedOnly,
+    onFilterEnrichedChange: () => setFilterEnrichedOnly((prev) => !prev),
+    filterGeotaggedOnly,
+    onFilterGeotaggedChange: () => setFilterGeotaggedOnly((prev) => !prev),
+    enrichedCount: qualityCounts.enriched,
+    geotaggedCount: qualityCounts.geotagged,
+    totalCrimeCount: qualityCounts.total,
     indicatorYears,
     onYearChange: (year: string) => { setSelectedIndicatorYear(year); setIsIndicatorPlaying(false); },
     isPlaying: isIndicatorPlaying,

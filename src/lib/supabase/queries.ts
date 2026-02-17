@@ -34,6 +34,8 @@ function rowToCrimeRecord(row: Partial<CrimeRecordRow>): CrimeRecord {
     incidentDate: row.incident_date,
     incidentTime: row.incident_time,
     incidentTimePrecision: row.incident_time_precision,
+    incidentEndDate: row.incident_end_date,
+    incidentEndTime: row.incident_end_time,
     crimeSubType: row.crime_sub_type,
     crimeConfidence: row.crime_confidence,
     drugType: row.drug_type,
@@ -45,16 +47,19 @@ function rowToCrimeRecord(row: Partial<CrimeRecordRow>): CrimeRecord {
     suspectGender: row.suspect_gender,
     victimHerkunft: row.victim_herkunft,
     suspectHerkunft: row.suspect_herkunft,
+    victimDescription: row.victim_description,
+    suspectDescription: row.suspect_description,
     severity: row.severity,
     motive: row.motive,
     incidentGroupId: row.incident_group_id,
     groupRole: row.group_role,
     pipelineRun: row.pipeline_run,
+    classification: row.classification,
   };
 }
 
 // Slim column set for map rendering & filtering (excludes heavy text fields)
-const SLIM_COLUMNS = 'id, title, clean_title, published_at, source_url, latitude, longitude, categories, weapon_type, confidence, incident_group_id, group_role, pipeline_run';
+const SLIM_COLUMNS = 'id, title, clean_title, published_at, source_url, latitude, longitude, categories, weapon_type, confidence, incident_group_id, group_role, pipeline_run, classification';
 
 /**
  * Fetch all crime records, optionally filtered by category.
@@ -342,6 +347,179 @@ export async function fetchPipelineRuns(): Promise<Array<{ run: string; count: n
   return Object.entries(counts)
     .map(([run, count]) => ({ run, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+// ============ Dashboard Queries ============
+
+/**
+ * Fetch category counts for the dashboard, filtered by timeframe.
+ * Returns count per category and weapon type, plus total.
+ */
+export async function fetchDashboardStats(
+  timeframeDays: number | null
+): Promise<{
+  byCategory: Partial<Record<CrimeCategory, number>>;
+  byWeapon: Record<string, number>;
+  total: number;
+}> {
+  const PAGE_SIZE = 1000;
+  const records: Array<{ categories: CrimeCategory[]; weapon_type: string | null }> = [];
+  let from = 0;
+
+  const cutoff = timeframeDays
+    ? new Date(Date.now() - timeframeDays * 86400000).toISOString()
+    : null;
+
+  while (true) {
+    let query = supabase
+      .from('crime_records')
+      .select('categories, weapon_type')
+      .eq('hidden', false)
+      .order('published_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (cutoff) {
+      query = query.gte('published_at', cutoff);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Dashboard stats: ${error.message}`);
+
+    const rows = (data ?? []) as Array<{ categories: CrimeCategory[]; weapon_type: string | null }>;
+    records.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  const byCategory: Partial<Record<CrimeCategory, number>> = {};
+  const byWeapon: Record<string, number> = {};
+
+  for (const rec of records) {
+    for (const cat of rec.categories) {
+      byCategory[cat] = (byCategory[cat] || 0) + 1;
+    }
+    if (rec.weapon_type && rec.weapon_type !== 'none' && rec.weapon_type !== 'unknown') {
+      byWeapon[rec.weapon_type] = (byWeapon[rec.weapon_type] || 0) + 1;
+    }
+  }
+
+  return { byCategory, byWeapon, total: records.length };
+}
+
+/**
+ * Fetch city ranking by weapon type or category for the dashboard.
+ * Groups records by location_text city, returns top N.
+ */
+export async function fetchCityRankingByCategory(
+  category: CrimeCategory,
+  timeframeDays: number | null,
+  limit: number = 10
+): Promise<Array<{ city: string; count: number }>> {
+  const PAGE_SIZE = 1000;
+  const records: Array<{ location_text: string | null }> = [];
+  let from = 0;
+
+  const cutoff = timeframeDays
+    ? new Date(Date.now() - timeframeDays * 86400000).toISOString()
+    : null;
+
+  while (true) {
+    let query = supabase
+      .from('crime_records')
+      .select('location_text')
+      .eq('hidden', false)
+      .contains('categories', [category])
+      .not('latitude', 'is', null)
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (cutoff) {
+      query = query.gte('published_at', cutoff);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`City ranking: ${error.message}`);
+
+    const rows = (data ?? []) as Array<{ location_text: string | null }>;
+    records.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  // Extract city name from location_text (typically "City" or "City-District")
+  const cityCounts: Record<string, number> = {};
+  for (const rec of records) {
+    if (!rec.location_text) continue;
+    // Take the primary city name (before comma or dash details)
+    const city = rec.location_text.split(',')[0].split(' - ')[0].split('/')[0].trim();
+    if (city) {
+      cityCounts[city] = (cityCounts[city] || 0) + 1;
+    }
+  }
+
+  return Object.entries(cityCounts)
+    .map(([city, count]) => ({ city, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
+/**
+ * Fetch worst Kreise by overall crime rate (HZ) from deutschlandatlas_data.
+ * Uses the "Straftaten" indicator.
+ */
+export async function fetchHotspotKreise(
+  limit: number = 10
+): Promise<Array<{ ags: string; name: string; hz: number }>> {
+  const { data, error } = await supabase
+    .from('deutschlandatlas_data')
+    .select('ags, name, indicators');
+
+  if (error) throw new Error(`Hotspot Kreise: ${error.message}`);
+
+  const rows = (data ?? []) as unknown as DeutschlandatlasRow[];
+  const results: Array<{ ags: string; name: string; hz: number }> = [];
+
+  for (const row of rows) {
+    // The "straft" indicator contains the crime rate (HZ per 100k)
+    const hz = row.indicators?.['straft'];
+    if (hz != null && typeof hz === 'number') {
+      results.push({ ags: row.ags, name: row.name, hz });
+    }
+  }
+
+  return results
+    .sort((a, b) => b.hz - a.hz)
+    .slice(0, limit);
+}
+
+/**
+ * Fetch paginated live feed of violent crime records.
+ * Filters to knife, murder, or sexual categories.
+ */
+export async function fetchLiveFeed(
+  categories: CrimeCategory[],
+  offset: number = 0,
+  limit: number = 10
+): Promise<CrimeRecord[]> {
+  // Build an OR filter for overlapping categories
+  let query = supabase
+    .from('crime_records')
+    .select('id, title, clean_title, published_at, source_url, latitude, longitude, location_text, categories, weapon_type, severity')
+    .eq('hidden', false)
+    .order('published_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (categories.length === 1) {
+    query = query.contains('categories', categories);
+  } else if (categories.length > 1) {
+    // Use OR filter: match any of the categories
+    const orFilter = categories.map(c => `categories.cs.{${c}}`).join(',');
+    query = query.or(orFilter);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Live feed: ${error.message}`);
+
+  return ((data ?? []) as Partial<CrimeRecordRow>[]).map(rowToCrimeRecord);
 }
 
 export async function fetchGeoBoundaries(level: GeoBoundaryRow['level']): Promise<Record<string, GeoBoundaryRow>> {

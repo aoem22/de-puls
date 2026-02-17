@@ -185,23 +185,53 @@ function personLine(
 }
 
 /**
- * Format incident date for display
+ * Format a YYYY-MM-DD date string to DD.MM.YYYY
  */
-function formatIncidentDate(date: string | null | undefined, time: string | null | undefined, precision: IncidentTimePrecision | null | undefined, lang: Language): string | null {
+function fmtDate(d: string): string {
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : d;
+}
+
+/**
+ * Format incident date/time for display, supporting time spans.
+ * - Single point: "10.02.2026, 14:30 (ca.)"
+ * - Same-day span: "10.02.2026, 14:30 – 16:30 (ca.)"
+ * - Multi-day span: "10.02.2026, 14:30 – 11.02.2026, 08:00 (ca.)"
+ */
+function formatIncidentDate(
+  date: string | null | undefined,
+  time: string | null | undefined,
+  precision: IncidentTimePrecision | null | undefined,
+  lang: Language,
+  endDate?: string | null,
+  endTime?: string | null,
+): string | null {
   if (!date) return null;
-  const parts: string[] = [];
-  const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) {
-    parts.push(`${m[3]}.${m[2]}.${m[1]}`);
-  } else {
-    parts.push(date);
+
+  // Build start part
+  let start = fmtDate(date);
+  if (time) start += `, ${time}`;
+
+  // Build end part if present
+  const hasEnd = endDate || endTime;
+  let result = start;
+  if (hasEnd) {
+    const sameDay = endDate === date || !endDate;
+    if (sameDay && endTime) {
+      // Same day — only show end time
+      result += ` – ${endTime}`;
+    } else if (endDate) {
+      let end = fmtDate(endDate);
+      if (endTime) end += `, ${endTime}`;
+      result += ` – ${end}`;
+    }
   }
-  if (time) parts.push(time);
+
   if (precision && precision !== 'unknown') {
     const precLabel = tNested('timePrecisionLabels', precision, lang);
-    parts.push(`(${precLabel})`);
+    result += ` (${precLabel})`;
   }
-  return parts.join(', ');
+  return result;
 }
 
 /**
@@ -234,7 +264,7 @@ function DetailsSection({ crime, lang, compact = false }: { crime: CrimeRecord; 
   const drugType = crime.drugType as DrugType | null;
   const motive = crime.motive && crime.motive !== 'unknown' ? crime.motive as Motive : null;
 
-  const hasContent = victimLine || suspectLine || severity || drugType || motive;
+  const hasContent = victimLine || suspectLine || crime.victimDescription || crime.suspectDescription || severity || drugType || motive;
   if (!hasContent) return null;
 
   const px = compact ? 'px-4' : 'px-5';
@@ -249,23 +279,37 @@ function DetailsSection({ crime, lang, compact = false }: { crime: CrimeRecord; 
         <div className="flex-1 h-px bg-[var(--card-elevated)]" />
       </div>
 
-      {victimLine && (
-        <div className="flex items-center gap-3">
-          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs">👤</span>
-          <span className="text-sm text-[var(--text-secondary)]">
-            <span className="text-[var(--text-muted)] mr-1.5">{t.victim[lang]}:</span>
-            {victimLine}
-          </span>
+      {(victimLine || crime.victimDescription) && (
+        <div className="flex items-start gap-3">
+          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs mt-0.5">👤</span>
+          <div className="text-sm text-[var(--text-secondary)]">
+            {victimLine && (
+              <div>
+                <span className="text-[var(--text-muted)] mr-1.5">{t.victim[lang]}:</span>
+                {victimLine}
+              </div>
+            )}
+            {crime.victimDescription && (
+              <div className="text-xs text-[var(--text-tertiary)] mt-0.5 italic">{crime.victimDescription}</div>
+            )}
+          </div>
         </div>
       )}
 
-      {suspectLine && (
-        <div className="flex items-center gap-3">
-          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs">👤</span>
-          <span className="text-sm text-[var(--text-secondary)]">
-            <span className="text-[var(--text-muted)] mr-1.5">{t.suspect[lang]}:</span>
-            {suspectLine}
-          </span>
+      {(suspectLine || crime.suspectDescription) && (
+        <div className="flex items-start gap-3">
+          <span className="text-[var(--text-muted)] w-5 flex justify-center text-xs mt-0.5">👤</span>
+          <div className="text-sm text-[var(--text-secondary)]">
+            {suspectLine && (
+              <div>
+                <span className="text-[var(--text-muted)] mr-1.5">{t.suspect[lang]}:</span>
+                {suspectLine}
+              </div>
+            )}
+            {crime.suspectDescription && (
+              <div className="text-xs text-[var(--text-tertiary)] mt-0.5 italic">{crime.suspectDescription}</div>
+            )}
+          </div>
         </div>
       )}
 
@@ -318,15 +362,28 @@ function TimelineSection({ crime, lang }: { crime: CrimeRecord; lang: Language }
 
   useEffect(() => {
     if (!crime.incidentGroupId) return;
+    let cancelled = false;
 
-    setLoading(true);
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setLoading(true);
+        setExpandedId(null);
+      }
+    });
     fetchRelatedArticles(crime.incidentGroupId)
       .then((articles) => {
+        if (cancelled) return;
         // Filter out the current article and sort chronologically
         const others = articles.filter((a) => a.id !== crime.id);
         setRelated(others);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [crime.incidentGroupId, crime.id]);
 
   if (!crime.incidentGroupId || (related.length === 0 && !loading)) return null;
@@ -463,7 +520,9 @@ function MetadataSection({
     crime.incidentDate,
     crime.incidentTime,
     crime.incidentTimePrecision,
-    lang
+    lang,
+    crime.incidentEndDate,
+    crime.incidentEndTime,
   );
 
   // Precise Delikt-Ort (crime location — street + house number)
@@ -551,7 +610,7 @@ function MetadataSection({
 }
 
 export function BlaulichtDetailPanel({ crime: slimCrime, onClose, isPreview = false, flashToken = 0, isFavorite = false, onToggleFavorite, favoriteComment = '', onSetFavoriteComment }: BlaulichtDetailPanelProps) {
-  const { sheetRef, scrollRef, isExpanded, ready, handlers } = useDraggableSheet(onClose);
+  const { sheetRef, scrollRef, isExpanded, handlers } = useDraggableSheet(onClose);
   const { lang } = useTranslation();
   const t = translations;
   const flashClass = flashToken > 0
@@ -561,7 +620,6 @@ export function BlaulichtDetailPanel({ crime: slimCrime, onClose, isPreview = fa
   // Lazy-load full record (body, details, metadata) — only when not previewing
   const { data: fullCrime, isLoading: isLoadingDetail } = useCrimeDetail(isPreview ? null : slimCrime.id);
   const crime = fullCrime ?? slimCrime;
-  const isDetailLoaded = !!fullCrime || isPreview;
 
   const sourceDomain = (() => {
     try {

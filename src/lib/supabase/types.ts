@@ -28,6 +28,8 @@ export interface CrimeRecordRow {
   incident_date: string | null;
   incident_time: string | null;
   incident_time_precision: IncidentTimePrecision | null;
+  incident_end_date: string | null;
+  incident_end_time: string | null;
   crime_sub_type: string | null;
   crime_confidence: number | null;
   drug_type: DrugType | null;
@@ -39,11 +41,14 @@ export interface CrimeRecordRow {
   suspect_gender: Gender | null;
   victim_herkunft: string | null;
   suspect_herkunft: string | null;
+  victim_description: string | null;
+  suspect_description: string | null;
   severity: Severity | null;
   motive: Motive | null;
   incident_group_id: string | null;
   group_role: string | null;
   pipeline_run: string;
+  classification: string | null;
   created_at: string;
   updated_at: string;
 }

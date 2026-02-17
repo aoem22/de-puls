@@ -35,6 +35,8 @@ export type DrugType = 'cannabis' | 'cocaine' | 'amphetamine' | 'heroin' | 'ecst
 
 export type IncidentTimePrecision = 'exact' | 'approximate' | 'unknown';
 
+export type DamageEstimate = 'exact' | 'approximate' | 'unknown';
+
 export const GENDER_LABELS: Record<Gender, { de: string; en: string }> = {
   male:    { de: 'männlich', en: 'male' },
   female:  { de: 'weiblich', en: 'female' },
@@ -60,22 +62,24 @@ export const MOTIVE_LABELS: Record<Motive, { de: string; en: string }> = {
   unknown:   { de: 'Unbekannt',       en: 'Unknown' },
 };
 
-export const DRUG_LABELS: Record<DrugType, { de: string; en: string }> = {
-  cannabis:     { de: 'Cannabis',      en: 'Cannabis' },
-  cocaine:      { de: 'Kokain',        en: 'Cocaine' },
-  amphetamine:  { de: 'Amphetamin',    en: 'Amphetamine' },
-  heroin:       { de: 'Heroin',        en: 'Heroin' },
-  ecstasy:      { de: 'Ecstasy',       en: 'Ecstasy' },
-  meth:         { de: 'Methamphetamin', en: 'Meth' },
-  other:        { de: 'Sonstige',      en: 'Other' },
+export const DRUG_LABELS: Record<string, { de: string; en: string; icon: string }> = {
+  cannabis:     { de: 'Cannabis',       en: 'Cannabis',     icon: '🌿' },
+  cocaine:      { de: 'Kokain',         en: 'Cocaine',      icon: '❄️' },
+  amphetamine:  { de: 'Amphetamin',     en: 'Amphetamine',  icon: '⚡' },
+  heroin:       { de: 'Heroin',         en: 'Heroin',       icon: '💉' },
+  ecstasy:      { de: 'Ecstasy',        en: 'Ecstasy',      icon: '💊' },
+  meth:         { de: 'Crystal Meth',   en: 'Meth',         icon: '🔬' },
+  other:        { de: 'Sonstige',       en: 'Other',        icon: '💊' },
 };
 
 export const WEAPON_LABELS: Record<string, { de: string; en: string; icon: string }> = {
-  knife:     { de: 'Messer',        en: 'Knife',      icon: '\u{1F52A}' },
-  gun:       { de: 'Schusswaffe',   en: 'Firearm',    icon: '\u{1F52B}' },
-  blunt:     { de: 'Schlagwaffe',   en: 'Blunt weapon', icon: '\u{1F528}' },
-  explosive: { de: 'Sprengstoff',   en: 'Explosive',  icon: '\u{1F4A3}' },
-  vehicle:   { de: 'Fahrzeug',      en: 'Vehicle',    icon: '\u{1F697}' },
+  knife:        { de: 'Messer',        en: 'Knife',         icon: '🔪' },
+  gun:          { de: 'Schusswaffe',   en: 'Firearm',       icon: '🎯' },
+  blunt:        { de: 'Schlagwaffe',   en: 'Blunt weapon',  icon: '🔨' },
+  axe:          { de: 'Axt',           en: 'Axe',           icon: '🪓' },
+  explosive:    { de: 'Sprengstoff',   en: 'Explosive',     icon: '💣' },
+  pepper_spray: { de: 'Pfefferspray',  en: 'Pepper spray',  icon: '🌶️' },
+  other:        { de: 'Sonstige',      en: 'Other',         icon: '🥔' },
 };
 
 export type LocationPrecision = 'street' | 'neighborhood' | 'city' | 'region' | 'unknown';
@@ -99,6 +103,8 @@ export interface CrimeRecord {
   incidentDate?: string | null;
   incidentTime?: string | null;
   incidentTimePrecision?: IncidentTimePrecision | null;
+  incidentEndDate?: string | null;
+  incidentEndTime?: string | null;
   crimeSubType?: string | null;
   crimeConfidence?: number | null;
   drugType?: DrugType | null;
@@ -110,30 +116,36 @@ export interface CrimeRecord {
   suspectGender?: Gender | null;
   victimHerkunft?: string | null;
   suspectHerkunft?: string | null;
+  victimDescription?: string | null;
+  suspectDescription?: string | null;
   severity?: Severity | null;
   motive?: Motive | null;
+  damageAmountEur?: number | null;
+  damageEstimate?: DamageEstimate | null;
   incidentGroupId?: string | null;
   groupRole?: string | null;
   pipelineRun?: string | null;
+  classification?: string | null;
 }
 
 export const CRIME_CATEGORIES: Array<{
   key: CrimeCategory;
   label: string;
   color: string;
+  icon: string;
 }> = [
-  { key: 'murder', label: 'Tötungsdelikt', color: '#7f1d1d' },      // dark red
-  { key: 'knife', label: 'Messerangriff', color: '#ef4444' },       // red
-  { key: 'weapons', label: 'Waffen', color: '#dc2626' },            // red-600
-  { key: 'sexual', label: 'Sexualdelikte', color: '#a855f7' },      // purple
-  { key: 'assault', label: 'Körperverletzung', color: '#8b5cf6' },  // violet
-  { key: 'robbery', label: 'Raub', color: '#f59e0b' },              // amber
-  { key: 'burglary', label: 'Einbruch', color: '#f97316' },         // orange
-  { key: 'arson', label: 'Brandstiftung', color: '#e11d48' },       // rose
-  { key: 'drugs', label: 'Drogen', color: '#22c55e' },              // green
-  { key: 'fraud', label: 'Betrug', color: '#14b8a6' },              // teal
-  { key: 'vandalism', label: 'Sachbeschädigung', color: '#64748b' },// slate
-  { key: 'traffic', label: 'Verkehr', color: '#38bdf8' },           // sky
-  { key: 'missing_person', label: 'Vermisst', color: '#10b981' },   // emerald
-  { key: 'other', label: 'Sonstiges', color: '#94a3b8' },           // gray
+  { key: 'murder', label: 'Tötungsdelikt', color: '#7f1d1d', icon: '💀' },
+  { key: 'knife', label: 'Messerangriff', color: '#ef4444', icon: '🔪' },
+  { key: 'weapons', label: 'Waffen', color: '#dc2626', icon: '🔫' },
+  { key: 'sexual', label: 'Sexualdelikte', color: '#a855f7', icon: '💦' },
+  { key: 'assault', label: 'Körperverletzung', color: '#8b5cf6', icon: '👊' },
+  { key: 'robbery', label: 'Raub', color: '#f59e0b', icon: '💰' },
+  { key: 'burglary', label: 'Einbruch', color: '#f97316', icon: '🏠' },
+  { key: 'arson', label: 'Brandstiftung', color: '#e11d48', icon: '🔥' },
+  { key: 'drugs', label: 'Drogen', color: '#22c55e', icon: '💊' },
+  { key: 'fraud', label: 'Betrug', color: '#14b8a6', icon: '🤝' },
+  { key: 'vandalism', label: 'Sachbeschädigung', color: '#64748b', icon: '💥' },
+  { key: 'traffic', label: 'Verkehr', color: '#38bdf8', icon: '🚗' },
+  { key: 'missing_person', label: 'Vermisst', color: '#10b981', icon: '🔍' },
+  { key: 'other', label: 'Sonstiges', color: '#94a3b8', icon: '📋' },
 ];

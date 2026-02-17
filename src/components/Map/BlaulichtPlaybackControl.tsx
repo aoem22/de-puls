@@ -71,7 +71,7 @@ function computePresetRange(key: PresetKey): { from: string | null; to: string |
 
 const PRESETS: { key: PresetKey; labelDe: string; labelEn: string }[] = [
   { key: 'all', labelDe: 'Alle', labelEn: 'All' },
-  { key: 'today', labelDe: 'Heute', labelEn: 'Today' },
+  { key: 'today', labelDe: 'Live', labelEn: 'Live' },
   { key: 'yesterday', labelDe: 'Gestern', labelEn: 'Yesterday' },
   { key: 'week', labelDe: 'Woche', labelEn: 'Week' },
 ];
@@ -101,6 +101,8 @@ const CATEGORY_SHORT_LABELS: Partial<Record<CrimeCategory, { de: string; en: str
   other: { de: 'Sonstige', en: 'Other' },
 };
 
+const WEAPON_ORDER = ['knife', 'gun', 'explosive', 'blunt'];
+
 // Weapon icons — emojis (centered) for most, Noto Emoji Oreo revolver for gun (🔫 = water gun on all platforms)
 export function WeaponIcon({ type, className = 'text-[16px]' }: { type: string; className?: string }) {
   if (type === 'gun') {
@@ -129,10 +131,11 @@ export function WeaponIcon({ type, className = 'text-[16px]' }: { type: string; 
   const emoji: Record<string, string> = {
     knife: '🔪',
     blunt: '🔨',
+    axe: '🪓',
     explosive: '💣',
   };
   return (
-    <span className="w-[24px] h-[24px] text-[18px] leading-none flex-shrink-0 inline-flex items-center justify-center">
+    <span className={`w-[24px] h-[24px] leading-none flex-shrink-0 inline-flex items-center justify-center ${className}`}>
       {emoji[type] ?? WEAPON_LABELS[type]?.icon ?? '?'}
     </span>
   );
@@ -306,7 +309,6 @@ export function BlaulichtPlaybackControl({
   }, [blaulichtStats]);
 
   // ── Sorted weapons with counts (vehicle hidden) ──
-  const WEAPON_ORDER = ['knife', 'gun', 'explosive', 'blunt'];
   const sortedWeapons = useMemo(() => {
     if (!weaponCounts) return [];
     return Object.entries(weaponCounts)
@@ -470,15 +472,24 @@ export function BlaulichtPlaybackControl({
             type="button"
             onClick={() => togglePanel('time')}
             className={`glass-button flex items-center gap-1 text-[11px] h-8 px-1.5 sm:px-2 rounded-lg border font-medium transition-colors duration-150 ${
-              expandedPanel === 'time' || hasTimeFilter
-                ? 'bg-blue-500/20 border-blue-500/60 text-blue-300'
-                : 'text-[var(--text-tertiary)]'
+              activePreset === 'today'
+                ? 'bg-red-500/20 border-red-500/60 text-red-300'
+                : expandedPanel === 'time' || hasTimeFilter
+                  ? 'bg-blue-500/20 border-blue-500/60 text-blue-300'
+                  : 'text-[var(--text-tertiary)]'
             }`}
           >
-            <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
+            {activePreset === 'today' ? (
+              <span className="relative flex h-2 w-2 flex-shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+              </span>
+            ) : (
+              <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            )}
             <span className="hidden min-[400px]:inline whitespace-nowrap">{timeLabel}</span>
           </button>
         </div>
@@ -522,17 +533,26 @@ export function BlaulichtPlaybackControl({
             <div className="flex items-center gap-1.5 flex-wrap">
               {PRESETS.map((preset) => {
                 const isActive = activePreset === preset.key;
+                const isLive = preset.key === 'today';
                 return (
                   <button
                     key={preset.key}
                     type="button"
                     onClick={() => handlePresetClick(preset.key)}
-                    className={`glass-button text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors duration-150 ${
+                    className={`glass-button flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors duration-150 ${
                       isActive
-                        ? 'bg-blue-500/25 border-blue-500 text-blue-300'
+                        ? isLive
+                          ? 'bg-red-500/25 border-red-500 text-red-300'
+                          : 'bg-blue-500/25 border-blue-500 text-blue-300'
                         : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
                     }`}
                   >
+                    {isLive && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                      </span>
+                    )}
                     {lang === 'de' ? preset.labelDe : preset.labelEn}
                   </button>
                 );

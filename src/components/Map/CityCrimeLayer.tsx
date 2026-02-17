@@ -116,41 +116,37 @@ export function CityCrimeLayer({
     return dataMap;
   }, [selectedYear, cityCrimeData]);
 
-  // Color scale - consistent across all years
-  const colorScale = useMemo(() => {
-    const values: number[] = [];
-    if (!cityCrimeData) return () => '#333333';
+  // Build enriched GeoJSON with pre-computed colors
+  const enrichedGeoJson = useMemo(() => {
+    let getFillColor: (value: number | null) => string = (value) =>
+      (value === null ? '#333333' : '#333333');
 
-    for (const yearData of Object.values(cityCrimeData)) {
-      for (const row of Object.values(yearData)) {
-        const stats = row.crimes[selectedCrimeType];
-        if (stats) {
-          values.push(metric === 'hz' ? stats.hz : stats.aq);
+    if (cityCrimeData) {
+      const values: number[] = [];
+      for (const yearData of Object.values(cityCrimeData)) {
+        for (const row of Object.values(yearData)) {
+          const stats = row.crimes[selectedCrimeType];
+          if (stats) {
+            values.push(metric === 'hz' ? stats.hz : stats.aq);
+          }
         }
+      }
+
+      if (values.length > 0) {
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const interpolator = metric === 'hz' ? interpolateCrimeRate : interpolateClearanceRate;
+        const scale = scaleSequential<string>().domain([min, max]).interpolator(interpolator);
+        getFillColor = (value: number | null): string => (value === null ? '#333333' : scale(value));
       }
     }
 
-    if (values.length === 0) return () => '#333333';
-
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const interpolator = metric === 'hz' ? interpolateCrimeRate : interpolateClearanceRate;
-    const scale = scaleSequential<string>().domain([min, max]).interpolator(interpolator);
-
-    return (value: number | null): string => {
-      if (value === null) return '#333333';
-      return scale(value);
-    };
-  }, [cityCrimeData, selectedCrimeType, metric]);
-
-  // Build enriched GeoJSON with pre-computed colors
-  const enrichedGeoJson = useMemo(() => {
     const features = citiesGeojson.features.map((feature) => {
       const ags = (feature.properties as Record<string, unknown>)?.ags as string | undefined;
       const city = ags ? cityDataMap.get(ags) : undefined;
       const stats = city?.crimes[selectedCrimeType];
       const value = stats ? (metric === 'hz' ? stats.hz : stats.aq) : null;
-      const fillColor = colorScale(value);
+      const fillColor = getFillColor(value);
       return {
         ...feature,
         id: ags ? parseInt(ags, 10) : undefined,
@@ -161,7 +157,7 @@ export function CityCrimeLayer({
       };
     });
     return { type: 'FeatureCollection' as const, features };
-  }, [citiesGeojson, cityDataMap, selectedCrimeType, metric, colorScale]);
+  }, [cityCrimeData, cityDataMap, selectedCrimeType, metric]);
 
   // Sync hover feature-state
   useEffect(() => {
