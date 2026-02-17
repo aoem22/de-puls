@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Push enriched LLM-coords data to Supabase crime_records table.
+Push enriched data to Supabase crime_records table.
 
-Transforms the enriched JSON format (from test_llm_coords.py) to the
-Supabase schema and batch-upserts records.
+Transforms the enriched JSON format to the Supabase schema and batch-upserts records.
+Supports single-file mode (--input) or directory scanning (--input-dir) with optional
+year filtering (--year).
 
 Usage:
-    python3 scripts/pipeline/push_to_supabase.py
+    python3 scripts/pipeline/push_to_supabase.py --input-dir data/pipeline/chunks/enriched/ --year 2026 --dry-run
+    python3 scripts/pipeline/push_to_supabase.py --input-dir data/pipeline/chunks/enriched/ --year 2026 --run-name v1_2026
     python3 scripts/pipeline/push_to_supabase.py --input path/to/enriched.json
-    python3 scripts/pipeline/push_to_supabase.py --dry-run  # preview without uploading
 """
 import hashlib
 import json
@@ -163,11 +164,8 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
         crime = crime[0] if crime else {}
     details = article.get("details", {})
 
-    # Skip articles without coordinates
     lat = loc.get("lat")
     lon = loc.get("lon")
-    if lat is None or lon is None:
-        return None
 
     url = article.get("url", "")
     published_at = sanitize_timestamp(article.get("date", ""))
@@ -225,6 +223,15 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
     if not isinstance(suspect_herkunft, str) or not suspect_herkunft.strip():
         suspect_herkunft = None
 
+    # Person description fields (free-text from police report)
+    victim_description = details.get("victim_description")
+    if not isinstance(victim_description, str) or not victim_description.strip():
+        victim_description = None
+
+    suspect_description = details.get("suspect_description")
+    if not isinstance(suspect_description, str) or not suspect_description.strip():
+        suspect_description = None
+
     # Severity, validate against known values
     severity = details.get("severity")
     valid_severities = {"minor", "serious", "critical", "fatal", "property_only", "unknown"}
@@ -237,15 +244,36 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
     if motive not in valid_motives:
         motive = None
 
-    # Incident time fields
+    # Damage amount in EUR, validate as non-negative int
+    damage_amount_eur = details.get("damage_amount_eur")
+    if isinstance(damage_amount_eur, (int, float)) and damage_amount_eur >= 0:
+        damage_amount_eur = int(damage_amount_eur)
+    else:
+        damage_amount_eur = None
+
+    # Damage estimate precision
+    damage_estimate = details.get("damage_estimate")
+    valid_estimates = {"exact", "approximate", "unknown"}
+    if damage_estimate not in valid_estimates:
+        damage_estimate = None
+
+    # Incident time fields (prompt outputs start_date/start_time/end_date/end_time)
     incident_time_obj = article.get("incident_time", {})
-    incident_date = incident_time_obj.get("date")
+    incident_date = incident_time_obj.get("start_date") or incident_time_obj.get("date")
     if not isinstance(incident_date, str) or not incident_date.strip():
         incident_date = None
 
-    incident_time = incident_time_obj.get("time")
+    incident_time = incident_time_obj.get("start_time") or incident_time_obj.get("time")
     if not isinstance(incident_time, str) or not incident_time.strip():
         incident_time = None
+
+    incident_end_date = incident_time_obj.get("end_date")
+    if not isinstance(incident_end_date, str) or not incident_end_date.strip():
+        incident_end_date = None
+
+    incident_end_time = incident_time_obj.get("end_time")
+    if not isinstance(incident_end_time, str) or not incident_end_time.strip():
+        incident_end_time = None
 
     incident_time_precision = incident_time_obj.get("precision")
     valid_precisions = {"exact", "approximate", "unknown"}
@@ -298,6 +326,8 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
         "incident_date": incident_date,
         "incident_time": incident_time,
         "incident_time_precision": incident_time_precision,
+        "incident_end_date": incident_end_date,
+        "incident_end_time": incident_end_time,
         "crime_sub_type": crime_sub_type,
         "crime_confidence": crime_confidence,
         "drug_type": drug_type,
@@ -309,36 +339,82 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
         "suspect_gender": suspect_gender,
         "victim_herkunft": victim_herkunft,
         "suspect_herkunft": suspect_herkunft,
+        "victim_description": victim_description,
+        "suspect_description": suspect_description,
         "severity": severity,
         "motive": motive,
+        "damage_amount_eur": damage_amount_eur,
+        "damage_estimate": damage_estimate,
         "incident_group_id": incident_group_id,
         "group_role": group_role,
         "pipeline_run": pipeline_run,
+        "classification": article.get("classification"),
     }
+
+
+def collect_articles_from_dir(dir_path: Path, year: str | None = None) -> list[dict]:
+    """Scan a directory tree for enriched JSON files and collect all articles.
+
+    Args:
+        dir_path: Root directory to scan (e.g. chunks/enriched/)
+        year: If set, only load files from */{year}/*.json subdirectories
+    """
+    articles = []
+    files_loaded = 0
+    for json_file in sorted(dir_path.rglob("*.json")):
+        # Year filter: check if the file is inside a /{year}/ directory
+        if year and f"/{year}/" not in str(json_file):
+            continue
+        try:
+            data = json.load(open(json_file, encoding="utf-8"))
+            if isinstance(data, list) and len(data) > 0:
+                articles.extend(data)
+                files_loaded += 1
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  WARN: skipping {json_file}: {e}")
+    print(f"Scanned {files_loaded} files from {dir_path}" + (f" (year={year})" if year else ""))
+    return articles
 
 
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Push enriched data to Supabase")
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
         "--input", "-i",
-        default="data/pipeline/chunks/enriched/test_llm_coords.json",
-        help="Input enriched JSON file",
+        help="Input enriched JSON file (single file mode)",
     )
+    group.add_argument(
+        "--input-dir",
+        help="Input directory to scan for enriched JSON files (recursive)",
+    )
+    parser.add_argument("--year", help="Only load files from this year (e.g. 2026)")
     parser.add_argument("--dry-run", action="store_true", help="Preview without uploading")
     parser.add_argument("--batch-size", type=int, default=500, help="Records per batch")
     parser.add_argument("--run-name", default="default", help="Pipeline run name for A/B experiments")
     args = parser.parse_args()
 
     # Load enriched data
-    input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"ERROR: Input file not found: {input_path}")
-        sys.exit(1)
+    if args.input_dir:
+        dir_path = Path(args.input_dir)
+        if not dir_path.is_dir():
+            print(f"ERROR: Directory not found: {dir_path}")
+            sys.exit(1)
+        articles = collect_articles_from_dir(dir_path, year=args.year)
+    elif args.input:
+        input_path = Path(args.input)
+        if not input_path.exists():
+            print(f"ERROR: Input file not found: {input_path}")
+            sys.exit(1)
+        articles = json.load(open(input_path, encoding="utf-8"))
+        print(f"Loaded {len(articles)} articles from {input_path}")
+    else:
+        # Default: scan CHUNKS_ENRICHED_DIR
+        from scripts.pipeline.config import CHUNKS_ENRICHED_DIR
+        articles = collect_articles_from_dir(CHUNKS_ENRICHED_DIR, year=args.year)
 
-    articles = json.load(open(input_path, encoding="utf-8"))
-    print(f"Loaded {len(articles)} articles from {input_path}")
+    print(f"Total articles: {len(articles)}")
     print(f"Pipeline run: {args.run_name}")
 
     # Transform and deduplicate by ID (multi-incident articles can produce dupes)
@@ -357,7 +433,8 @@ def main():
         else:
             skipped += 1
 
-    print(f"Transformed {len(rows)} records ({skipped} skipped - no coords, {dupes} deduped)")
+    no_coords = sum(1 for r in rows if r["latitude"] is None or r["longitude"] is None)
+    print(f"Transformed {len(rows)} records ({skipped} skipped, {dupes} deduped, {no_coords} without coords)")
 
     # Category distribution
     from collections import Counter
@@ -369,7 +446,8 @@ def main():
     if args.dry_run:
         print("\n[DRY RUN] Would upload these records. Sample:")
         for row in rows[:3]:
-            print(f"  {row['id'][:8]}... | {row['title'][:50]} | ({row['latitude']}, {row['longitude']}) | {row['categories']}")
+            coords = f"({row['latitude']}, {row['longitude']})" if row['latitude'] else "(no coords)"
+            print(f"  {row['id'][:8]}... | {row['title'][:50]} | {coords} | {row['categories']}")
         print(f"\n[DRY RUN] Total: {len(rows)} records ready for upload")
         return
 

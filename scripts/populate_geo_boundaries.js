@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Populate geo_boundaries table with Kreis-level entries from kreise.json.
  * Computes bounding boxes from polygon geometry.
