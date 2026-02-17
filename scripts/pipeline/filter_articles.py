@@ -44,12 +44,24 @@ JUNK_TITLE_PATTERNS = [
     re.compile(r'Polizei\s+informiert\s+über', re.IGNORECASE),
     re.compile(r'Tag\s+der\s+offenen\s+Tür', re.IGNORECASE),
     re.compile(r'Blitzerstandorte', re.IGNORECASE),
+    # New high-signal junk categories found in full-corpus audit
+    re.compile(r'\bBlitzermeldung\b', re.IGNORECASE),
+    re.compile(r'\bGeschwindigkeitskontrollstellen?\b', re.IGNORECASE),
+    re.compile(r'\bVersammlungsgeschehen\b', re.IGNORECASE),
+    re.compile(r'Einsatz der Bundespolizei.*Fußballspielbegegnung', re.IGNORECASE),
+    re.compile(r'\bSave the date\b', re.IGNORECASE),
+    re.compile(r'\bPresseeinladung\b', re.IGNORECASE),
+    re.compile(r'Präventionsveranstaltung|Praeventionsveranstaltung', re.IGNORECASE),
+    re.compile(r'Internationaler Zolltag', re.IGNORECASE),
+    re.compile(r'Karriere beim ZOLL|Berufseinsteiger beim Hauptzollamt|Berufsinformationstag beim HZA', re.IGNORECASE),
+    re.compile(r'Weltverbrauchertag.*ZOLL|Tag der Kinderhospizarbeit.*ZOLL', re.IGNORECASE),
 ]
 
 # Body patterns (checked only if title didn't match)
 JUNK_BODY_PATTERNS = [
     re.compile(r'Geschwindigkeitskontrolle.*Messstelle', re.IGNORECASE),
     re.compile(r'Die Pressestelle.*ist.*erreichbar', re.IGNORECASE),
+    re.compile(r'(Rücknahme|Widerruf|Erledigung).*(Vermisstenfahndung|Vermisstenmeldung|Öffentlichkeitsfahndung|Oeffentlichkeitsfahndung)', re.IGNORECASE),
 ]
 
 # Feuerwehr source filter (backup — should be caught by scraper)
@@ -57,6 +69,52 @@ FEUERWEHR_PATTERN = re.compile(
     r'Feuerwehr|^FW[ -]|Berufsfeuerwehr|Freiwillige Feuerwehr',
     re.IGNORECASE,
 )
+
+# Missing-person bulletins are treated as junk per enrichment prompt policy.
+MISSING_PERSON_CORE_PATTERN = re.compile(
+    r'(vermisst|vermisstenfahndung|vermisstensuche|vermisstenmeldung|öffentlichkeitsfahndung|oeffentlichkeitsfahndung)',
+    re.IGNORECASE,
+)
+MISSING_PERSON_EXPLICIT_PATTERN = re.compile(
+    r'(vermisst|vermisstenfahndung|vermisstensuche|vermisstenmeldung)',
+    re.IGNORECASE,
+)
+PUBLIC_SEARCH_PATTERN = re.compile(
+    r'(öffentlichkeitsfahndung|oeffentlichkeitsfahndung)',
+    re.IGNORECASE,
+)
+MISSING_PERSON_STRONG_PATTERN = re.compile(
+    r'(rücknahme|ruecknahme|widerruf|erledigung).*(vermissten|öffentlichkeits|oeffentlichkeits)?fahndung'
+    r'|\bvermisst(?:e|er|en)?\b.*\b(wieder da|wieder aufgefunden|aufgefunden|tot aufgefunden|leblos aufgefunden)\b'
+    r'|polizei bittet um hinweise',
+    re.IGNORECASE,
+)
+MISSING_PERSON_CRIME_CONTEXT_PATTERN = re.compile(
+    r'(raub|mord|tötungsdelikt|toetungsdelikt|einbruch|betrug|landfriedensbruch|brandstiftung|körperverletzung|koerperverletzung|tatverdächtig|tatverdaechtig|schwerer\s+bandendiebstahl)',
+    re.IGNORECASE,
+)
+
+
+def _is_missing_person_bulletin(title: str) -> bool:
+    """Conservative missing-person detector to avoid filtering crime-fahndung posts."""
+    if not title or ";" in title:
+        return False
+    if not MISSING_PERSON_CORE_PATTERN.search(title):
+        return False
+    # Generic public-fahndung can be crime-related; require explicit missing-person markers.
+    has_explicit_missing_marker = bool(MISSING_PERSON_EXPLICIT_PATTERN.search(title))
+    if PUBLIC_SEARCH_PATTERN.search(title) and not has_explicit_missing_marker:
+        return False
+    if MISSING_PERSON_CRIME_CONTEXT_PATTERN.search(title):
+        return False
+    if MISSING_PERSON_STRONG_PATTERN.search(title):
+        return True
+    return bool(
+        re.search(
+            r'\b(\d{1,3}-jährige[rsn]?\b.*\bvermisst|vermisst\b.*\b(polizei|kripo))',
+            title.lower(),
+        )
+    )
 
 
 def is_junk_article(article: dict) -> Optional[str]:
@@ -72,6 +130,10 @@ def is_junk_article(article: dict) -> Optional[str]:
         return "feuerwehr_source"
     if title and re.match(r'^FW[ -]', title):
         return "feuerwehr_title"
+
+    # Missing-person/search-only bulletins (non-incident)
+    if _is_missing_person_bulletin(title):
+        return "junk_title:missing_person"
 
     # Title-based junk
     for pattern in JUNK_TITLE_PATTERNS:

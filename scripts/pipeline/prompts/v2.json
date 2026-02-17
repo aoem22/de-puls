@@ -1,0 +1,6 @@
+{
+  "model": "x-ai/grok-4-fast",
+  "provider": "openrouter",
+  "max_tokens": 10000,
+  "temperature": 0
+}

@@ -25,7 +25,7 @@ load_dotenv()
 load_dotenv(Path(".env.local"), override=True)
 os.environ['SSL_CERT_FILE'] = certifi.where()
 
-from .config import BUNDESLAENDER, CACHE_DIR, CHUNKS_RAW_DIR
+from .config import BUNDESLAENDER, CACHE_DIR, CHUNKS_RAW_DIR, chunk_raw_path
 from .filter_articles import is_junk_article, group_incidents
 from .fast_enricher import FastEnricher
 from .push_to_supabase import transform_article
@@ -71,7 +71,7 @@ def _load_week_articles(year: int, week: int) -> list[dict]:
 
     for bl in BUNDESLAENDER:
         for y, m in months:
-            raw_file = CHUNKS_RAW_DIR / bl / f"{y}-{m:02d}.json"
+            raw_file = chunk_raw_path(bl, f"{y}-{m:02d}")
             if not raw_file.exists():
                 continue
 

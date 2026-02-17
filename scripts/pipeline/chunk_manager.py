@@ -20,6 +20,9 @@ from .config import (
     CHUNKS_ENRICHED_DIR,
     MANIFEST_PATH,
     DATA_DIR,
+    chunk_raw_path,
+    chunk_enriched_path,
+    chunk_filename,
 )
 
 
@@ -93,8 +96,8 @@ def create_initial_manifest(
             "year_month": year_month,
             "start_date": chunk["start_date"],
             "end_date": chunk["end_date"],
-            "raw_file": str(CHUNKS_RAW_DIR / f"{year_month}.json"),
-            "enriched_file": str(CHUNKS_ENRICHED_DIR / f"{year_month}.json"),
+            "raw_file": str(CHUNKS_RAW_DIR / chunk_filename("_all_", year_month)),
+            "enriched_file": str(CHUNKS_ENRICHED_DIR / chunk_filename("_all_", year_month)),
             "bundeslaender_completed": [],  # Track which states are done
             "articles_count": None,
             "enriched_count": None,

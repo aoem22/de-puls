@@ -32,6 +32,7 @@ from .parallel_orchestrator import (
     run_parallel_pipeline,
     run_scrape_only,
     run_enrich_only,
+    run_turbo_enrich,
 )
 from .merge import run_merge, run_transform
 from .weekly_processor import process_week
@@ -98,6 +99,25 @@ def cmd_filter(args):
 def cmd_enrich(args):
     """Run enrichment only (on already-scraped data)."""
     run_enrich_only()
+
+
+def cmd_turbo(args):
+    """Run async parallel enrichment (100x speedup)."""
+    import asyncio
+    asyncio.run(
+        run_turbo_enrich(
+            concurrency=args.concurrency,
+            batch_size=args.batch_size,
+            input_path=args.input,
+            output_path=args.output,
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            prompt_version=args.prompt_version,
+            model=args.model,
+            run_name=getattr(args, "run_name", "default"),
+            provider=getattr(args, "provider", None),
+        )
+    )
 
 
 def cmd_status(args):
@@ -311,6 +331,53 @@ def main():
         help="Run ONLY enrichment phase (on already-scraped data)",
     )
     enrich_parser.set_defaults(func=cmd_enrich)
+
+    # turbo command (async parallel enrichment)
+    turbo_parser = subparsers.add_parser(
+        "turbo",
+        help="Async parallel enrichment (30+ concurrent LLM calls)",
+    )
+    turbo_parser.add_argument(
+        "--concurrency", "-c", type=int, default=30,
+        help="Max concurrent LLM requests (default: 30)",
+    )
+    turbo_parser.add_argument(
+        "--batch-size", "-b", type=int, default=8,
+        help="Articles per LLM call (default: 8)",
+    )
+    turbo_parser.add_argument(
+        "--input", "-i",
+        help="Single input JSON file",
+    )
+    turbo_parser.add_argument(
+        "--output", "-o",
+        help="Single output JSON file",
+    )
+    turbo_parser.add_argument(
+        "--input-dir",
+        help="Input directory with JSON files (batch mode)",
+    )
+    turbo_parser.add_argument(
+        "--output-dir",
+        help="Output directory for enriched files (batch mode)",
+    )
+    turbo_parser.add_argument(
+        "--prompt-version",
+        help="Override prompt version",
+    )
+    turbo_parser.add_argument(
+        "--model",
+        help="Override LLM model (default: depends on provider)",
+    )
+    turbo_parser.add_argument(
+        "--provider", choices=["openrouter", "deepseek"],
+        help="LLM provider (default: openrouter)",
+    )
+    turbo_parser.add_argument(
+        "--run-name", default="default",
+        help="Pipeline run name for A/B experiments",
+    )
+    turbo_parser.set_defaults(func=cmd_turbo)
 
     # status command
     status_parser = subparsers.add_parser("status", help="Show pipeline progress")

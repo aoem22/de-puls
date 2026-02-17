@@ -30,7 +30,7 @@ BUNDESLAENDER = [
 # from their own state police portals.
 DEDICATED_SCRAPER_STATES = {
     "berlin",
-    "brandenburg",  # presseportal endpoint broken; no dedicated scraper yet
+    "brandenburg",
     "bayern",
     "sachsen-anhalt",
     # hamburg removed: polizei.hamburg embeds presseportal.de iframe, use presseportal
@@ -63,12 +63,14 @@ ASYNC_SCRAPER_SCRIPT = PROJECT_ROOT / "scripts" / "scrape_blaulicht_async.py"
 ENRICHER_SCRIPT = PROJECT_ROOT / "scripts" / "enrich_blaulicht.py"
 FAST_ENRICHER_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline" / "fast_enricher.py"
 FILTER_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline" / "filter_articles.py"
+ASYNC_ENRICHER_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline" / "async_enricher.py"
 TRANSFORMER_SCRIPT = PROJECT_ROOT / "scripts" / "transform_to_crimes.py"
 
 # Dedicated state scrapers (scripts/scrapers/)
 SCRAPERS_DIR = PROJECT_ROOT / "scripts" / "scrapers"
 STATE_SCRAPER_SCRIPTS = {
     "berlin": SCRAPERS_DIR / "scrape_berlin_polizei.py",
+    "brandenburg": SCRAPERS_DIR / "scrape_brandenburg_polizei.py",
     "bayern": SCRAPERS_DIR / "scrape_bayern_polizei.py",
     "sachsen-anhalt": SCRAPERS_DIR / "scrape_sachsen_anhalt.py",
     "hamburg": SCRAPERS_DIR / "scrape_hamburg_polizei.py",
@@ -79,6 +81,14 @@ STATE_SCRAPER_SCRIPTS = {
 DELAY_BETWEEN_CHUNKS_SECONDS = 5
 MAX_RETRIES = 3
 RETRY_DELAYS_SECONDS = [60, 300, 900]  # 1min, 5min, 15min
+
+# Async enrichment settings (async_enricher.py)
+ASYNC_CONCURRENCY = 30           # Max concurrent LLM requests
+ASYNC_BATCH_SIZE = 8             # Articles per LLM call
+ASYNC_CACHE_SAVE_INTERVAL = 500  # Save cache every N articles
+ASYNC_MAX_RETRIES = 5            # Per-request retries on 429
+ASYNC_RETRY_BASE_DELAY = 1.0    # Exponential backoff base (seconds)
+ASYNC_RETRY_MAX_DELAY = 60.0    # Cap on retry delay
 
 # API Keys (loaded from environment)
 # GOOGLE_MAPS_API_KEY - Required for geocoding (set in .env)
@@ -91,3 +101,82 @@ CHUNKS_FILTERED_DIR = DATA_DIR / "chunks" / "filtered"
 MERGED_RAW_FILE = MERGED_DIR / "blaulicht_all_raw.json"
 MERGED_ENRICHED_FILE = MERGED_DIR / "blaulicht_all_enriched.json"
 FINAL_CRIMES_FILE = PROJECT_ROOT / "lib" / "data" / "blaulicht-crimes.json"
+
+# German month names for flat chunk filenames
+GERMAN_MONTHS = {
+    "01": "januar",
+    "02": "februar",
+    "03": "maerz",
+    "04": "april",
+    "05": "mai",
+    "06": "juni",
+    "07": "juli",
+    "08": "august",
+    "09": "september",
+    "10": "oktober",
+    "11": "november",
+    "12": "dezember",
+}
+
+GERMAN_MONTHS_REVERSE = {v: k for k, v in GERMAN_MONTHS.items()}
+
+
+def chunk_filename(bundesland: str, year_month: str) -> str:
+    """Build flat chunk filename: e.g. 'hessen_januar_2024.json'"""
+    year, month = year_month.split("-")
+    german_month = GERMAN_MONTHS[month]
+    return f"{bundesland}_{german_month}_{year}.json"
+
+
+def parse_chunk_filename(filename: str) -> tuple[str, str] | None:
+    """Parse a flat chunk filename back to (bundesland, year_month).
+
+    e.g. 'hessen_januar_2024.json' → ('hessen', '2024-01')
+    Returns None if the filename doesn't match the expected pattern.
+    """
+    name = filename.removesuffix(".json")
+    if name == filename:
+        return None  # no .json extension
+
+    # Find the last two underscores: {bundesland}_{german_month}_{year}
+    # bundesland itself may contain hyphens but not underscores
+    parts = name.rsplit("_", 2)
+    if len(parts) != 3:
+        return None
+
+    bundesland, german_month, year = parts
+    month_num = GERMAN_MONTHS_REVERSE.get(german_month)
+    if month_num is None or not year.isdigit() or len(year) != 4:
+        return None
+
+    return (bundesland, f"{year}-{month_num}")
+
+
+def chunk_raw_path(bundesland: str, year_month: str) -> Path:
+    """Build raw chunk path: chunks/raw/{bundesland}_{monat}_{year}.json
+
+    Creates parent directory if it doesn't exist.
+    """
+    p = CHUNKS_RAW_DIR / chunk_filename(bundesland, year_month)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def chunk_enriched_path(bundesland: str, year_month: str) -> Path:
+    """Build enriched chunk path: chunks/enriched/{bundesland}_{monat}_{year}.json
+
+    Creates parent directory if it doesn't exist.
+    """
+    p = CHUNKS_ENRICHED_DIR / chunk_filename(bundesland, year_month)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def chunk_filtered_path(bundesland: str, year_month: str) -> Path:
+    """Build filtered chunk path: chunks/filtered/{bundesland}_{monat}_{year}.json
+
+    Creates parent directory if it doesn't exist.
+    """
+    p = CHUNKS_FILTERED_DIR / chunk_filename(bundesland, year_month)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p

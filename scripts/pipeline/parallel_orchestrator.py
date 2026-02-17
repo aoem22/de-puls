@@ -29,6 +29,14 @@ from .config import (
     STATE_SCRAPER_SCRIPTS,
     LOG_DIR,
     DATA_DIR,
+    CHUNKS_RAW_DIR,
+    CHUNKS_ENRICHED_DIR,
+    ASYNC_CONCURRENCY,
+    ASYNC_BATCH_SIZE,
+    GERMAN_MONTHS,
+    chunk_raw_path,
+    chunk_enriched_path,
+    parse_chunk_filename,
 )
 from .chunk_manager import (
     get_or_create_manifest,
@@ -143,10 +151,8 @@ def run_scraper_sync(chunk: dict, use_async: bool = True) -> tuple[str, bool, Op
         if _shutdown_requested:
             break
 
-        # Per-state output file
-        state_dir = CHUNKS_RAW_DIR / bundesland
-        state_dir.mkdir(parents=True, exist_ok=True)
-        state_file = str(state_dir / f"{chunk['year_month']}.json")
+        # Per-state output file: chunks/raw/{bundesland}/{year}/{MM}.json
+        state_file = str(chunk_raw_path(bundesland, chunk['year_month']))
 
         # Skip if already exists with data
         sf = Path(state_file)
@@ -256,6 +262,7 @@ def run_enricher_sync(chunk: dict) -> tuple[str, bool, Optional[int], Optional[s
         str(FAST_ENRICHER_SCRIPT),
         "--input", str(input_path),
         "--output", chunk["enriched_file"],
+        "--no-geocode",  # Geocoding is intentionally run as a manual follow-up step
     ]
 
     try:
@@ -372,7 +379,8 @@ def run_parallel_pipeline(
 
     print(f"[{datetime.now().isoformat()}] Starting PARALLEL Blaulicht Pipeline")
     print(f"  Scraper workers: {MAX_PARALLEL_SCRAPERS}")
-    print(f"  Enricher workers: {MAX_PARALLEL_ENRICHERS}")
+    print(f"  Enricher: turbo (async, {ASYNC_CONCURRENCY} concurrent LLM calls)")
+    print("  Geocoding: deferred (run scripts/pipeline/post_geocode.py manually)")
     print(f"  Pipeline run: {run_name}")
 
     # Load manifest
@@ -437,23 +445,14 @@ def run_parallel_pipeline(
                 manifest,
             )
 
-    # Phase 3: Parallel enrichment (only for successfully scraped)
+    # Phase 3: Turbo enrichment (async, 30 concurrent LLM calls)
     if not _shutdown_requested:
-        # Get chunks that were scraped but not yet enriched
-        to_enrich = [
-            {"id": chunk_id, **chunk}
-            for chunk_id, chunk in manifest["chunks"].items()
-            if chunk["status"] == "in_progress" and chunk.get("articles_count", 0) > 0
-        ]
-
-        if to_enrich:
-            enrich_success, enrich_fail = run_parallel_phase(
-                to_enrich,
-                "enrich",
-                run_enricher_sync,
-                MAX_PARALLEL_ENRICHERS,
-                manifest,
-            )
+        has_enrichable = any(
+            chunk["status"] == "in_progress" and chunk.get("articles_count", 0) > 0
+            for chunk in manifest["chunks"].values()
+        )
+        if has_enrichable:
+            asyncio.run(_run_turbo_phase(manifest, ASYNC_CONCURRENCY, ASYNC_BATCH_SIZE))
 
     elapsed = time.time() - start_time
 
@@ -515,16 +514,51 @@ def run_scrape_only(
 
 
 def run_enrich_only() -> None:
-    """Run only the enrichment phase on already-scraped data."""
+    """Run only the enrichment phase on already-scraped data (uses turbo)."""
     setup_signal_handlers()
 
-    print(f"[{datetime.now().isoformat()}] Starting ENRICH-ONLY phase")
+    print(f"[{datetime.now().isoformat()}] Starting ENRICH-ONLY phase (turbo)")
 
     manifest = get_or_create_manifest()
 
-    # Get chunks that are scraped but not enriched
+    has_enrichable = any(
+        chunk["status"] == "in_progress" and chunk.get("articles_count", 0) > 0
+        for chunk in manifest["chunks"].values()
+    )
+
+    if not has_enrichable:
+        print("No chunks need enrichment.")
+        return
+
+    start_time = time.time()
+
+    asyncio.run(_run_turbo_phase(manifest, ASYNC_CONCURRENCY, ASYNC_BATCH_SIZE))
+
+    elapsed = time.time() - start_time
+    print(f"\nEnrichment complete in {elapsed/60:.1f} minutes")
+    print(get_progress_summary(manifest))
+
+
+async def _run_turbo_phase(
+    manifest: dict,
+    concurrency: int = ASYNC_CONCURRENCY,
+    batch_size: int = ASYNC_BATCH_SIZE,
+    model: str = None,
+    prompt_version: str = None,
+    provider: str = None,
+) -> None:
+    """Run turbo (async) enrichment on all in-progress manifest chunks.
+
+    Loads all articles from raw/filtered chunk files, enriches them via
+    AsyncFastEnricher with high concurrency, then splits results back
+    into per-chunk enriched files and updates the manifest.
+
+    Used by both `run_parallel_pipeline()` Phase 3 and `run_turbo_enrich()` Mode 3.
+    """
+    from .async_enricher import AsyncFastEnricher
+
     to_enrich = [
-        {"id": chunk_id, **chunk}
+        (chunk_id, chunk)
         for chunk_id, chunk in manifest["chunks"].items()
         if chunk["status"] == "in_progress" and chunk.get("articles_count", 0) > 0
     ]
@@ -533,18 +567,175 @@ def run_enrich_only() -> None:
         print("No chunks need enrichment.")
         return
 
-    print(f"Enriching {len(to_enrich)} chunks with {MAX_PARALLEL_ENRICHERS} workers...")
+    print(f"\n{'='*60}")
+    print(f"[{datetime.now().isoformat()}] Starting turbo enrichment phase")
+    print(f"  Concurrency: {concurrency}, Batch size: {batch_size}")
+    print(f"  Chunks to enrich: {len(to_enrich)}")
+    print(f"{'='*60}")
 
-    start_time = time.time()
+    # Load all articles from raw chunk files
+    all_articles = []
+    chunk_article_ranges: list[tuple[str, dict, int, int]] = []
 
-    run_parallel_phase(
-        to_enrich,
-        "enrich",
-        run_enricher_sync,
-        MAX_PARALLEL_ENRICHERS,
-        manifest,
+    for chunk_id, chunk in to_enrich:
+        # Use filtered file if available, otherwise raw
+        input_file = chunk.get("filtered_file") or chunk.get("raw_file")
+        if not input_file or not Path(input_file).exists():
+            # Try per-state raw files: {bundesland}_{german_month}_{year}.json
+            ym = chunk.get('year_month', '')
+            if '-' in ym:
+                ym_year, ym_month = ym.split('-')
+                german_month = GERMAN_MONTHS.get(ym_month, '')
+                raw_files = sorted(CHUNKS_RAW_DIR.glob(f"*_{german_month}_{ym_year}.json")) if german_month else []
+            else:
+                raw_files = []
+            if not raw_files:
+                print(f"  Skipping {chunk_id}: no input files found")
+                continue
+            articles = []
+            for rf in raw_files:
+                with open(rf, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    arts = data if isinstance(data, list) else data.get("articles", [])
+                    articles.extend(arts)
+        else:
+            with open(input_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                articles = data if isinstance(data, list) else data.get("articles", [])
+
+        if not articles:
+            continue
+
+        start_idx = len(all_articles)
+        all_articles.extend(articles)
+        chunk_article_ranges.append((chunk_id, chunk, start_idx, start_idx + len(articles)))
+
+    print(f"  Total articles loaded: {len(all_articles)}")
+
+    if not all_articles:
+        print("No articles to enrich.")
+        return
+
+    # Enrich all articles in one shot
+    enricher = AsyncFastEnricher(
+        cache_dir=".cache",
+        concurrency=concurrency,
+        batch_size=batch_size,
+        model=model,
+        prompt_version=prompt_version,
+        provider=provider,
     )
 
-    elapsed = time.time() - start_time
-    print(f"\nEnrichment complete in {elapsed/60:.1f} minutes")
-    print(get_progress_summary(manifest))
+    import signal as sig
+
+    loop = asyncio.get_running_loop()
+
+    def _signal_shutdown():
+        enricher._shutdown = True
+        print("\nShutdown requested — finishing in-flight requests...")
+
+    for s in (sig.SIGINT, sig.SIGTERM):
+        loop.add_signal_handler(s, _signal_shutdown)
+
+    try:
+        enriched, removed = await enricher.enrich_all(all_articles)
+    except Exception:
+        enricher.save_cache_sync()
+        raise
+
+    await enricher.save_cache()
+
+    # Build URL-based lookup for splitting results back into chunks
+    enriched_by_url: dict[str, list[dict]] = {}
+    for rec in enriched:
+        url = rec.get("url", "")
+        enriched_by_url.setdefault(url, []).append(rec)
+
+    # Split results back into per-chunk output files
+    for chunk_id, chunk, start_idx, end_idx in chunk_article_ranges:
+        chunk_enriched = []
+        for idx in range(start_idx, end_idx):
+            art = all_articles[idx]
+            url = art.get("url", "")
+            if url in enriched_by_url:
+                chunk_enriched.extend(enriched_by_url.pop(url, []))
+
+        enriched_file = chunk.get("enriched_file")
+        if not enriched_file:
+            bl = chunk.get("bundesland", "unknown")
+            ym = chunk.get("year_month", chunk_id)
+            enriched_file = str(chunk_enriched_path(bl, ym))
+
+        if chunk_enriched:
+            Path(enriched_file).parent.mkdir(parents=True, exist_ok=True)
+            with open(enriched_file, "w", encoding="utf-8") as f:
+                json.dump(chunk_enriched, f, ensure_ascii=False, indent=2)
+
+        update_chunk_status(manifest, chunk_id, "completed", enriched_count=len(chunk_enriched))
+
+    save_manifest(manifest)
+    print(f"\nTurbo enrichment complete. {len(enriched)} records across {len(chunk_article_ranges)} chunks.")
+
+
+async def run_turbo_enrich(
+    concurrency: int = ASYNC_CONCURRENCY,
+    batch_size: int = ASYNC_BATCH_SIZE,
+    input_path: str = None,
+    output_path: str = None,
+    input_dir: str = None,
+    output_dir: str = None,
+    prompt_version: str = None,
+    model: str = None,
+    run_name: str = "default",
+    provider: str = None,
+) -> None:
+    """Run async parallel enrichment — single process, many concurrent LLM calls.
+
+    Modes:
+      1. Single file: --input + --output
+      2. Directory:   --input-dir + --output-dir
+      3. Manifest:    no input args → reads manifest, processes all pending chunks
+    """
+    from .async_enricher import AsyncFastEnricher, _run_single_file, _run_directory
+
+    print(f"[{datetime.now().isoformat()}] Starting TURBO enrichment")
+    print(f"  Concurrency: {concurrency}, Batch size: {batch_size}")
+    print(f"  Pipeline run: {run_name}")
+
+    # Mode 1: Single file
+    if input_path:
+        if not output_path:
+            print("ERROR: --output required with --input")
+            return
+        await _run_single_file(
+            input_path=Path(input_path),
+            output_path=Path(output_path),
+            concurrency=concurrency,
+            batch_size=batch_size,
+            cache_dir=".cache",
+            prompt_version=prompt_version,
+            model=model,
+            provider=provider,
+        )
+        return
+
+    # Mode 2: Directory
+    if input_dir:
+        if not output_dir:
+            print("ERROR: --output-dir required with --input-dir")
+            return
+        await _run_directory(
+            input_dir=Path(input_dir),
+            output_dir=Path(output_dir),
+            concurrency=concurrency,
+            batch_size=batch_size,
+            cache_dir=".cache",
+            prompt_version=prompt_version,
+            model=model,
+            provider=provider,
+        )
+        return
+
+    # Mode 3: Manifest-driven — delegates to shared _run_turbo_phase
+    manifest = get_or_create_manifest()
+    await _run_turbo_phase(manifest, concurrency, batch_size, model, prompt_version, provider)

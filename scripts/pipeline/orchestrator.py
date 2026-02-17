@@ -25,6 +25,7 @@ from .config import (
     DEDICATED_SCRAPER_STATES,
     STATE_SCRAPER_SCRIPTS,
     CHUNKS_RAW_DIR,
+    chunk_raw_path,
 )
 from .chunk_manager import (
     get_or_create_manifest,
@@ -86,10 +87,8 @@ def run_scraper(chunk: dict, manifest: dict) -> tuple[bool, Optional[int], Optio
             print(f"    Skipping {bundesland} ({i}/{total_states}) - already completed")
             continue
 
-        # Per-state output file (matches weekly_processor expectations)
-        state_dir = CHUNKS_RAW_DIR / bundesland
-        state_dir.mkdir(parents=True, exist_ok=True)
-        state_file = state_dir / f"{chunk['year_month']}.json"
+        # Per-state output file: chunks/raw/{bundesland}/{year}/{MM}.json
+        state_file = chunk_raw_path(bundesland, chunk['year_month'])
 
         # Skip if already exists with data
         if state_file.exists() and state_file.stat().st_size > 10:
@@ -356,6 +355,17 @@ def process_chunk(chunk: dict, manifest: dict) -> bool:
     print(f"  Scraped {article_count} total articles")
     update_chunk_status(manifest, chunk_id, "in_progress", articles_count=article_count)
     save_manifest(manifest)
+
+    # Step 1.5: Check scrape completeness against presseportal.de
+    completed_states = manifest["chunks"][chunk_id].get("bundeslaender_completed", [])
+    if completed_states:
+        try:
+            from .presseportal_counts import check_completeness_for_states
+
+            print(f"\n  Step 1.5: Checking scrape completeness...")
+            check_completeness_for_states(completed_states, chunk["year_month"])
+        except Exception as e:
+            print(f"  Completeness check failed (non-fatal): {e}")
 
     # Step 2: Filter (junk removal + incident grouping)
     skip_filter = chunk.get("_skip_filter", False)
