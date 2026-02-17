@@ -6,7 +6,7 @@ interface BackToMapProps {
 export function BackToMap({ ags, label = 'Auf der Karte anzeigen' }: BackToMapProps) {
   return (
     <a
-      href={`/?focus=${ags}`}
+      href={`/karte?focus=${ags}`}
       className="inline-flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
     >
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">

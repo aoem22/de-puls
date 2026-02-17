@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { BUNDESLAND_BY_SLUG, ALL_BUNDESLAND_SLUGS } from '@/lib/slugs/bundesland-registry';
-import { getKreiseByBundesland, KREIS_BY_AGS } from '@/lib/slugs/registry';
+import { getKreiseByBundesland } from '@/lib/slugs/registry';
 import { CRIME_CATEGORIES } from '@/lib/types/crime';
-import { CRIME_SLUG_MAP } from '@/lib/slugs/crime-slugs';
 import { fetchCityRanking } from '@/lib/supabase/seo-queries';
 import { Breadcrumbs } from '@/components/seo/Breadcrumbs';
 
@@ -90,7 +90,6 @@ export default async function BundeslandPage(
         <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Deliktarten</h2>
         <div className="flex flex-wrap gap-2">
           {CRIME_CATEGORIES.map((cat) => {
-            const slugEntry = CRIME_SLUG_MAP[cat.key];
             return (
               <span
                 key={cat.key}
@@ -111,7 +110,7 @@ export default async function BundeslandPage(
         </h2>
         <div className="grid gap-2">
           {kreiseWithStats.map((k) => (
-            <a
+            <Link
               key={k.ags}
               href={`/${k.slug}`}
               className="flex items-center justify-between rounded-lg border border-[var(--card-border)] bg-[var(--card)]/50 px-4 py-3 hover:border-[var(--text-faint)] transition-colors group"
@@ -134,7 +133,7 @@ export default async function BundeslandPage(
                   </div>
                 </div>
               )}
-            </a>
+            </Link>
           ))}
         </div>
       </section>

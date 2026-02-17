@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export const alt = 'De-Puls – Interaktive Choropleth-Karte von Deutschland';
 export const size = { width: 1200, height: 630 };
