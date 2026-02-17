@@ -660,6 +660,11 @@ class AsyncHamburgPolizeiScraper:
         self.skipped_cached = 0
         self.feuerwehr_dropped = 0
 
+        # Metadata tracking
+        self.pages_visited = 0
+        self.pages_with_content = 0
+        self.stop_reason = "unknown"
+
     # ---- HTTP helpers ----
     def _create_ssl_context(self) -> ssl.SSLContext:
         ctx = ssl.create_default_context(cafile=certifi.where())
@@ -794,11 +799,13 @@ class AsyncHamburgPolizeiScraper:
         print("Phase 1: Fetching listing page...")
         listing_url = BASE_URL + LISTING_PATH
         first_html = await self._fetch(session, listing_url, semaphore)
+        self.pages_visited += 1
 
         if not first_html:
             print(f"  ERROR: Could not fetch listing page at {listing_url}")
             print("  The site may be down, blocking scrapers, or the URL may have changed.")
             print("  Try running with --test to debug.")
+            self.stop_reason = "listing_failed"
             return []
 
         # Test mode: just dump structure and exit
@@ -813,6 +820,8 @@ class AsyncHamburgPolizeiScraper:
         # Parse first page
         articles_p1 = parse_listing_page(first_html)
         print(f"  Page 1: found {len(articles_p1)} article links")
+        if articles_p1:
+            self.pages_with_content += 1
 
         for art in articles_p1:
             url = art["url"]
@@ -887,6 +896,7 @@ class AsyncHamburgPolizeiScraper:
             for i in range(0, len(pag_urls), self.concurrent):
                 batch = pag_urls[i:i + self.concurrent]
                 results = await self._fetch_batch(session, batch, semaphore)
+                self.pages_visited += len(batch)
 
                 batch_added = 0
                 empty_count = 0
@@ -900,6 +910,8 @@ class AsyncHamburgPolizeiScraper:
                     if not page_articles:
                         empty_count += 1
                         continue
+
+                    self.pages_with_content += 1
 
                     for art in page_articles:
                         url = art["url"]
@@ -920,6 +932,7 @@ class AsyncHamburgPolizeiScraper:
                 # Stop if all pages in batch were empty (likely past last page)
                 if empty_count == len(batch):
                     print("  All pages in batch empty, stopping pagination")
+                    self.stop_reason = "all_empty"
                     break
 
                 await asyncio.sleep(DELAY_BETWEEN_BATCHES)
@@ -1036,6 +1049,27 @@ class AsyncHamburgPolizeiScraper:
 
         # Save URL cache
         self.url_cache.save()
+
+        # Write scrape metadata
+        meta = {
+            "source": "polizei_hamburg",
+            "pages_visited": self.pages_visited,
+            "pages_with_content": self.pages_with_content,
+            "articles_per_page": None,
+            "source_total": None,
+            "estimated_total": None,
+            "articles_scraped": len(self.articles),
+            "articles_cached_skip": self.skipped_cached,
+            "articles_feuerwehr_skip": self.feuerwehr_dropped,
+            "stop_reason": self.stop_reason,
+            "fetch_count": self.fetch_count,
+            "fetch_errors": self.fetch_errors,
+            "scrape_duration_s": round(elapsed, 1),
+        }
+        meta_path = self.output.rsplit('.json', 1)[0] + '.meta.json'
+        Path(meta_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
 
         # Write output
         output_data = [asdict(article) for article in self.articles]

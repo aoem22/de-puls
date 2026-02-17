@@ -469,6 +469,11 @@ class AsyncPresseportalScraper:
         self.fetch_count = 0
         self.fetch_errors = 0
 
+        # Metadata tracking
+        self.pages_visited = 0
+        self.pages_with_content = 0
+        self.stop_reason = "unknown"
+
     def _build_listing_url(self, page: int = 1) -> str:
         """Build the listing page URL with optional Bundesland, Dienststelle, and date filters.
 
@@ -604,6 +609,7 @@ class AsyncPresseportalScraper:
         while True:
             if self.max_pages > 0 and page > self.max_pages:
                 print(f"  Reached max pages limit ({self.max_pages})")
+                self.stop_reason = "max_pages"
                 break
 
             # Build batch of URLs
@@ -619,6 +625,7 @@ class AsyncPresseportalScraper:
 
             # Fetch all pages in batch concurrently
             results = await self._fetch_batch(session, batch_urls, semaphore)
+            self.pages_visited += len(batch_urls)
 
             batch_added = 0
             empty_pages = 0
@@ -633,6 +640,8 @@ class AsyncPresseportalScraper:
                 if not articles:
                     empty_pages += 1
                     continue
+
+                self.pages_with_content += 1
 
                 for article in articles:
                     article_date_str = article.get("date")
@@ -663,10 +672,12 @@ class AsyncPresseportalScraper:
             # Stop conditions
             if empty_pages == len(batch_urls):
                 print(f"  All pages in batch empty, stopping")
+                self.stop_reason = "all_pages_empty"
                 break
 
             if self.start_date and all_too_old_batch:
                 print(f"  All articles older than {self.start_date.date()}, stopping")
+                self.stop_reason = "date_boundary"
                 break
 
             # Track consecutive batches with 0 new articles
@@ -674,6 +685,7 @@ class AsyncPresseportalScraper:
                 consecutive_no_new += 1
                 if consecutive_no_new >= 3:  # 3 batches = 60 pages with 0 new articles
                     print(f"  No new articles for {consecutive_no_new} batches, stopping")
+                    self.stop_reason = "3_consecutive_no_new"
                     break
             else:
                 consecutive_no_new = 0
@@ -808,18 +820,57 @@ class AsyncPresseportalScraper:
         # Save URL cache
         self.url_cache.save()
 
-        # Write output
+        # Write scrape metadata
+        meta = {
+            "source": "presseportal",
+            "pages_visited": self.pages_visited,
+            "pages_with_content": self.pages_with_content,
+            "articles_per_page": 30,
+            "source_total": None,
+            "estimated_total": self.pages_with_content * 30,
+            "articles_scraped": len(self.articles),
+            "articles_cached_skip": self.skipped_cached_count,
+            "articles_feuerwehr_skip": self.feuerwehr_dropped_count,
+            "stop_reason": self.stop_reason,
+            "fetch_count": self.fetch_count,
+            "fetch_errors": self.fetch_errors,
+            "scrape_duration_s": round(elapsed, 1),
+        }
+        meta_path = self.output.rsplit('.json', 1)[0] + '.meta.json'
+        Path(meta_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        # Write output — merge with existing file to preserve prior data
         output_data = [asdict(article) for article in self.articles]
 
         # Ensure output directory exists
         Path(self.output).parent.mkdir(parents=True, exist_ok=True)
 
+        # Load existing articles and merge (dedupe by URL)
+        existing = []
+        if Path(self.output).exists():
+            try:
+                with open(self.output, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                    existing = loaded if isinstance(loaded, list) else loaded.get("articles", [])
+            except (json.JSONDecodeError, IOError):
+                existing = []
+
+        existing_urls = {a.get("url") for a in existing if a.get("url")}
+        new_count = 0
+        for article in output_data:
+            if article.get("url") not in existing_urls:
+                existing.append(article)
+                existing_urls.add(article.get("url"))
+                new_count += 1
+
         with open(self.output, "w", encoding="utf-8") as f:
-            json.dump(output_data, f, ensure_ascii=False, indent=2)
+            json.dump(existing, f, ensure_ascii=False, indent=2)
 
         print()
         print("=" * 60)
-        print(f"Saved {len(self.articles)} articles to {self.output}")
+        print(f"Saved {len(existing)} articles to {self.output} ({new_count} new, {len(existing) - new_count} existing)")
         if self.feuerwehr_dropped_count:
             print(f"Dropped {self.feuerwehr_dropped_count} Feuerwehr (fire dept) articles")
         print(f"URL cache: {len(self.url_cache)} total URLs in {self.url_cache.cache_file}")

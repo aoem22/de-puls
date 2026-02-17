@@ -396,6 +396,11 @@ class AsyncSachsenAnhaltScraper:
         self.fetch_count = 0
         self.fetch_errors = 0
 
+        # Metadata tracking
+        self.pages_visited = 0
+        self.pages_with_content = 0
+        self.stop_reason = "unknown"
+
     def _is_in_date_range(self, date_str: Optional[str]) -> Optional[bool]:
         """
         Check if article date falls within configured range.
@@ -525,15 +530,18 @@ class AsyncSachsenAnhaltScraper:
         while True:
             if self.max_pages > 0 and page > self.max_pages:
                 print(f"  Reached max pages limit ({self.max_pages})")
+                self.stop_reason = "max_pages"
                 break
 
             url = build_listing_url(page)
 
             html = await self._fetch_url(session, url, semaphore)
+            self.pages_visited += 1
             if not html:
                 consecutive_empty += 1
                 if consecutive_empty >= 3:
                     print(f"  {consecutive_empty} consecutive failed pages, stopping")
+                    self.stop_reason = "3_empty_pages"
                     break
                 page += 1
                 continue
@@ -542,7 +550,10 @@ class AsyncSachsenAnhaltScraper:
             articles = parse_listing_page(html)
             if not articles:
                 print(f"  Page {page}: no articles found, stopping")
+                self.stop_reason = "empty_page"
                 break
+
+            self.pages_with_content += 1
 
             page_added = 0
             page_too_old = 0
@@ -587,6 +598,7 @@ class AsyncSachsenAnhaltScraper:
             # the rest of the archive will also be older (newest-first ordering)
             if self.start_date and page_too_old > 0 and page_added == 0 and page_too_new == 0:
                 print(f"  All articles on page {page} are before {self.start_date.date()}, stopping")
+                self.stop_reason = "date_boundary"
                 break
 
             page += 1
@@ -695,6 +707,27 @@ class AsyncSachsenAnhaltScraper:
 
         # Save URL cache
         self.url_cache.save()
+
+        # Write scrape metadata
+        meta = {
+            "source": "sachsen_anhalt",
+            "pages_visited": self.pages_visited,
+            "pages_with_content": self.pages_with_content,
+            "articles_per_page": 20,
+            "source_total": None,
+            "estimated_total": self.pages_with_content * 20,
+            "articles_scraped": len(self.articles),
+            "articles_cached_skip": self.skipped_cached_count,
+            "articles_feuerwehr_skip": self.feuerwehr_dropped_count,
+            "stop_reason": self.stop_reason,
+            "fetch_count": self.fetch_count,
+            "fetch_errors": self.fetch_errors,
+            "scrape_duration_s": round(elapsed, 1),
+        }
+        meta_path = self.output.rsplit('.json', 1)[0] + '.meta.json'
+        Path(meta_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
 
         # Write output
         output_data = [asdict(article) for article in self.articles]

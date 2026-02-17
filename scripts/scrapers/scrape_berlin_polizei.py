@@ -222,12 +222,19 @@ def parse_listing_page(html: str, year: int) -> list[dict]:
 def parse_article_page(html: str, url: str) -> Optional[dict]:
     """Parse a Berlin Polizei article page.
 
-    Structure:
+    Current structure (2026):
         <h1>Headline</h1>
-        <p>Polizeimeldung vom DD.MM.YYYY</p>
-        <p>District</p>
-        <p><strong>Nr. NNNN</strong></p>
-        <p>Body paragraphs...</p>
+        <p class="polizeimeldung">Polizeimeldung vom DD.MM.YYYY</p>
+        <p class="polizeimeldung">District</p>
+        <section class="modul-text_bild">
+          <div class="text"><div class="textile">
+            <p><strong>Nr. NNNN</strong><br/>Body text...</p>
+            <p>More body text...</p>
+          </div></div>
+        </section>
+
+    The Nr. reference and body text are often combined in a single <p>.
+    District may appear as a <br/>-separated line before Nr. in the same <p>.
     """
     soup = BeautifulSoup(html, "html.parser")
 
@@ -235,12 +242,37 @@ def parse_article_page(html: str, url: str) -> Optional[dict]:
     h1 = soup.select_one("h1")
     title = h1.get_text(strip=True) if h1 else "Ohne Titel"
 
-    # Find the main content area - berlin.de uses .body or .textile or article
+    # --- Extract date from <p class="polizeimeldung"> ---
+    date_str = None
+    for p in soup.select("p.polizeimeldung"):
+        text = p.get_text(strip=True)
+        if "Polizeimeldung vom" in text:
+            date_str = parse_german_datetime(text)
+            break
+
+    # --- Extract district from <p class="polizeimeldung"> ---
+    city = None
+    berlin_districts = [
+        "Charlottenburg-Wilmersdorf", "Friedrichshain-Kreuzberg",
+        "Lichtenberg", "Marzahn-Hellersdorf", "Mitte",
+        "Neukoelln", "Neukolln", "Pankow", "Reinickendorf",
+        "Spandau", "Steglitz-Zehlendorf", "Tempelhof-Schoeneberg",
+        "Tempelhof-Schoneberg", "Treptow-Koepenick", "Treptow-Kopenick",
+        "Neukölln", "Tempelhof-Schöneberg", "Treptow-Köpenick",
+    ]
+    berlin_districts_lower = [d.lower() for d in berlin_districts]
+    for p in soup.select("p.polizeimeldung"):
+        text = p.get_text(strip=True).rstrip(".")
+        if text.lower() in berlin_districts_lower:
+            city = text
+            break
+
+    # --- Find main content area ---
     content_area = (
-        soup.select_one(".body")
+        soup.select_one("section.modul-text_bild .textile")
+        or soup.select_one(".body")
         or soup.select_one("article .textile")
         or soup.select_one("article")
-        or soup.select_one("#content .block .body")
         or soup.select_one("#layout-grid__area--maincontent")
         or soup
     )
@@ -248,59 +280,58 @@ def parse_article_page(html: str, url: str) -> Optional[dict]:
     # Collect all <p> tags in the content area
     paragraphs = content_area.select("p") if content_area else []
 
-    date_str = None
-    city = None
     ref_number = None
     body_parts = []
 
     for p in paragraphs:
-        text = p.get_text(strip=True)
-        if not text:
+        # Use <br/>-aware text extraction: replace <br/> with newline
+        for br in p.find_all("br"):
+            br.replace_with("\n")
+        text = p.get_text("\n")
+        if not text.strip():
             continue
 
-        # Date line: "Polizeimeldung vom DD.MM.YYYY"
-        if not date_str and "Polizeimeldung vom" in text:
-            date_str = parse_german_datetime(text)
-            continue
+        # Split by newlines (from <br/> tags) to handle multi-part <p>
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
 
-        # Reference number: "Nr. 0029" (inside <strong>)
-        strong = p.select_one("strong")
-        if strong and re.match(r'^Nr\.\s*\d+', strong.get_text(strip=True)):
-            ref_number = strong.get_text(strip=True)
-            continue
-
-        # District line: typically a short standalone <p> near the top
-        # that contains a Berlin district name, before the body text starts
-        if not city and not body_parts:
-            # Berlin districts
-            berlin_districts = [
-                "Charlottenburg-Wilmersdorf", "Friedrichshain-Kreuzberg",
-                "Lichtenberg", "Marzahn-Hellersdorf", "Mitte",
-                "Neukoelln", "Neukolln", "Pankow", "Reinickendorf",
-                "Spandau", "Steglitz-Zehlendorf", "Tempelhof-Schoeneberg",
-                "Tempelhof-Schoneberg", "Treptow-Koepenick", "Treptow-Kopenick",
-                # Common alternate spellings with umlauts
-                "Neukölln", "Tempelhof-Schöneberg", "Treptow-Köpenick",
-            ]
-            # Check if this paragraph is just a district name
-            cleaned = text.strip().rstrip(".")
-            for district in berlin_districts:
-                if cleaned.lower() == district.lower():
-                    city = cleaned
-                    break
-            if city:
+        for line in lines:
+            # Extract reference number (Nr. 0169) — may have trailing text
+            nr_match = re.match(r'^(Nr\.\s*\d+)\s*(.*)', line)
+            if nr_match:
+                ref_number = nr_match.group(1).strip()
+                remainder = nr_match.group(2).strip()
+                if remainder:
+                    # Keep text after the Nr. as body content
+                    body_parts.append(remainder)
                 continue
 
-        # Skip navigation/footer text
-        if text.startswith("Seite") and "von" in text:
-            continue
+            # Skip district names that appear inline
+            if not city and line.rstrip(".").lower() in berlin_districts_lower:
+                city = line.rstrip(".")
+                continue
+            if line.rstrip(".").lower() in berlin_districts_lower:
+                continue
 
-        # Accumulate body text
-        body_parts.append(text)
+            # Skip "bezirksübergreifend" (cross-district label)
+            if line.lower().startswith("bezirksübergreifend"):
+                continue
+
+            # Skip "Polizeimeldung vom" if it leaked into content
+            if "Polizeimeldung vom" in line:
+                if not date_str:
+                    date_str = parse_german_datetime(line)
+                continue
+
+            # Skip navigation/footer text
+            if line.startswith("Seite") and "von" in line:
+                continue
+
+            # Accumulate body text
+            body_parts.append(line)
 
     body = "\n\n".join(body_parts)
 
-    # If no date found in article page, try to extract from any text
+    # Fallback: if no date found, try to extract from any text
     if not date_str:
         page_text = content_area.get_text(" ", strip=True) if content_area else ""
         date_str = parse_german_datetime(page_text)
@@ -361,6 +392,11 @@ class AsyncBerlinPolizeiScraper:
         # Stats
         self.fetch_count = 0
         self.fetch_errors = 0
+
+        # Metadata tracking
+        self.pages_visited = 0
+        self.pages_with_content = 0
+        self.stop_reason = "unknown"
 
     def _get_years_to_scrape(self) -> list[int]:
         """Determine which archive years to scrape based on date range."""
@@ -479,6 +515,7 @@ class AsyncBerlinPolizeiScraper:
         while True:
             if self.max_pages > 0 and page > self.max_pages:
                 print(f"    Reached max pages limit ({self.max_pages})")
+                self.stop_reason = "max_pages"
                 break
 
             # Build batch of listing page URLs
@@ -493,6 +530,7 @@ class AsyncBerlinPolizeiScraper:
                 break
 
             results = await self._fetch_batch(session, batch_urls, semaphore)
+            self.pages_visited += len(batch_urls)
 
             batch_new = 0
             empty_in_batch = 0
@@ -506,6 +544,7 @@ class AsyncBerlinPolizeiScraper:
                 if not articles:
                     empty_in_batch += 1
                     continue
+                self.pages_with_content += 1
 
                 for article in articles:
                     article_url = article["url"]
@@ -538,6 +577,7 @@ class AsyncBerlinPolizeiScraper:
                 if consecutive_empty >= max_consecutive_empty:
                     if self.verbose:
                         print(f"    {consecutive_empty} consecutive empty batches, stopping")
+                    self.stop_reason = "3_empty_pages"
                     break
             else:
                 consecutive_empty = 0
@@ -679,6 +719,27 @@ class AsyncBerlinPolizeiScraper:
 
         # Save URL cache
         self.url_cache.save()
+
+        # Write scrape metadata
+        meta = {
+            "source": "berlin_polizei",
+            "pages_visited": self.pages_visited,
+            "pages_with_content": self.pages_with_content,
+            "articles_per_page": None,
+            "source_total": None,
+            "estimated_total": None,
+            "articles_scraped": len(self.articles),
+            "articles_cached_skip": self.skipped_cached_count,
+            "articles_feuerwehr_skip": self.feuerwehr_dropped_count,
+            "stop_reason": self.stop_reason,
+            "fetch_count": self.fetch_count,
+            "fetch_errors": self.fetch_errors,
+            "scrape_duration_s": round(elapsed, 1),
+        }
+        meta_path = self.output.rsplit('.json', 1)[0] + '.meta.json'
+        Path(meta_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
 
         # Write output
         output_data = [asdict(article) for article in self.articles]

@@ -398,6 +398,11 @@ class AsyncSachsenPolizeiScraper:
         self.fetch_count = 0
         self.fetch_errors = 0
 
+        # Metadata tracking
+        self.pages_visited = 0
+        self.pages_with_content = 0
+        self.stop_reason = "unknown"
+
     def _build_search_url(self, page: int = 1) -> str:
         """Build the search API URL with institution and date filters."""
         params: list[tuple[str, str]] = []
@@ -504,10 +509,12 @@ class AsyncSachsenPolizeiScraper:
         while True:
             if self.max_pages > 0 and page > self.max_pages:
                 print(f"  Reached max pages limit ({self.max_pages})")
+                self.stop_reason = "max_pages"
                 break
 
             url = self._build_search_url(page)
             data = await self._fetch(session, url, semaphore, expect_json=True)
+            self.pages_visited += 1
 
             if not data or not isinstance(data, dict):
                 print(f"  Page {page}: failed to fetch or invalid response")
@@ -524,9 +531,11 @@ class AsyncSachsenPolizeiScraper:
             if not teasers or disabled:
                 if self.verbose:
                     print(f"  Page {page}: no teasers (disable={disabled}), stopping")
+                self.stop_reason = "api_disable"
                 break
 
             page_added = 0
+            self.pages_with_content += 1
             for teaser_html in teasers:
                 info = parse_teaser_html(teaser_html)
                 if not info or not info["url"]:
@@ -562,6 +571,7 @@ class AsyncSachsenPolizeiScraper:
                 consecutive_empty += 1
                 if consecutive_empty >= 3:
                     print(f"  No new articles for {consecutive_empty} consecutive pages, stopping")
+                    self.stop_reason = "3_empty_pages"
                     break
             else:
                 consecutive_empty = 0
@@ -707,6 +717,27 @@ class AsyncSachsenPolizeiScraper:
 
         elapsed = time.time() - start_time
         self.url_cache.save()
+
+        # Write scrape metadata
+        meta = {
+            "source": "medienservice_sachsen",
+            "pages_visited": self.pages_visited,
+            "pages_with_content": self.pages_with_content,
+            "articles_per_page": 6,
+            "source_total": None,
+            "estimated_total": self.pages_with_content * 6,
+            "articles_scraped": len(self.articles),
+            "articles_cached_skip": self.skipped_cached,
+            "articles_feuerwehr_skip": self.feuerwehr_dropped,
+            "stop_reason": self.stop_reason,
+            "fetch_count": self.fetch_count,
+            "fetch_errors": self.fetch_errors,
+            "scrape_duration_s": round(elapsed, 1),
+        }
+        meta_path = self.output.rsplit('.json', 1)[0] + '.meta.json'
+        Path(meta_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
 
         # Write output
         output_data = [asdict(a) for a in self.articles]
