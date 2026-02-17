@@ -3,15 +3,26 @@ import { supabase } from '@/lib/supabase/client';
 
 export const revalidate = 60; // Cache for 1 minute
 
+interface PipelineHealthRow {
+  started_at: string;
+  duration_seconds: number;
+  sources_polled: number;
+  total_scraped: number;
+  total_enriched: number;
+  total_pushed: number;
+  total_errors: number;
+}
+
 export async function GET() {
   try {
     // Get the most recent pipeline health record
+    // Cast needed: pipeline_health table is not in generated Supabase types
     const { data: lastCycle, error: cycleError } = await supabase
-      .from('pipeline_health')
+      .from('pipeline_health' as never)
       .select('*')
       .order('started_at', { ascending: false })
       .limit(1)
-      .single();
+      .single() as { data: PipelineHealthRow | null; error: { code?: string; message?: string } | null };
 
     if (cycleError && cycleError.code !== 'PGRST116') {
       throw cycleError;
@@ -19,9 +30,9 @@ export async function GET() {
 
     // Get per-source poll state
     const { data: pollState, error: pollError } = await supabase
-      .from('pipeline_poll_state')
+      .from('pipeline_poll_state' as never)
       .select('*')
-      .order('source');
+      .order('source') as { data: Record<string, unknown>[] | null; error: { code?: string; message?: string } | null };
 
     if (pollError) {
       throw pollError;
