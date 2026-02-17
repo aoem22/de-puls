@@ -84,7 +84,10 @@ class LivePipeline:
         if self.enricher is not None:
             return
         from .fast_enricher import FastEnricher
-        self.enricher = FastEnricher(cache_dir=self.cache_dir, no_geocode=False)
+        no_geocode = not os.environ.get("GOOGLE_MAPS_API_KEY")
+        if no_geocode:
+            print("  GOOGLE_MAPS_API_KEY not set — skipping geocoding (records will lack coordinates)")
+        self.enricher = FastEnricher(cache_dir=self.cache_dir, no_geocode=no_geocode)
 
     def _init_supabase(self):
         if self.supabase is not None or self.dry_run:
@@ -276,7 +279,7 @@ class LivePipeline:
             rows = []
             for a in enriched:
                 row = transform_article(a, pipeline_run=LIVE_PIPELINE_RUN_NAME)
-                if row and row.get("latitude") and row.get("longitude"):
+                if row:
                     rows.append(row)
 
             if rows:
