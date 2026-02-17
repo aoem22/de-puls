@@ -23,6 +23,7 @@ import { BlaulichtPlaybackControl } from './BlaulichtPlaybackControl';
 import { PulseMarkerOverlay } from './PulseMarkerOverlay';
 import { CRIME_CATEGORIES, type CrimeRecord } from '@/lib/types/crime';
 import { useFavorites } from '@/lib/useFavorites';
+import { DEFAULT_PIPELINE_RUN } from '@/lib/dashboard/timeframes';
 import type { CrimeTypeKey } from '../../../lib/types/cityCrime';
 import type { IndicatorKey, SubMetricKey } from '../../../lib/indicators/types';
 import type { CrimeCategory } from '@/lib/types/crime';
@@ -140,7 +141,7 @@ export function ChoroplethMap() {
   const [selectedBlaulichtCategory, setSelectedBlaulichtCategory] = useState<CrimeCategory | null>(null);
   const [selectedWeaponType, setSelectedWeaponType] = useState<string | null>(null);
   const [selectedDrugType, setSelectedDrugType] = useState<string | null>(null);
-  const [selectedPipelineRun, setSelectedPipelineRun] = useState<string | undefined>(undefined);
+  const [selectedPipelineRun, setSelectedPipelineRun] = useState<string | undefined>(DEFAULT_PIPELINE_RUN);
   const [isBlaulichtPlaying, setIsBlaulichtPlaying] = useState(false);
   const [blaulichtPlaybackIndex, setBlaulichtPlaybackIndex] = useState<number | null>(null);
   const [flashingCrimeIds, setFlashingCrimeIds] = useState<Set<string>>(new Set());

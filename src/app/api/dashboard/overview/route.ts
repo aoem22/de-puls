@@ -7,6 +7,7 @@ import {
   DASHBOARD_TIMEFRAME_LABELS,
   DASHBOARD_YEAR,
   DEFAULT_DASHBOARD_TIMEFRAME,
+  DEFAULT_PIPELINE_RUN,
 } from '@/lib/dashboard/timeframes';
 import {
   countRecords,
@@ -236,7 +237,9 @@ export async function GET(request: NextRequest) {
     const page = parsePage(pageParam);
     const weaponFilter = weaponParam && weaponParam !== 'all' ? weaponParam : null;
     const drugFilter = drugParam && drugParam !== 'all' ? drugParam : null;
-    const pipelineRun = pipelineRunParam && pipelineRunParam !== 'all' ? pipelineRunParam : null;
+    const pipelineRun = pipelineRunParam === 'all'
+      ? null
+      : (pipelineRunParam || DEFAULT_PIPELINE_RUN);
 
     const nowMs = Date.now();
     const anchorMs = Math.min(
