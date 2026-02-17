@@ -84,10 +84,7 @@ class LivePipeline:
         if self.enricher is not None:
             return
         from .fast_enricher import FastEnricher
-        no_geocode = not os.environ.get("GOOGLE_MAPS_API_KEY")
-        if no_geocode:
-            print("  GOOGLE_MAPS_API_KEY not set — skipping geocoding (records will lack coordinates)")
-        self.enricher = FastEnricher(cache_dir=self.cache_dir, no_geocode=no_geocode)
+        self.enricher = FastEnricher(cache_dir=self.cache_dir, no_geocode=True)
 
     def _init_supabase(self):
         if self.supabase is not None or self.dry_run:
