@@ -214,6 +214,17 @@ class LivePipeline:
             return 0
         self._init_supabase()
         try:
+            # Deduplicate by ID within the batch (multi-incident splits can collide)
+            seen: set[str] = set()
+            deduped = []
+            for r in rows:
+                if r["id"] not in seen:
+                    seen.add(r["id"])
+                    deduped.append(r)
+            if len(deduped) < len(rows):
+                print(f"  Deduped {len(rows)} → {len(deduped)} rows (removed {len(rows) - len(deduped)} duplicate IDs)")
+            rows = deduped
+
             # Batch upsert in chunks of 200
             pushed = 0
             for i in range(0, len(rows), 200):
