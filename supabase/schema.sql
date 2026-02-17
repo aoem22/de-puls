@@ -39,6 +39,12 @@ CREATE TABLE IF NOT EXISTS crime_records (
   incident_end_date TEXT,
   incident_end_time TEXT,
   classification TEXT,
+  city TEXT,
+  bundesland TEXT,
+  kreis_ags TEXT,
+  kreis_name TEXT,
+  pks_category TEXT,
+  damage_amount_eur INTEGER,
   incident_group_id TEXT,
   group_role TEXT CHECK (group_role IN ('primary', 'follow_up', 'update', 'resolution', 'related')),
   pipeline_run TEXT DEFAULT 'default',
@@ -53,6 +59,10 @@ CREATE INDEX IF NOT EXISTS idx_crime_records_location ON crime_records(latitude,
 CREATE INDEX IF NOT EXISTS idx_crime_records_precision ON crime_records(precision);
 CREATE INDEX IF NOT EXISTS idx_crime_records_hidden ON crime_records(hidden) WHERE hidden = false;
 CREATE INDEX IF NOT EXISTS idx_crime_records_pipeline_run ON crime_records(pipeline_run);
+CREATE INDEX IF NOT EXISTS idx_crime_records_city ON crime_records(city);
+CREATE INDEX IF NOT EXISTS idx_crime_records_bundesland ON crime_records(bundesland);
+CREATE INDEX IF NOT EXISTS idx_crime_records_kreis_ags ON crime_records(kreis_ags);
+CREATE INDEX IF NOT EXISTS idx_crime_records_classification ON crime_records(classification);
 CREATE INDEX IF NOT EXISTS idx_crime_records_incident_group ON crime_records(incident_group_id) WHERE incident_group_id IS NOT NULL;
 
 -- Enable Row Level Security

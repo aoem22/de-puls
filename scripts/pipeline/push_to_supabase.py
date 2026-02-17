@@ -349,6 +349,16 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
         "group_role": group_role,
         "pipeline_run": pipeline_run,
         "classification": article.get("classification"),
+        "city": loc.get("city") if isinstance(loc.get("city"), str) and loc.get("city", "").strip() else None,
+        "bundesland": (
+            article.get("bundesland") or loc.get("bundesland")
+            if isinstance(article.get("bundesland") or loc.get("bundesland"), str)
+            else None
+        ),
+        "kreis_ags": None,   # computed via backfill or point-in-polygon post-push
+        "kreis_name": None,
+        "pks_category": crime.get("pks_category") if isinstance(crime.get("pks_category"), str) and crime.get("pks_category", "").strip() else None,
+        "damage_amount_eur": damage_amount_eur,
     }
 
 

@@ -19,7 +19,7 @@ import {
   getContextStats,
   getWeaponCounts,
   getDrugCounts,
-} from '@/lib/local-enriched-data';
+} from '@/lib/supabase/dashboard-queries';
 
 interface TimeWindow {
   timeframe: DashboardTimeframe;
@@ -223,6 +223,7 @@ export async function GET(request: NextRequest) {
     const pageParam = request.nextUrl.searchParams.get('page');
     const weaponParam = request.nextUrl.searchParams.get('weapon');
     const drugParam = request.nextUrl.searchParams.get('drug');
+    const pipelineRunParam = request.nextUrl.searchParams.get('pipeline_run');
 
     let category: CrimeCategory | null = null;
     if (categoryParam && categoryParam !== 'all') {
@@ -235,6 +236,7 @@ export async function GET(request: NextRequest) {
     const page = parsePage(pageParam);
     const weaponFilter = weaponParam && weaponParam !== 'all' ? weaponParam : null;
     const drugFilter = drugParam && drugParam !== 'all' ? drugParam : null;
+    const pipelineRun = pipelineRunParam && pipelineRunParam !== 'all' ? pipelineRunParam : null;
 
     const nowMs = Date.now();
     const anchorMs = Math.min(
@@ -251,38 +253,60 @@ export async function GET(request: NextRequest) {
     const oneHourAgoIso = new Date(anchorMs - 60 * 60 * 1000).toISOString();
     const anchorIso = new Date(anchorMs).toISOString();
 
-    const incidentsCurrent = countRecords({ startIso: window.startIso, endIso: window.endIso, weaponType: weaponFilter, drugType: drugFilter });
-    const incidentsPrevious = countRecords({ startIso: window.previousStartIso, endIso: window.previousEndIso, weaponType: weaponFilter, drugType: drugFilter });
-    const severeCurrent = countRecords({
-      startIso: window.startIso, endIso: window.endIso, overlapCategories: SEVERE_CATEGORIES, weaponType: weaponFilter, drugType: drugFilter,
-    });
-    const severePrevious = countRecords({
-      startIso: window.previousStartIso, endIso: window.previousEndIso, overlapCategories: SEVERE_CATEGORIES, weaponType: weaponFilter, drugType: drugFilter,
-    });
-    const geocodedCurrent = countRecords({
-      startIso: window.startIso, endIso: window.endIso, geocodedOnly: true, weaponType: weaponFilter, drugType: drugFilter,
-    });
-    const newLastHour = countRecords({ startIso: oneHourAgoIso, endIso: anchorIso, weaponType: weaponFilter, drugType: drugFilter });
-    const explicitFocusCount = category
-      ? countRecords({ startIso: window.startIso, endIso: window.endIso, category, weaponType: weaponFilter, drugType: drugFilter })
-      : 0;
-    const totalRecords2026 = getTotalCount();
+    const liveFeedOffset = (page - 1) * LIVE_FEED_PAGE_SIZE;
+
+    // ── Group A: All count queries + stats + live feed (parallel) ──
+    const [
+      incidentsCurrent,
+      incidentsPrevious,
+      severeCurrent,
+      severePrevious,
+      geocodedCurrent,
+      newLastHour,
+      explicitFocusCount,
+      totalRecords2026,
+      ...categoryCountResults
+    ] = await Promise.all([
+      countRecords({ startIso: window.startIso, endIso: window.endIso, weaponType: weaponFilter, drugType: drugFilter, pipelineRun }),
+      countRecords({ startIso: window.previousStartIso, endIso: window.previousEndIso, weaponType: weaponFilter, drugType: drugFilter, pipelineRun }),
+      countRecords({ startIso: window.startIso, endIso: window.endIso, overlapCategories: SEVERE_CATEGORIES, weaponType: weaponFilter, drugType: drugFilter, pipelineRun }),
+      countRecords({ startIso: window.previousStartIso, endIso: window.previousEndIso, overlapCategories: SEVERE_CATEGORIES, weaponType: weaponFilter, drugType: drugFilter, pipelineRun }),
+      countRecords({ startIso: window.startIso, endIso: window.endIso, geocodedOnly: true, weaponType: weaponFilter, drugType: drugFilter, pipelineRun }),
+      countRecords({ startIso: oneHourAgoIso, endIso: anchorIso, weaponType: weaponFilter, drugType: drugFilter, pipelineRun }),
+      category
+        ? countRecords({ startIso: window.startIso, endIso: window.endIso, category, weaponType: weaponFilter, drugType: drugFilter, pipelineRun })
+        : Promise.resolve(0),
+      getTotalCount(pipelineRun),
+      ...SNAPSHOT_CATEGORIES.map((item) =>
+        countRecords({ startIso: window.startIso, endIso: window.endIso, category: item.key, weaponType: weaponFilter, drugType: drugFilter, pipelineRun }),
+      ),
+    ]);
 
     const focusCountCurrent = category ? explicitFocusCount : incidentsCurrent;
 
-    const categoryCounts = SNAPSHOT_CATEGORIES.map((item) => ({
+    const categoryCounts = SNAPSHOT_CATEGORIES.map((item, i) => ({
       ...item,
-      count: countRecords({ startIso: window.startIso, endIso: window.endIso, category: item.key, weaponType: weaponFilter, drugType: drugFilter }),
+      count: categoryCountResults[i],
     }));
 
-    const cityRows = getCityRows(window.previousStartIso, window.endIso, category, weaponFilter, drugFilter);
-    const cityBuckets: Record<string, { current: number; previous: number }> = {};
+    // ── Group B: City/Kreis rows + stats + live feed + weapon/drug counts (parallel) ──
+    const [cityRows, kreisRows, contextStats, liveFeedResult, weaponCounts, drugCounts] = await Promise.all([
+      getCityRows(window.previousStartIso, window.endIso, category, weaponFilter, drugFilter, pipelineRun),
+      getKreisRows(window.previousStartIso, window.endIso, category, weaponFilter, drugFilter, pipelineRun),
+      getContextStats(window.startIso, window.endIso, category, weaponFilter, drugFilter, pipelineRun),
+      getLiveFeed(window.startIso, window.endIso, category, LIVE_FEED_PAGE_SIZE, liveFeedOffset, weaponFilter, drugFilter, pipelineRun),
+      getWeaponCounts(window.startIso, window.endIso, category, pipelineRun),
+      getDrugCounts(window.startIso, window.endIso, category, pipelineRun),
+    ]);
 
+    const { items: liveFeed, total: liveFeedTotal } = liveFeedResult;
+
+    // ── City ranking ──
+    const cityBuckets: Record<string, { current: number; previous: number }> = {};
     for (const row of cityRows) {
       const ts = Date.parse(row.published_at);
       if (Number.isNaN(ts)) continue;
       if (!cityBuckets[row.city]) cityBuckets[row.city] = { current: 0, previous: 0 };
-
       if (ts >= currentStartMs && ts < currentEndMs) cityBuckets[row.city].current += 1;
       else if (ts >= previousStartMs && ts < previousEndMs) cityBuckets[row.city].previous += 1;
     }
@@ -300,21 +324,8 @@ export async function GET(request: NextRequest) {
     );
     const topCities = addRankChange(topCitiesBase, (row) => row.city, previousCityRankMap);
 
-    // Get geocoded points for cities in the top list
-    const topCityNames = new Set(topCities.map((c) => c.city));
-    const topCityPoints = getGeocodedCityPoints(
-      window.startIso,
-      window.endIso,
-      category,
-      topCityNames,
-      weaponFilter,
-      drugFilter,
-    );
-
-    // ── Kreis ranking (same algorithm as cities) ──
-    const kreisRows = getKreisRows(window.previousStartIso, window.endIso, category, weaponFilter, drugFilter);
+    // ── Kreis ranking ──
     const kreisBuckets: Record<string, { name: string; current: number; previous: number }> = {};
-
     for (const row of kreisRows) {
       const ts = Date.parse(row.published_at);
       if (Number.isNaN(ts)) continue;
@@ -343,16 +354,16 @@ export async function GET(request: NextRequest) {
     );
     const topKreise = addRankChange(topKreiseBase, (row) => row.kreisAgs, previousKreisRankMap);
 
+    // ── Group C: Geocoded points (depends on Group B results) ──
+    const topCityNames = new Set(topCities.map((c) => c.city));
     const topKreisAgsSet = new Set(topKreise.map((k) => k.kreisAgs));
-    const topKreisPoints = getGeocodedKreisPoints(
-      window.startIso,
-      window.endIso,
-      category,
-      topKreisAgsSet,
-      weaponFilter,
-      drugFilter,
-    );
 
+    const [topCityPoints, topKreisPoints] = await Promise.all([
+      getGeocodedCityPoints(window.startIso, window.endIso, category, topCityNames, weaponFilter, drugFilter, pipelineRun),
+      getGeocodedKreisPoints(window.startIso, window.endIso, category, topKreisAgsSet, weaponFilter, drugFilter, pipelineRun),
+    ]);
+
+    // ── Anomalies ──
     const anomalies = Object.entries(cityBuckets)
       .map(([city, counts]) => ({
         city,
@@ -364,18 +375,9 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.delta - a.delta || b.current - a.current)
       .slice(0, 8);
 
-    const liveFeedOffset = (page - 1) * LIVE_FEED_PAGE_SIZE;
-    const { items: liveFeed, total: liveFeedTotal } = getLiveFeed(
-      window.startIso, window.endIso, category, LIVE_FEED_PAGE_SIZE, liveFeedOffset, weaponFilter, drugFilter,
-    );
-
-    const contextStats = getContextStats(window.startIso, window.endIso, category, weaponFilter, drugFilter);
-    const weaponCounts = getWeaponCounts(window.startIso, window.endIso, category);
-    const drugCounts = getDrugCounts(window.startIso, window.endIso, category);
-
     const payload: SecurityOverviewResponse = {
       generatedAt: new Date(anchorMs).toISOString(),
-      dataSource: 'local enriched JSON files (classification: crime/update/null)',
+      dataSource: 'supabase crime_records',
       focusCategory: category,
       period: {
         timeframe: window.timeframe,

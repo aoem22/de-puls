@@ -49,6 +49,12 @@ export interface CrimeRecordRow {
   group_role: string | null;
   pipeline_run: string;
   classification: string | null;
+  city: string | null;
+  bundesland: string | null;
+  kreis_ags: string | null;
+  kreis_name: string | null;
+  pks_category: string | null;
+  damage_amount_eur: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,5 +1,8 @@
 /**
+ * @deprecated Use `@/lib/supabase/dashboard-queries` instead.
+ *
  * Server-side loader for local enriched JSON files.
+ * Kept as fallback during the Supabase migration. Will be removed in a follow-up PR.
  *
  * Reads all data/pipeline/chunks/enriched/<state>/2026/*.json files,
  * transforms each article to the dashboard-compatible format (porting
