@@ -64,9 +64,6 @@ export function BlaulichtFeed({ records, title = 'Aktuelle Polizeimeldungen' }: 
                 <span className="text-xs text-[var(--text-faint)]">{record.locationText}</span>
               )}
             </div>
-            {record.summary && (
-              <p className="text-xs text-[var(--text-muted)] mt-2 line-clamp-2">{record.summary}</p>
-            )}
           </article>
         ))}
       </div>

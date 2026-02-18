@@ -542,6 +542,7 @@ export interface LiveFeedItem {
   clean_title: string | null;
   published_at: string;
   location_text: string | null;
+  district: string | null;
   city: string | null;
   bundesland: string | null;
   categories: CrimeCategory[];
@@ -567,7 +568,7 @@ export interface LiveFeedItem {
 }
 
 const LIVE_FEED_SELECT = [
-  'id', 'title', 'clean_title', 'published_at', 'location_text', 'city',
+  'id', 'title', 'clean_title', 'published_at', 'location_text', 'district', 'city',
   'bundesland', 'categories', 'severity', 'confidence', 'body',
   'weapon_type', 'drug_type', 'motive', 'victim_count', 'suspect_count',
   'victim_age', 'suspect_age', 'victim_gender', 'suspect_gender',

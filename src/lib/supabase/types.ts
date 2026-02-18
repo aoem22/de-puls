@@ -12,8 +12,8 @@ export interface CrimeRecordRow {
   id: string;
   title: string;
   clean_title: string | null;
-  summary: string | null;
   body: string | null;
+  district: string | null;
   published_at: string;
   source_url: string;
   source_agency: string | null;
@@ -55,6 +55,7 @@ export interface CrimeRecordRow {
   kreis_name: string | null;
   pks_category: string | null;
   damage_amount_eur: number | null;
+  damage_estimate: string | null;
   created_at: string;
   updated_at: string;
 }

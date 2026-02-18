@@ -629,7 +629,7 @@ export function BlaulichtDetailPanel({ crime: slimCrime, onClose, isPreview = fa
     }
   })();
 
-  const bodyText = crime.body || crime.summary;
+  const bodyText = crime.body;
   const displayTitle = getDisplayTitle(crime);
 
   return (

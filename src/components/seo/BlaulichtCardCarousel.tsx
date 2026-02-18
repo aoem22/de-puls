@@ -40,7 +40,7 @@ export function BlaulichtCardCarousel({
   const normalizeIndex = (index: number) => Math.min(index, records.length - 1);
   const safeIndex = Math.min(activeIndex, records.length - 1);
   const activeRecord = records[safeIndex];
-  const fullText = activeRecord.body || activeRecord.summary;
+  const fullText = activeRecord.body;
 
   return (
     <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)]/60 p-4">

@@ -89,8 +89,8 @@ export interface CrimeRecord {
   id: string;
   title: string;
   cleanTitle?: string | null;
-  summary?: string | null;
   body?: string | null; // Full press release text
+  district?: string | null;
   publishedAt: string;
   sourceUrl: string;
   sourceAgency?: string | null;
