@@ -55,26 +55,43 @@ function rowToCrimeRecord(row: Partial<CrimeRecordRow>): CrimeRecord {
     groupRole: row.group_role,
     pipelineRun: row.pipeline_run,
     classification: row.classification,
+    bundesland: row.bundesland,
   };
 }
 
 // Slim column set for map rendering & filtering (excludes heavy text fields)
-const SLIM_COLUMNS = 'id, title, clean_title, published_at, source_url, latitude, longitude, categories, weapon_type, confidence, incident_group_id, group_role, pipeline_run, classification';
+const SLIM_COLUMNS = 'id, title, clean_title, published_at, source_url, latitude, longitude, categories, weapon_type, confidence, incident_group_id, group_role, pipeline_run, classification, bundesland';
 
 /**
- * Fetch all crime records, optionally filtered by category.
- * Only fetches columns needed for map pins, filtering, and stats.
- * Use fetchCrimeById() to get full record details.
+ * Fetch all crime records via the cached server API route.
+ * The API route handles pagination and caching server-side.
  *
  * @param category - Optional category to filter by
+ * @param pipelineRun - Optional pipeline run filter
  * @returns Array of crime records (slim)
  */
 export async function fetchCrimes(category?: CrimeCategory, pipelineRun?: string): Promise<CrimeRecord[]> {
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (pipelineRun) params.set('pipeline_run', pipelineRun);
+  const url = `/api/map/crimes${params.toString() ? `?${params}` : ''}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch crimes: ${res.status} ${res.statusText}`);
+  }
+  return res.json() as Promise<CrimeRecord[]>;
+}
+
+/**
+ * Server-side fetch of all crime records with pagination.
+ * Used by the /api/map/crimes route handler.
+ */
+export async function fetchCrimesFromSupabase(category?: CrimeCategory, pipelineRun?: string): Promise<CrimeRecord[]> {
   const PAGE_SIZE = 1000;
   let allData: Partial<CrimeRecordRow>[] = [];
   let from = 0;
 
-  // Paginate to avoid Supabase's default 1000-row limit
   while (true) {
     let query = supabase
       .from('crime_records')
@@ -309,44 +326,20 @@ export async function fetchAllDatasetMeta(): Promise<Record<string, DatasetMetaR
  */
 /**
  * Fetch distinct pipeline run names with record counts.
- * Used for the experiment toggle in LayerControl.
+ * Uses the get_pipeline_run_counts RPC function for a single SQL GROUP BY.
  */
 export async function fetchPipelineRuns(): Promise<Array<{ run: string; count: number }>> {
-  // Supabase doesn't support GROUP BY directly, so fetch all pipeline_run values
-  const PAGE_SIZE = 1000;
-  const runs: string[] = [];
-  let from = 0;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('get_pipeline_run_counts');
+    if (error) throw error;
 
-  while (true) {
-    const { data, error } = await supabase
-      .from('crime_records')
-      .select('pipeline_run')
-      .eq('hidden', false)
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) {
-      console.error('Error fetching pipeline runs:', error);
-      return [];
-    }
-
-    const rows = (data ?? []) as Array<{ pipeline_run: string }>;
-    for (const row of rows) {
-      runs.push(row.pipeline_run ?? 'default');
-    }
-
-    if (rows.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
+    return ((data ?? []) as Array<{ pipeline_run: string; count: number }>)
+      .map((row) => ({ run: row.pipeline_run, count: Number(row.count) }));
+  } catch (err) {
+    console.error('Error fetching pipeline runs:', err);
+    return [];
   }
-
-  // Aggregate counts
-  const counts: Record<string, number> = {};
-  for (const run of runs) {
-    counts[run] = (counts[run] || 0) + 1;
-  }
-
-  return Object.entries(counts)
-    .map(([run, count]) => ({ run, count }))
-    .sort((a, b) => b.count - a.count);
 }
 
 // ============ Dashboard Queries ============

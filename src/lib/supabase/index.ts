@@ -5,6 +5,6 @@ export type { AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow }
 export { fetchCrimes, fetchCrimeById, fetchCrimeStats, fetchPipelineRuns } from './queries';
 export { fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchDatasetMeta, fetchAllDatasetMeta } from './queries';
 export { fetchDashboardStats, fetchCityRankingByCategory, fetchHotspotKreise, fetchLiveFeed } from './queries';
-export { useCrimes, useCrimeDetail, useCrimeStats, usePipelineRuns } from './hooks';
+export { useCrimes, useCrimeDetail, useCrimeStats, usePipelineRuns, useSearchCrimes } from './hooks';
 export { useAuslaenderData, useDeutschlandatlasData, useCityCrimeData, useAllDatasetMeta } from './hooks';
 export { useDashboardStats, useCityRanking, useHotspotKreise, useLiveFeed } from './hooks';

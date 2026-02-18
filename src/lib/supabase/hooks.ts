@@ -1,6 +1,6 @@
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
-import { fetchCrimes, fetchCrimeById, fetchCrimeStats, fetchPipelineRuns, fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchAllDatasetMeta, fetchDashboardStats, fetchCityRankingByCategory, fetchHotspotKreise, fetchLiveFeed } from './queries';
+import { fetchCrimeById, fetchCrimeStats, fetchPipelineRuns, fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchAllDatasetMeta, fetchDashboardStats, fetchCityRankingByCategory, fetchHotspotKreise, fetchLiveFeed } from './queries';
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
 import type { BlaulichtStats, AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow } from './types';
 import type { DashboardTimeframe, SecurityOverviewResponse } from '@/lib/dashboard/types';
@@ -13,20 +13,24 @@ async function jsonFetcher<T>(url: string): Promise<T> {
 }
 
 /**
- * SWR hook for fetching crime records with automatic caching and revalidation
+ * SWR hook for fetching crime records via the cached server API route.
  *
  * @param category - Optional category filter
  * @param pipelineRun - Optional pipeline run filter
  * @returns SWR response with crimes data, loading state, and error
  */
 export function useCrimes(category?: CrimeCategory, pipelineRun?: string) {
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (pipelineRun) params.set('pipeline_run', pipelineRun);
+  const url = `/api/map/crimes${params.toString() ? `?${params}` : ''}`;
+
   return useSWR<CrimeRecord[], Error>(
-    ['crimes', category ?? 'all', pipelineRun ?? 'all'],
-    () => fetchCrimes(category, pipelineRun),
+    url,
+    jsonFetcher,
     {
-      // Keep data fresh for 5 minutes before revalidating
       revalidateOnFocus: false,
-      dedupingInterval: 60000, // Dedupe requests within 1 minute
+      dedupingInterval: 60000,
     }
   );
 }
@@ -219,12 +223,36 @@ export function useLiveFeed(categories: CrimeCategory[]) {
   };
 }
 
+/**
+ * SWR hook for full-text search across crime records (title + body).
+ * Returns an array of matching crime IDs.
+ * Only fires when query is at least 2 characters.
+ */
+export function useSearchCrimes(query: string) {
+  const url = query.length >= 2
+    ? `/api/map/crimes/search?q=${encodeURIComponent(query)}`
+    : null;
+
+  return useSWR<string[], Error>(
+    url,
+    jsonFetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
+    }
+  );
+}
+
 export function useSecurityOverview(
   category: CrimeCategory | null,
   timeframe: DashboardTimeframe = DEFAULT_DASHBOARD_TIMEFRAME,
   page = 1,
   weapon: string | null = null,
   drug: string | null = null,
+  city: string | null = null,
+  kreis: string | null = null,
+  bundesland: string | null = null,
 ) {
   const params = new URLSearchParams();
   if (category) params.set('category', category);
@@ -232,6 +260,9 @@ export function useSecurityOverview(
   if (page > 1) params.set('page', String(page));
   if (weapon) params.set('weapon', weapon);
   if (drug) params.set('drug', drug);
+  if (city) params.set('city', city);
+  if (kreis) params.set('kreis', kreis);
+  if (bundesland) params.set('bundesland', bundesland);
   const key = `/api/dashboard/overview${params.toString() ? `?${params}` : ''}`;
 
   return useSWR<SecurityOverviewResponse, Error>(
