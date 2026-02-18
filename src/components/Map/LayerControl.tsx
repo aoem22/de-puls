@@ -49,6 +49,15 @@ export interface LayerControlProps {
   drugCounts?: Record<string, number>;
   selectedDrugType?: string | null;
   onDrugTypeChange?: (drugType: string | null) => void;
+  // Blaulicht Bundesland filter
+  bundeslandCounts?: Record<string, number>;
+  selectedBundesland?: string | null;
+  onBundeslandChange?: (bundesland: string | null) => void;
+  // Blaulicht full-text search
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
+  searchResultCount?: number | null;
+  isSearching?: boolean;
   // Favorites filter
   favoritesCount?: number;
   showFavoritesOnly?: boolean;
@@ -150,6 +159,13 @@ export function LayerControl({
   drugCounts,
   selectedDrugType,
   onDrugTypeChange,
+  bundeslandCounts,
+  selectedBundesland,
+  onBundeslandChange,
+  searchQuery,
+  onSearchQueryChange,
+  searchResultCount,
+  isSearching,
   favoritesCount,
   showFavoritesOnly,
   onToggleFavoritesOnly,
@@ -620,6 +636,109 @@ export function LayerControl({
                   </button>
                 );
               })}
+          </div>
+        </div>
+      )}
+
+      {/* Bundesland filter */}
+      {selectedIndicator === 'blaulicht' && bundeslandCounts && onBundeslandChange && Object.keys(bundeslandCounts).length > 0 && (
+        <div className="hidden md:block pt-2 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">{lang === 'de' ? 'Bundesland' : 'State'}</span>
+          </div>
+          <div className="space-y-1">
+            {/* All states button */}
+            <button
+              onClick={() => onBundeslandChange(null)}
+              className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
+                selectedBundesland === null
+                  ? 'bg-[var(--card-elevated)] border border-[var(--foreground)]/80'
+                  : 'hover:bg-[var(--card-elevated)] active:bg-[var(--card-elevated)] border border-transparent'
+              }`}
+            >
+              <span className="w-4 text-center text-xs flex-shrink-0">🗺️</span>
+              <span className={`text-sm md:text-xs flex-1 text-left no-select ${selectedBundesland === null ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
+                {lang === 'de' ? 'Alle' : 'All'}
+              </span>
+              <span className="text-xs text-[var(--text-tertiary)] tabular-nums">
+                {Object.values(bundeslandCounts).reduce((a, b) => a + b, 0)}
+              </span>
+            </button>
+
+            {Object.entries(bundeslandCounts)
+              .sort(([, a], [, b]) => b - a)
+              .map(([bl, count]) => {
+                const isSelected = selectedBundesland === bl;
+                return (
+                  <button
+                    key={bl}
+                    onClick={() => onBundeslandChange(isSelected ? null : bl)}
+                    className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
+                      isSelected
+                        ? 'bg-[var(--card-elevated)] border border-[var(--foreground)]/80'
+                        : 'hover:bg-[var(--card-elevated)] active:bg-[var(--card-elevated)] border border-transparent'
+                    }`}
+                  >
+                    <span className={`text-sm md:text-xs flex-1 text-left no-select ${isSelected ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
+                      {bl}
+                    </span>
+                    <span className="text-xs text-[var(--text-tertiary)] tabular-nums">{count}</span>
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Full-text search across all Polizeimeldungen */}
+      {selectedIndicator === 'blaulicht' && onSearchQueryChange && (
+        <div className="pt-2 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">
+              {lang === 'de' ? 'Suche' : 'Search'}
+            </span>
+            {searchQuery && searchQuery.length >= 2 && searchResultCount != null && (
+              <span className="text-xs text-[var(--text-tertiary)] tabular-nums">
+                {searchResultCount.toLocaleString('de-DE')} {lang === 'de' ? 'Treffer' : 'results'}
+              </span>
+            )}
+          </div>
+          <div className="relative">
+            <svg
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery ?? ''}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
+              placeholder={lang === 'de' ? 'z.B. Pfefferspray, Messer…' : 'e.g. pepper spray, knife…'}
+              className="w-full pl-8 pr-8 py-2 md:py-1.5 text-sm md:text-xs bg-[var(--background)] border border-[var(--border)] rounded-md text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+            />
+            {isSearching && (
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            )}
+            {!isSearching && searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchQueryChange('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                aria-label={lang === 'de' ? 'Suche leeren' : 'Clear search'}
+              >
+                <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       )}

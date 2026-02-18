@@ -56,6 +56,25 @@ function buildDrugChips(drugCounts?: Record<string, number>): DrugChip[] {
     }));
 }
 
+interface BundeslandChip {
+  key: string;
+  label: string;
+  count: number;
+}
+
+function buildBundeslandChips(bundeslandCounts?: Record<string, number>): BundeslandChip[] {
+  if (!bundeslandCounts) return [];
+
+  return Object.entries(bundeslandCounts)
+    .filter(([, count]) => count > 0)
+    .sort((left, right) => right[1] - left[1])
+    .map(([key, count]) => ({
+      key,
+      label: key,
+      count,
+    }));
+}
+
 function categoryLabel(category: CrimeCategory | null): string {
   if (!category) return 'Alle Kategorien';
   return CRIME_CATEGORIES.find((item) => item.key === category)?.label ?? category;
@@ -67,6 +86,9 @@ export function DashboardPage() {
   const [drugFilter, setDrugFilter] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState<DashboardTimeframe>('year_to_date');
   const [feedPage, setFeedPage] = useState(1);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedKreis, setSelectedKreis] = useState<string | null>(null);
+  const [bundeslandFilter, setBundeslandFilter] = useState<string | null>(null);
   const effectiveDrugFilter = focusCategory === 'drugs' ? drugFilter : null;
 
   const { data, isLoading, error } = useSecurityOverview(
@@ -75,6 +97,9 @@ export function DashboardPage() {
     feedPage,
     weaponFilter,
     effectiveDrugFilter,
+    selectedCity,
+    selectedKreis,
+    bundeslandFilter,
   );
   const { theme, toggleTheme } = useTheme();
 
@@ -83,12 +108,16 @@ export function DashboardPage() {
     || data.period.timeframe !== timeframe
     || data.weaponFilter !== weaponFilter
     || data.drugFilter !== effectiveDrugFilter
+    || data.liveFeedCity !== selectedCity
+    || data.liveFeedKreis !== selectedKreis
+    || data.bundeslandFilter !== bundeslandFilter
   );
   const showLoading = isLoading || isStale;
 
   const categoryChips = data?.categoryCounts ?? [];
   const weaponChips = buildWeaponChips(data?.weaponCounts);
   const drugChips = buildDrugChips(data?.drugCounts);
+  const bundeslandChips = buildBundeslandChips(data?.bundeslandCounts);
   const periodLabel = data?.period.label ?? 'Zeitraum';
   const previousLabel = data?.period.previousLabel ?? 'Vorperiode';
   const isYearView = timeframe === 'year_to_date';
@@ -107,26 +136,42 @@ export function DashboardPage() {
             onTimeframeChange={(nextTimeframe) => {
               setTimeframe(nextTimeframe);
               setFeedPage(1);
+              setSelectedCity(null);
+              setSelectedKreis(null);
             }}
             focusCategory={focusCategory}
             onFocusCategoryChange={(nextCategory) => {
               setFocusCategory(nextCategory);
               if (nextCategory !== 'drugs') setDrugFilter(null);
               setFeedPage(1);
+              setSelectedCity(null);
+              setSelectedKreis(null);
             }}
             weaponFilter={weaponFilter}
             onWeaponFilterChange={(nextWeaponFilter) => {
               setWeaponFilter(nextWeaponFilter);
               setFeedPage(1);
+              setSelectedCity(null);
+              setSelectedKreis(null);
             }}
             drugFilter={focusCategory === 'drugs' ? drugFilter : null}
             onDrugFilterChange={(nextDrugFilter) => {
               setDrugFilter(nextDrugFilter);
               setFeedPage(1);
+              setSelectedCity(null);
+              setSelectedKreis(null);
             }}
             categoryChips={categoryChips}
             weaponChips={weaponChips}
             drugChips={drugChips}
+            bundeslandChips={bundeslandChips}
+            bundeslandFilter={bundeslandFilter}
+            onBundeslandFilterChange={(nextBundesland) => {
+              setBundeslandFilter(nextBundesland);
+              setFeedPage(1);
+              setSelectedCity(null);
+              setSelectedKreis(null);
+            }}
             incidentsCurrent={data?.snapshot.incidentsCurrent}
             totalRecords2026={data?.snapshot.totalRecords2026}
             isDark={theme === 'dark'}
@@ -161,6 +206,18 @@ export function DashboardPage() {
                 periodLabel={periodLabel}
                 categoryLabel={categoryLabel(focusCategory)}
                 isYearView={isYearView}
+                selectedCity={selectedCity}
+                selectedKreis={selectedKreis}
+                onCityClick={(city) => {
+                  setSelectedCity((prev) => prev === city ? null : city);
+                  setSelectedKreis(null);
+                  setFeedPage(1);
+                }}
+                onKreisClick={(kreisAgs) => {
+                  setSelectedKreis((prev) => prev === kreisAgs ? null : kreisAgs);
+                  setSelectedCity(null);
+                  setFeedPage(1);
+                }}
               />
             ) : (
               <div
@@ -178,6 +235,18 @@ export function DashboardPage() {
             liveFeed={data?.liveFeed ?? []}
             liveFeedTotal={data?.liveFeedTotal ?? 0}
             liveFeedPageSize={data?.liveFeedPageSize ?? 20}
+            locationFilterLabel={
+              selectedCity
+                ? selectedCity
+                : selectedKreis
+                  ? data?.topKreise.find((k) => k.kreisAgs === selectedKreis)?.kreisName ?? selectedKreis
+                  : null
+            }
+            onClearLocationFilter={() => {
+              setSelectedCity(null);
+              setSelectedKreis(null);
+              setFeedPage(1);
+            }}
           />
         </main>
 

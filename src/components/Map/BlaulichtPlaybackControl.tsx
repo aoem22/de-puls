@@ -101,7 +101,7 @@ const CATEGORY_SHORT_LABELS: Partial<Record<CrimeCategory, { de: string; en: str
   other: { de: 'Sonstige', en: 'Other' },
 };
 
-const WEAPON_ORDER = ['knife', 'gun', 'explosive', 'blunt'];
+const WEAPON_ORDER = ['knife', 'gun', 'axe', 'explosive', 'blunt', 'pepper_spray', 'other'];
 
 // Weapon icons — emojis (centered) for most, Noto Emoji Oreo revolver for gun (🔫 = water gun on all platforms)
 export function WeaponIcon({ type, className = 'text-[16px]' }: { type: string; className?: string }) {

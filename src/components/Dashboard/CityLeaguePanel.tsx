@@ -40,6 +40,10 @@ interface CityLeaguePanelProps {
   periodLabel: string;
   categoryLabel: string;
   isYearView: boolean;
+  selectedCity: string | null;
+  selectedKreis: string | null;
+  onCityClick: (city: string) => void;
+  onKreisClick: (kreisAgs: string) => void;
 }
 
 // Generic row for the reusable table
@@ -128,6 +132,8 @@ function LeagueTable({
   isYearView,
   hoveredKey,
   onHover,
+  selectedKey,
+  onSelect,
 }: {
   title: string;
   nameHeader: string;
@@ -135,6 +141,8 @@ function LeagueTable({
   isYearView: boolean;
   hoveredKey: string | null;
   onHover: (key: string | null) => void;
+  selectedKey: string | null;
+  onSelect: (key: string) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -178,19 +186,27 @@ function LeagueTable({
         <tbody>
           {rows.map((row, idx) => {
             const isHovered = hoveredKey === row.key;
+            const isSelected = selectedKey === row.key;
             return (
               <tr
                 key={row.key}
                 onMouseEnter={() => onHover(row.key)}
                 onMouseLeave={() => onHover(null)}
-                className="cursor-default transition-colors"
+                onClick={() => onSelect(row.key)}
+                className="cursor-pointer transition-colors"
                 style={{
-                  background: isHovered
-                    ? 'color-mix(in srgb, var(--accent) 8%, transparent)'
-                    : idx % 2 === 0
-                      ? 'var(--card)'
-                      : 'var(--card-inner)',
-                  borderLeft: isHovered ? '2px solid var(--accent)' : '2px solid transparent',
+                  background: isSelected
+                    ? 'color-mix(in srgb, var(--accent) 15%, transparent)'
+                    : isHovered
+                      ? 'color-mix(in srgb, var(--accent) 8%, transparent)'
+                      : idx % 2 === 0
+                        ? 'var(--card)'
+                        : 'var(--card-inner)',
+                  borderLeft: isSelected
+                    ? '2px solid var(--accent)'
+                    : isHovered
+                      ? '2px solid color-mix(in srgb, var(--accent) 50%, transparent)'
+                      : '2px solid transparent',
                 }}
               >
                 <td
@@ -309,6 +325,10 @@ export function CityLeaguePanel({
   periodLabel,
   categoryLabel,
   isYearView,
+  selectedCity,
+  selectedKreis,
+  onCityClick,
+  onKreisClick,
 }: CityLeaguePanelProps) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [hoveredSource, setHoveredSource] = useState<'city' | 'kreis' | null>(null);
@@ -406,6 +426,8 @@ export function CityLeaguePanel({
               setHoveredKey(key);
               setHoveredSource(key ? 'city' : null);
             }}
+            selectedKey={selectedCity}
+            onSelect={onCityClick}
           />
         </div>
 
@@ -427,6 +449,8 @@ export function CityLeaguePanel({
               setHoveredKey(key);
               setHoveredSource(key ? 'kreis' : null);
             }}
+            selectedKey={selectedKreis}
+            onSelect={onKreisClick}
           />
         </div>
 

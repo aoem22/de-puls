@@ -22,6 +22,12 @@ interface DrugChip {
   count: number;
 }
 
+interface BundeslandChip {
+  key: string;
+  label: string;
+  count: number;
+}
+
 interface DashboardTopControlsProps {
   timeframe: DashboardTimeframe;
   onTimeframeChange: (timeframe: DashboardTimeframe) => void;
@@ -31,6 +37,9 @@ interface DashboardTopControlsProps {
   onWeaponFilterChange: (weapon: string | null) => void;
   drugFilter: string | null;
   onDrugFilterChange: (drug: string | null) => void;
+  bundeslandChips: BundeslandChip[];
+  bundeslandFilter: string | null;
+  onBundeslandFilterChange: (bundesland: string | null) => void;
   categoryChips: SecurityOverviewResponse['categoryCounts'];
   weaponChips: WeaponChip[];
   drugChips: DrugChip[];
@@ -49,6 +58,9 @@ export function DashboardTopControls({
   onWeaponFilterChange,
   drugFilter,
   onDrugFilterChange,
+  bundeslandChips,
+  bundeslandFilter,
+  onBundeslandFilterChange,
   categoryChips,
   weaponChips,
   drugChips,
@@ -146,10 +158,10 @@ export function DashboardTopControls({
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
           Delikte
         </p>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="-mx-5 px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0 flex gap-1.5 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-hide">
           <button
             onClick={() => onFocusCategoryChange(null)}
-            className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
             style={{
               borderColor: focusCategory === null ? 'var(--accent)' : 'var(--border-subtle)',
               background: focusCategory === null ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--card)',
@@ -171,7 +183,7 @@ export function DashboardTopControls({
               <button
                 key={item.key}
                 onClick={() => onFocusCategoryChange(item.key)}
-                className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                 style={{
                   borderColor: active ? catColor : 'var(--border-subtle)',
                   background: active ? `color-mix(in srgb, ${catColor} 15%, transparent)` : 'var(--card)',
@@ -198,21 +210,63 @@ export function DashboardTopControls({
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
             Tatmittel
           </p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="-mx-5 px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0 flex gap-1.5 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-hide">
             {weaponChips.map((item) => {
               const active = weaponFilter === item.key;
               return (
                 <button
                   key={item.key}
                   onClick={() => onWeaponFilterChange(active ? null : item.key)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  className="inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-all duration-200 ease-out"
                   style={{
                     borderColor: active ? '#ef4444' : 'var(--border-subtle)',
                     background: active ? 'rgba(239,68,68,0.12)' : 'var(--card)',
                     color: active ? '#ef4444' : 'var(--text-secondary)',
                   }}
                 >
-                  <WeaponIcon type={item.key} className="text-[14px]" />
+                  {/* Icon: visible when inactive, collapses when active */}
+                  <span
+                    className={`inline-flex items-center justify-center transition-all duration-200 ease-out ${
+                      active ? 'max-w-0 overflow-hidden opacity-0' : 'max-w-[24px] opacity-100'
+                    }`}
+                  >
+                    <WeaponIcon type={item.key} className="text-[18px]" />
+                  </span>
+                  {/* Label + count: hidden when inactive, expands when active */}
+                  <span
+                    className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out ${
+                      active ? 'max-w-[10rem] opacity-100' : 'max-w-0 opacity-0'
+                    }`}
+                  >
+                    {item.label}
+                    <span className="tabular-nums opacity-60 ml-1">{item.count.toLocaleString('de-DE')}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {bundeslandChips.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
+            Bundesland
+          </p>
+          <div className="-mx-5 px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0 flex gap-1.5 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-hide">
+            {bundeslandChips.map((item) => {
+              const active = bundeslandFilter === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => onBundeslandFilterChange(active ? null : item.key)}
+                  className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  style={{
+                    borderColor: active ? '#3b82f6' : 'var(--border-subtle)',
+                    background: active ? 'rgba(59,130,246,0.12)' : 'var(--card)',
+                    color: active ? '#3b82f6' : 'var(--text-secondary)',
+                  }}
+                >
                   {item.label}
                   <span className="tabular-nums opacity-60">{item.count.toLocaleString('de-DE')}</span>
                 </button>
@@ -227,14 +281,14 @@ export function DashboardTopControls({
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
             Drogenart
           </p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="-mx-5 px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0 flex gap-1.5 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-hide">
             {drugChips.map((item) => {
               const active = drugFilter === item.key;
               return (
                 <button
                   key={item.key}
                   onClick={() => onDrugFilterChange(active ? null : item.key)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                   style={{
                     borderColor: active ? '#22c55e' : 'var(--border-subtle)',
                     background: active ? 'rgba(34,197,94,0.12)' : 'var(--card)',
