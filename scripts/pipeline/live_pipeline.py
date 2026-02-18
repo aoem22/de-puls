@@ -18,7 +18,7 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import certifi
@@ -46,6 +46,21 @@ LIVE_CONCURRENT_REQUESTS = 5
 LIVE_PIPELINE_RUN_NAME = "v1_2026"
 PUSH_QUEUE_FILE = CACHE_DIR / "push_queue.json"
 LOCK_FILE = CACHE_DIR / "live_pipeline.lock"
+
+# Source URL patterns for per-source start date queries.
+# Dedicated scrapers (Berlin, etc.) publish with a 1–2 day lag, so the global
+# start date (driven by presseportal's near-real-time timestamps) can race ahead
+# and silently drop their articles. Per-source queries fix this.
+DEDICATED_SOURCE_URL_PATTERNS = {
+    "berlin": "%berlin.de/polizei%",
+    "brandenburg": "%polizei.brandenburg.de%",
+    "bayern": "%polizei.bayern.de%",
+    "sachsen-anhalt": "%sachsen-anhalt.de%",
+    "sachsen": "%medienservice.sachsen.de%",
+}
+
+# Days to look back beyond the latest per-source record (covers publication delays)
+DEDICATED_SCRAPER_LOOKBACK_DAYS = 3
 
 
 def _now_utc() -> datetime:
@@ -127,6 +142,53 @@ class LivePipeline:
         print(f"  Start date fallback: {self._start_date}")
         return self._start_date
 
+    def _get_start_date_for_source(self, source: dict) -> str:
+        """Get per-source start date for dedicated scrapers.
+
+        Dedicated scrapers (Berlin, etc.) often publish with a 1–2 day delay.
+        Using the global start date (driven by real-time presseportal) causes
+        these delayed articles to be silently dropped by the scraper's date
+        filter. Instead, query the latest published_at for this specific source
+        and subtract a lookback buffer. The URL cache prevents re-processing,
+        so the extra overlap is cheap.
+        """
+        if source["type"] != "dedicated":
+            return self._get_start_date()
+
+        source_name = source["name"]
+        url_pattern = DEDICATED_SOURCE_URL_PATTERNS.get(source_name)
+        if not url_pattern:
+            return self._get_start_date()
+
+        try:
+            self._init_supabase()
+            if self.supabase:
+                result = self.supabase.table("crime_records") \
+                    .select("published_at") \
+                    .eq("pipeline_run", LIVE_PIPELINE_RUN_NAME) \
+                    .like("source_url", url_pattern) \
+                    .order("published_at", desc=True) \
+                    .limit(1) \
+                    .execute()
+                if result.data:
+                    latest_str = result.data[0]["published_at"][:10]
+                    latest = date.fromisoformat(latest_str)
+                    buffered = latest - timedelta(days=DEDICATED_SCRAPER_LOOKBACK_DAYS)
+                    start = buffered.isoformat()
+                    print(f"  [{source_name}] Per-source start date: {start} "
+                          f"(latest: {latest_str}, -{DEDICATED_SCRAPER_LOOKBACK_DAYS}d buffer)")
+                    return start
+        except Exception as e:
+            print(f"  [{source_name}] Could not query per-source start date: {e}")
+
+        # Fallback: subtract lookback from global start date
+        global_start = self._get_start_date()
+        buffered = date.fromisoformat(global_start) - timedelta(days=DEDICATED_SCRAPER_LOOKBACK_DAYS)
+        start = buffered.isoformat()
+        print(f"  [{source_name}] Fallback start date: {start} "
+              f"(global {global_start} -{DEDICATED_SCRAPER_LOOKBACK_DAYS}d buffer)")
+        return start
+
     def _get_sources(self) -> list[dict]:
         """Build list of sources to poll."""
         sources = []
@@ -162,7 +224,7 @@ class LivePipeline:
 
     async def _scrape_source(self, source: dict) -> list[dict]:
         """Scrape a single source and return new articles as dicts."""
-        start_date = self._get_start_date()
+        start_date = self._get_start_date_for_source(source)
         end_date = _today_iso()
 
         if source["type"] == "presseportal":
