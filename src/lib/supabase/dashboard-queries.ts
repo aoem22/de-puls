@@ -129,6 +129,79 @@ async function fetchAllRows<T>(
   return allRows;
 }
 
+// ────────────────────────── City name normalization (mirrors SQL normalize_city_name) ──────────────────────────
+
+const BERLIN_DISTRICTS = new Set([
+  'Mitte', 'Neukölln', 'Reinickendorf', 'Steglitz-Zehlendorf',
+  'Treptow-Köpenick', 'Friedrichshain-Kreuzberg', 'Charlottenburg-Wilmersdorf',
+  'Spandau', 'Tempelhof-Schöneberg', 'Marzahn-Hellersdorf',
+  'Lichtenberg', 'Pankow', 'Kreuzberg', 'Friedrichshain',
+  'Charlottenburg', 'Wilmersdorf', 'Schöneberg', 'Tempelhof',
+  'Steglitz', 'Zehlendorf', 'Treptow', 'Köpenick',
+  'Marzahn', 'Hellersdorf', 'Prenzlauer Berg', 'Wedding',
+  'Moabit', 'Tiergarten', 'Gesundbrunnen',
+]);
+
+const DISTRICT_SUFFIX_CITIES = new Set([
+  'Stuttgart', 'Hamm', 'Köln', 'Dortmund', 'Essen', 'Duisburg',
+  'Düsseldorf', 'Bochum', 'Wuppertal', 'Bielefeld', 'Gelsenkirchen',
+  'Mönchengladbach', 'Krefeld', 'Oberhausen', 'Hagen', 'Bottrop',
+  'Recklinghausen', 'Remscheid', 'Solingen', 'Herne', 'Mülheim',
+  'Bonn', 'Münster', 'Mannheim', 'Karlsruhe', 'Freiburg',
+  'Heidelberg', 'Ulm', 'Pforzheim', 'Reutlingen', 'Heilbronn',
+  'München', 'Nürnberg', 'Augsburg', 'Regensburg', 'Würzburg',
+  'Erlangen', 'Fürth', 'Ingolstadt', 'Bamberg',
+  'Frankfurt', 'Wiesbaden', 'Kassel', 'Darmstadt', 'Offenbach',
+  'Hannover', 'Braunschweig', 'Oldenburg', 'Osnabrück', 'Wolfsburg',
+  'Göttingen', 'Hildesheim', 'Salzgitter',
+  'Bremen', 'Bremerhaven',
+  'Leipzig', 'Dresden', 'Chemnitz',
+  'Magdeburg', 'Halle',
+  'Erfurt', 'Jena', 'Weimar',
+  'Rostock', 'Schwerin',
+  'Kiel', 'Lübeck', 'Flensburg',
+  'Mainz', 'Ludwigshafen', 'Koblenz', 'Trier',
+  'Saarbrücken',
+]);
+
+const COMPOUND_CITY_EXCLUSIONS = new Set([
+  'Baden-Baden', 'Castrop-Rauxel', 'Halle-Neustadt', 'Frankfurt-Oder',
+]);
+
+function normalizeCityName(city: string | null, bundesland: string | null): string | null {
+  if (!city || !city.trim()) return null;
+
+  // Unicode dash normalization (U+2011 → regular hyphen)
+  let c = city.trim().replace(/\u2011/g, '-');
+
+  // Kreis-as-city exclusion
+  if (/(?:land)?kreis/i.test(c)) return null;
+
+  // Berlin districts → "Berlin"
+  if (bundesland === 'Berlin') {
+    if (BERLIN_DISTRICTS.has(c)) return 'Berlin';
+    if (c.startsWith('Berlin-')) return 'Berlin';
+    return c || 'Berlin';
+  }
+
+  // Frankfurt normalization
+  if (c === 'Frankfurt' && (bundesland === 'Hessen' || !bundesland)) {
+    return 'Frankfurt am Main';
+  }
+
+  // City-District suffix stripping
+  const dashIdx = c.indexOf('-');
+  if (dashIdx > 0) {
+    const base = c.slice(0, dashIdx);
+    if (DISTRICT_SUFFIX_CITIES.has(base) && !COMPOUND_CITY_EXCLUSIONS.has(c)) {
+      if (base === 'Frankfurt' && bundesland === 'Brandenburg') return c;
+      return base;
+    }
+  }
+
+  return c;
+}
+
 // ────────────────────────── Drug type filtering (post-fetch) ──────────────────────────
 
 function filterByDrugType<T extends { drug_type: string | null }>(
@@ -245,11 +318,11 @@ async function getCityRankingFallback(
   pipelineRun: string | null,
   bundesland: string | null = null,
 ): Promise<CityRankingRow[]> {
-  const rows = await fetchAllRows<{ city: string; published_at: string; drug_type: string | null }>(
+  const rows = await fetchAllRows<{ city: string; bundesland: string | null; published_at: string; drug_type: string | null }>(
     (from, to) => {
       let q = supabase
         .from('crime_records')
-        .select('city,published_at,drug_type')
+        .select('city,bundesland,published_at,drug_type')
         .not('city', 'is', null);
       q = applyBaseFilters(q, { startIso: previousStartIso, endIso: currentEndIso, category, weaponType, pipelineRun, bundesland });
       return q.range(from, to);
@@ -266,9 +339,11 @@ async function getCityRankingFallback(
   for (const row of filtered) {
     const ts = Date.parse(row.published_at);
     if (Number.isNaN(ts)) continue;
-    if (!buckets[row.city]) buckets[row.city] = { current: 0, previous: 0 };
-    if (ts >= currentStartMs && ts < currentEndMs) buckets[row.city].current += 1;
-    else if (ts >= previousStartMs && ts < previousEndMs) buckets[row.city].previous += 1;
+    const normalizedCity = normalizeCityName(row.city, row.bundesland);
+    if (!normalizedCity) continue;
+    if (!buckets[normalizedCity]) buckets[normalizedCity] = { current: 0, previous: 0 };
+    if (ts >= currentStartMs && ts < currentEndMs) buckets[normalizedCity].current += 1;
+    else if (ts >= previousStartMs && ts < previousEndMs) buckets[normalizedCity].previous += 1;
   }
 
   return Object.entries(buckets)
@@ -968,4 +1043,179 @@ export async function getTotalCount(pipelineRun: string | null = null): Promise<
   const { count, error } = await q;
   if (error) throw new Error(`getTotalCount error: ${error.message}`);
   return count ?? 0;
+}
+
+// ────────────────────────── Snapshot Counts (consolidated) ──────────────────────────
+
+const SEVERE_CATS: ReadonlySet<string> = new Set(['murder', 'weapons', 'knife', 'sexual']);
+
+export interface SnapshotCounts {
+  incidentsCurrent: number;
+  incidentsPrevious: number;
+  severeCurrent: number;
+  severePrevious: number;
+  geocodedCurrent: number;
+  newLastHour: number;
+  focusCount: number;
+  totalRecords: number;
+  categoryCounts: Record<string, number>;
+}
+
+interface SnapshotCountsRaw {
+  incidents_current: number;
+  incidents_previous: number;
+  severe_current: number;
+  severe_previous: number;
+  geocoded_current: number;
+  new_last_hour: number;
+  focus_count: number;
+  total_records: number;
+  cat_murder: number;
+  cat_sexual: number;
+  cat_assault: number;
+  cat_robbery: number;
+  cat_burglary: number;
+  cat_arson: number;
+  cat_vandalism: number;
+  cat_fraud: number;
+  cat_drugs: number;
+  cat_traffic: number;
+}
+
+export interface SnapshotCountsOpts {
+  startIso: string;
+  endIso: string;
+  prevStartIso: string;
+  prevEndIso: string;
+  hourStartIso: string;
+  hourEndIso: string;
+  category: CrimeCategory | null;
+  weaponType: string | null;
+  drugType: string | null;
+  pipelineRun: string | null;
+  bundesland: string | null;
+}
+
+/**
+ * Get all snapshot counts in a single query.
+ * Replaces 18 separate countRecords calls with 1 SQL RPC using FILTER aggregation.
+ * Falls back to single-fetch + JS counting when drug filter is active.
+ */
+export async function getSnapshotCounts(opts: SnapshotCountsOpts): Promise<SnapshotCounts> {
+  if (opts.drugType) {
+    return getSnapshotCountsWithDrugFilter(opts);
+  }
+
+  const raw = await rpc<SnapshotCountsRaw>('dashboard_snapshot_counts', {
+    p_start: opts.startIso,
+    p_end: opts.endIso,
+    p_prev_start: opts.prevStartIso,
+    p_prev_end: opts.prevEndIso,
+    p_hour_start: opts.hourStartIso,
+    p_hour_end: opts.hourEndIso,
+    p_category: opts.category,
+    p_weapon: opts.weaponType,
+    p_pipeline_run: opts.pipelineRun,
+    p_bundesland: opts.bundesland,
+  });
+
+  return {
+    incidentsCurrent: raw.incidents_current,
+    incidentsPrevious: raw.incidents_previous,
+    severeCurrent: raw.severe_current,
+    severePrevious: raw.severe_previous,
+    geocodedCurrent: raw.geocoded_current,
+    newLastHour: raw.new_last_hour,
+    focusCount: raw.focus_count,
+    totalRecords: raw.total_records,
+    categoryCounts: {
+      murder: raw.cat_murder,
+      sexual: raw.cat_sexual,
+      assault: raw.cat_assault,
+      robbery: raw.cat_robbery,
+      burglary: raw.cat_burglary,
+      arson: raw.cat_arson,
+      vandalism: raw.cat_vandalism,
+      fraud: raw.cat_fraud,
+      drugs: raw.cat_drugs,
+      traffic: raw.cat_traffic,
+    },
+  };
+}
+
+/**
+ * Fallback: fetch matching rows once, filter by drug type in JS, count everything.
+ * Replaces 18 separate fetchAllRows calls with 1.
+ */
+async function getSnapshotCountsWithDrugFilter(opts: SnapshotCountsOpts): Promise<SnapshotCounts> {
+  const minStart = [opts.startIso, opts.prevStartIso, opts.hourStartIso].sort()[0];
+  const maxEnd = [opts.endIso, opts.prevEndIso, opts.hourEndIso].sort().reverse()[0];
+
+  const [rows, totalRecords] = await Promise.all([
+    fetchAllRows<{
+      published_at: string;
+      categories: CrimeCategory[];
+      latitude: number | null;
+      drug_type: string | null;
+    }>((from, to) => {
+      let q = supabase
+        .from('crime_records')
+        .select('published_at,categories,latitude,drug_type');
+      q = applyBaseFilters(q, {
+        startIso: minStart,
+        endIso: maxEnd,
+        weaponType: opts.weaponType,
+        pipelineRun: opts.pipelineRun,
+        bundesland: opts.bundesland,
+      });
+      return q.range(from, to);
+    }),
+    getTotalCount(opts.pipelineRun),
+  ]);
+
+  const filtered = filterByDrugType(rows, opts.drugType);
+
+  let incidentsCurrent = 0;
+  let incidentsPrevious = 0;
+  let severeCurrent = 0;
+  let severePrevious = 0;
+  let geocodedCurrent = 0;
+  let newLastHour = 0;
+  let focusCount = 0;
+  const catCounts: Record<string, number> = {};
+
+  for (const row of filtered) {
+    const pa = row.published_at;
+    const inCurrent = pa >= opts.startIso && pa < opts.endIso;
+    const inPrevious = pa >= opts.prevStartIso && pa < opts.prevEndIso;
+    const inHour = pa >= opts.hourStartIso && pa < opts.hourEndIso;
+    const isSevere = row.categories.some((c) => SEVERE_CATS.has(c));
+
+    if (inCurrent) {
+      incidentsCurrent++;
+      if (isSevere) severeCurrent++;
+      if (row.latitude != null) geocodedCurrent++;
+      if (opts.category && row.categories.includes(opts.category)) focusCount++;
+      for (const cat of row.categories) {
+        catCounts[cat] = (catCounts[cat] ?? 0) + 1;
+      }
+    }
+    if (inPrevious) {
+      incidentsPrevious++;
+      if (isSevere) severePrevious++;
+    }
+    if (inHour) newLastHour++;
+  }
+
+  return {
+    incidentsCurrent,
+    incidentsPrevious,
+    severeCurrent,
+    severePrevious,
+    geocodedCurrent,
+    newLastHour,
+    focusCount: opts.category ? focusCount : incidentsCurrent,
+    totalRecords,
+    categoryCounts: catCounts,
+  };
 }

@@ -85,6 +85,8 @@ export interface SecurityOverviewResponse {
   weaponFilter: string | null;
   drugCounts: Record<string, number>;
   drugFilter: string | null;
+  bundeslandCounts: Record<string, number>;
+  bundeslandFilter: string | null;
   topCities: Array<{ city: string; count: number; previousCount: number; rankChange: number | null }>;
   topCityPoints: Array<{ city: string; lat: number; lon: number }>;
   topKreise: Array<{ kreisAgs: string; kreisName: string; count: number; previousCount: number; rankChange: number | null }>;
@@ -95,4 +97,6 @@ export interface SecurityOverviewResponse {
   liveFeedPage: number;
   liveFeedPageSize: number;
   liveFeed: DashboardLiveFeedItem[];
+  liveFeedCity: string | null;
+  liveFeedKreis: string | null;
 }
