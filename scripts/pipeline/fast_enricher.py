@@ -126,8 +126,12 @@ WICHTIG: Jeder separate Vorfall MUSS ein eigenes JSON-Objekt werden! Alle Objekt
 Kontext-Vererbung: Jeder Split erbt Bundesland und date vom Elternartikel, wenn nicht explizit anders.
 NICHT splitten: Nummerierte Listen die Details EINES Vorfalls beschreiben (z.B. Zeugenhinweise 1-3 zum selben Unfall).
 
-=== REGEL 2: NUR DEUTSCHLAND ===
+=== REGEL 2: NUR DEUTSCHLAND + STADT vs. STADTTEIL ===
 Alle Vorfälle sind in DEUTSCHLAND. Extrahiere NUR deutsche Städte.
+WICHTIG STADT/STADTTEIL: Die `city` ist IMMER die Hauptstadt/Gemeinde, NICHT der Stadtteil. Stadtteilnamen gehören in `district`.
+- Bei Berlin: city ist IMMER "Berlin". Bezirksnamen (Mitte, Neukölln, Charlottenburg, Kreuzberg, etc.) gehören in `district`.
+- Bei Städten mit Bindestrich-Stadtteilen: city="Stuttgart", district="Bad Cannstatt" (NICHT city="Stuttgart-Bad Cannstatt").
+- Bei Städten mit Bindestrich-Stadtteilen: city="Hamm", district="Bockum-Hövel" (NICHT city="Hamm-Bockum-Hövel").
 Häufige Verwechslungen:
 - "Basel" → Bei Polizeipräsidium Freiburg: Grenzach-Wyhlen, Weil am Rhein, oder Lörrach (NICHT Basel, Schweiz!)
 - "Frankfurt" → Ohne "(Oder)": Frankfurt am Main (Hessen). MIT "(Oder)": Frankfurt (Oder) (Brandenburg)
@@ -203,7 +207,7 @@ Sonstiges:
 Bei Unsicherheit: Wähle den übergeordneten Code (z.B. 2200 statt 2210 wenn unklar ob einfach oder gefährlich).
 
 Feldwerte (NUR diese verwenden):
-- weapon_type: knife|gun|blunt|explosive|vehicle|pepper_spray|none|unknown
+- weapon_type: knife|gun|blunt|axe|explosive|vehicle|pepper_spray|other|none|unknown
 - drug_type: cannabis|cocaine|amphetamine|heroin|ecstasy|meth|other|null
 - severity: minor|serious|critical|fatal|property_only|unknown
 - motive: domestic|robbery|hate|drugs|road_rage|dispute|sexual|unknown|null

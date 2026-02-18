@@ -29,7 +29,7 @@ export type Gender = 'male' | 'female' | 'unknown';
 
 export type Severity = 'minor' | 'serious' | 'critical' | 'fatal' | 'property_only' | 'unknown';
 
-export type Motive = 'domestic' | 'robbery' | 'hate' | 'drugs' | 'road_rage' | 'dispute' | 'unknown';
+export type Motive = 'domestic' | 'robbery' | 'hate' | 'drugs' | 'road_rage' | 'dispute' | 'sexual' | 'unknown';
 
 export type DrugType = 'cannabis' | 'cocaine' | 'amphetamine' | 'heroin' | 'ecstasy' | 'meth' | 'other';
 
@@ -59,6 +59,7 @@ export const MOTIVE_LABELS: Record<Motive, { de: string; en: string }> = {
   drugs:     { de: 'Drogen',          en: 'Drugs' },
   road_rage: { de: 'Verkehrsstreit',  en: 'Road Rage' },
   dispute:   { de: 'Streit',          en: 'Dispute' },
+  sexual:    { de: 'Sexuell',         en: 'Sexual' },
   unknown:   { de: 'Unbekannt',       en: 'Unknown' },
 };
 
@@ -126,6 +127,7 @@ export interface CrimeRecord {
   groupRole?: string | null;
   pipelineRun?: string | null;
   classification?: string | null;
+  bundesland?: string | null;
 }
 
 export const CRIME_CATEGORIES: Array<{

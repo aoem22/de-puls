@@ -132,7 +132,7 @@ Sonstiges:
 Bei Unsicherheit: Wähle den übergeordneten Code (z.B. 2200 statt 2210 wenn unklar ob einfach oder gefährlich).
 
 Feldwerte (NUR diese verwenden):
-- weapon_type: knife|gun|blunt|explosive|vehicle|pepper_spray|none|unknown
+- weapon_type: knife|gun|blunt|axe|explosive|vehicle|pepper_spray|other|none|unknown
 - drug_type: cannabis|cocaine|amphetamine|heroin|ecstasy|meth|other|null
 - severity: minor|serious|critical|fatal|property_only|unknown
 - motive: domestic|robbery|hate|drugs|road_rage|dispute|sexual|unknown|null

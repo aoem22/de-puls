@@ -37,6 +37,8 @@ PKS_TO_CATEGORY: dict[str, str] = {
     "1100": "sexual",
     "1110": "sexual",
     "1300": "sexual",
+    "1310": "sexual",  # Exhibitionismus
+    "1320": "sexual",  # Sexuelle Belästigung
     # Theft / Burglary
     "3000": "burglary",
     "4000": "burglary",
@@ -69,6 +71,11 @@ GERMAN_TO_CATEGORY: dict[str, str] = {
     "Körperverletzung": "assault",
     "Bedrohung": "assault",
     "Sexualdelikt": "sexual",
+    "Vergewaltigung": "sexual",
+    "Sexuelle Belästigung": "sexual",
+    "Sexueller Missbrauch": "sexual",
+    "Exhibitionismus": "sexual",
+    "Sexuelle Nötigung": "sexual",
     "Diebstahl": "burglary",
     "Wohnungseinbruch": "burglary",
     "Kfz-Diebstahl": "burglary",
@@ -84,6 +91,85 @@ GERMAN_TO_CATEGORY: dict[str, str] = {
     "Verkehrskontrolle": "traffic",
     "Sonstige": "other",
 }
+
+
+import re as _re
+import unicodedata as _unicodedata
+
+# ── City name normalization (mirrors SQL normalize_city_name) ──
+
+BERLIN_DISTRICTS = {
+    "Mitte", "Neukölln", "Reinickendorf", "Steglitz-Zehlendorf",
+    "Treptow-Köpenick", "Friedrichshain-Kreuzberg", "Charlottenburg-Wilmersdorf",
+    "Spandau", "Tempelhof-Schöneberg", "Marzahn-Hellersdorf",
+    "Lichtenberg", "Pankow", "Kreuzberg", "Friedrichshain",
+    "Charlottenburg", "Wilmersdorf", "Schöneberg", "Tempelhof",
+    "Steglitz", "Zehlendorf", "Treptow", "Köpenick",
+    "Marzahn", "Hellersdorf", "Prenzlauer Berg", "Wedding",
+    "Moabit", "Tiergarten", "Gesundbrunnen",
+}
+
+DISTRICT_SUFFIX_CITIES = {
+    "Stuttgart", "Hamm", "Köln", "Dortmund", "Essen", "Duisburg",
+    "Düsseldorf", "Bochum", "Wuppertal", "Bielefeld", "Gelsenkirchen",
+    "Mönchengladbach", "Krefeld", "Oberhausen", "Hagen", "Bottrop",
+    "Recklinghausen", "Remscheid", "Solingen", "Herne", "Mülheim",
+    "Bonn", "Münster", "Mannheim", "Karlsruhe", "Freiburg",
+    "Heidelberg", "Ulm", "Pforzheim", "Reutlingen", "Heilbronn",
+    "München", "Nürnberg", "Augsburg", "Regensburg", "Würzburg",
+    "Erlangen", "Fürth", "Ingolstadt", "Bamberg",
+    "Frankfurt", "Wiesbaden", "Kassel", "Darmstadt", "Offenbach",
+    "Hannover", "Braunschweig", "Oldenburg", "Osnabrück", "Wolfsburg",
+    "Göttingen", "Hildesheim", "Salzgitter",
+    "Bremen", "Bremerhaven",
+    "Leipzig", "Dresden", "Chemnitz",
+    "Magdeburg", "Halle",
+    "Erfurt", "Jena", "Weimar",
+    "Rostock", "Schwerin",
+    "Kiel", "Lübeck", "Flensburg",
+    "Mainz", "Ludwigshafen", "Koblenz", "Trier",
+    "Saarbrücken",
+}
+
+COMPOUND_CITY_EXCLUSIONS = {
+    "Baden-Baden", "Castrop-Rauxel", "Halle-Neustadt", "Frankfurt-Oder",
+}
+
+
+def normalize_city(city: str | None, bundesland: str | None) -> str | None:
+    """Normalize city name to canonical form (mirrors SQL normalize_city_name)."""
+    if not city or not city.strip():
+        return None
+
+    # Unicode dash normalization (U+2011 non-breaking hyphen → regular hyphen)
+    c = city.strip().replace("\u2011", "-")
+
+    # Kreis-as-city exclusion
+    if _re.search(r"(?:land)?kreis", c, _re.IGNORECASE):
+        return None
+
+    # Berlin districts → "Berlin"
+    if bundesland == "Berlin":
+        if c in BERLIN_DISTRICTS:
+            return "Berlin"
+        if c.startswith("Berlin-"):
+            return "Berlin"
+        return c or "Berlin"
+
+    # Frankfurt normalization
+    if c == "Frankfurt" and (bundesland == "Hessen" or not bundesland):
+        return "Frankfurt am Main"
+
+    # City-District suffix stripping
+    dash_idx = c.find("-")
+    if dash_idx > 0:
+        base = c[:dash_idx]
+        if base in DISTRICT_SUFFIX_CITIES and c not in COMPOUND_CITY_EXCLUSIONS:
+            if base == "Frankfurt" and bundesland == "Brandenburg":
+                return c
+            return base
+
+    return c
 
 
 def make_id(url: str, published_at: str, location_text: str = "", pks_code: str = "", pipeline_run: str = "default") -> str:
@@ -172,7 +258,7 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
 
     # Extract weapon_type from details, validate against known values
     weapon_type = details.get("weapon_type")
-    valid_weapons = {"knife", "gun", "blunt", "explosive", "vehicle", "none", "unknown"}
+    valid_weapons = {"knife", "gun", "blunt", "axe", "explosive", "vehicle", "pepper_spray", "other", "none", "unknown"}
     if weapon_type not in valid_weapons:
         weapon_type = None
 
@@ -240,7 +326,7 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
 
     # Motive, validate against known values
     motive = details.get("motive")
-    valid_motives = {"domestic", "robbery", "hate", "drugs", "road_rage", "dispute", "unknown"}
+    valid_motives = {"domestic", "robbery", "hate", "drugs", "road_rage", "dispute", "sexual", "unknown"}
     if motive not in valid_motives:
         motive = None
 
@@ -349,7 +435,12 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
         "group_role": group_role,
         "pipeline_run": pipeline_run,
         "classification": article.get("classification"),
-        "city": loc.get("city") if isinstance(loc.get("city"), str) and loc.get("city", "").strip() else None,
+        "city": normalize_city(
+            loc.get("city") if isinstance(loc.get("city"), str) and loc.get("city", "").strip() else None,
+            (article.get("bundesland") or loc.get("bundesland"))
+            if isinstance(article.get("bundesland") or loc.get("bundesland"), str)
+            else None,
+        ),
         "bundesland": (
             article.get("bundesland") or loc.get("bundesland")
             if isinstance(article.get("bundesland") or loc.get("bundesland"), str)
