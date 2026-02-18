@@ -11,12 +11,12 @@ const CATEGORY_BADGE: Record<string, { label: string; color: string }> = {
 function getRelativeTime(dateStr: string, now: number): string {
   const diff = now - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'gerade eben';
-  if (mins < 60) return `vor ${mins} Min`;
+  if (mins < 1) return 'Gerade eben veröffentlicht';
+  if (mins < 60) return `Vor ${mins} Min veröffentlicht`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `vor ${hours} Std`;
+  if (hours < 24) return `Vor ${hours} Std veröffentlicht`;
   const days = Math.floor(hours / 24);
-  return `vor ${days} Tag${days > 1 ? 'en' : ''}`;
+  return `Vor ${days} Tag${days > 1 ? 'en' : ''} veröffentlicht`;
 }
 
 function getPrimaryCategory(categories: CrimeCategory[]): { label: string; color: string } | null {

@@ -528,9 +528,9 @@ class AsyncSachsenPolizeiScraper:
             teasers = data.get("teaser", [])
             disabled = data.get("disable", False)
 
-            if not teasers or disabled:
+            if not teasers:
                 if self.verbose:
-                    print(f"  Page {page}: no teasers (disable={disabled}), stopping")
+                    print(f"  Page {page}: no teasers, stopping")
                 self.stop_reason = "api_disable"
                 break
 
@@ -575,6 +575,11 @@ class AsyncSachsenPolizeiScraper:
                     break
             else:
                 consecutive_empty = 0
+
+            # disable=True means no more pages (last page of results)
+            if disabled:
+                self.stop_reason = "api_disable"
+                break
 
             page += 1
             await asyncio.sleep(DELAY_BETWEEN_BATCHES)

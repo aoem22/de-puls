@@ -61,12 +61,12 @@ function severityBg(severity: string | null): string {
 function formatRelativeTime(isoDate: string): string {
   const diffMs = Date.now() - Date.parse(isoDate);
   const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return 'gerade eben';
-  if (minutes < 60) return `vor ${minutes} Min`;
+  if (minutes < 1) return 'Gerade eben veröffentlicht';
+  if (minutes < 60) return `Vor ${minutes} Min veröffentlicht`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `vor ${hours} Std`;
+  if (hours < 24) return `Vor ${hours} Std veröffentlicht`;
   const days = Math.floor(hours / 24);
-  return `vor ${days} Tag${days === 1 ? '' : 'en'}`;
+  return `Vor ${days} Tag${days === 1 ? '' : 'en'} veröffentlicht`;
 }
 
 function formatDate(isoDate: string | null): string {
@@ -128,6 +128,8 @@ interface DashboardLiveFeedSectionProps {
   liveFeed: DashboardLiveFeedItem[];
   liveFeedTotal: number;
   liveFeedPageSize: number;
+  locationFilterLabel: string | null;
+  onClearLocationFilter: () => void;
 }
 
 export function DashboardLiveFeedSection({
@@ -138,6 +140,8 @@ export function DashboardLiveFeedSection({
   liveFeed,
   liveFeedTotal,
   liveFeedPageSize,
+  locationFilterLabel,
+  onClearLocationFilter,
 }: DashboardLiveFeedSectionProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const visibleExpandedId = liveFeed.some((row) => row.id === expandedId) ? expandedId : null;
@@ -151,9 +155,25 @@ export function DashboardLiveFeedSection({
       }}
     >
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
-          Pressemeldungen ({periodLabel})
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
+            Pressemeldungen ({periodLabel})
+          </h2>
+          {locationFilterLabel && (
+            <button
+              type="button"
+              onClick={onClearLocationFilter}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold transition-colors hover:opacity-80"
+              style={{
+                background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                color: 'var(--accent)',
+              }}
+            >
+              {locationFilterLabel}
+              <span className="ml-0.5 text-[9px]">✕</span>
+            </button>
+          )}
+        </div>
         {!showLoading && liveFeed.length > 0 && (
           <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
             {((feedPage - 1) * liveFeedPageSize + 1).toLocaleString('de-DE')}–{((feedPage - 1) * liveFeedPageSize + liveFeed.length).toLocaleString('de-DE')} von {liveFeedTotal.toLocaleString('de-DE')}
