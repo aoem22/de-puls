@@ -1,4 +1,4 @@
-# Python dependencies for scraping scripts
+# Python dependencies for scraping + pipeline
 requests>=2.28.0
 beautifulsoup4>=4.11.0
 geopy>=2.3.0
@@ -7,3 +7,6 @@ python-dotenv>=1.0.0  # Load .env files
 certifi>=2023.0.0  # SSL certificates for macOS
 python-dateutil>=2.8.0  # Date manipulation for pipeline chunks
 aiohttp>=3.9.0  # Async HTTP for fast scraping
+supabase>=2.0.0  # Supabase client for DB push
+googlemaps>=4.10.0  # Geocoding API
+lxml>=4.9.0  # Fast HTML parser for BeautifulSoup
