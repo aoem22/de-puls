@@ -12,8 +12,10 @@ import {
 import {
   getCityRanking,
   getKreisRanking,
+  getPlzRanking,
   getGeocodedCityPoints,
   getGeocodedKreisPoints,
+  getGeocodedPlzPoints,
   getLiveFeed,
   getContextStats,
   getWeaponCounts,
@@ -252,6 +254,7 @@ export async function GET(request: NextRequest) {
     const pipelineRunParam = request.nextUrl.searchParams.get('pipeline_run');
     const cityParam = request.nextUrl.searchParams.get('city');
     const kreisParam = request.nextUrl.searchParams.get('kreis');
+    const plzParam = request.nextUrl.searchParams.get('plz');
     const bundeslandParam = request.nextUrl.searchParams.get('bundesland');
 
     let category: CrimeCategory | null = null;
@@ -269,6 +272,7 @@ export async function GET(request: NextRequest) {
     const pipelineRun = rawPipelineRun === 'all' ? null : rawPipelineRun;
     const cityFilter = cityParam || null;
     const kreisFilter = kreisParam || null;
+    const plzFilter = plzParam || null;
     const bundeslandFilter = bundeslandParam || null;
 
     // ── Check cache ──
@@ -297,7 +301,7 @@ export async function GET(request: NextRequest) {
     const liveFeedOffset = (page - 1) * LIVE_FEED_PAGE_SIZE;
 
     // ── Batch 1: Snapshot counts (1 RPC) + rankings + stats + live feed (all parallel) ──
-    const [snapshot, cityRanking, kreisRanking, contextStats, liveFeedResult, weaponCounts, drugCounts, bundeslandCounts] = await Promise.all([
+    const [snapshot, cityRanking, kreisRanking, plzRanking, contextStats, liveFeedResult, weaponCounts, drugCounts, bundeslandCounts] = await Promise.all([
       getSnapshotCounts({
         startIso: window.startIso,
         endIso: window.endIso,
@@ -313,8 +317,9 @@ export async function GET(request: NextRequest) {
       }),
       getCityRanking(window.startIso, window.endIso, window.previousStartIso, window.previousEndIso, category, weaponFilter, drugFilter, pipelineRun, bundeslandFilter),
       getKreisRanking(window.startIso, window.endIso, window.previousStartIso, window.previousEndIso, category, weaponFilter, drugFilter, pipelineRun, bundeslandFilter),
+      getPlzRanking(window.startIso, window.endIso, window.previousStartIso, window.previousEndIso, category, weaponFilter, drugFilter, pipelineRun, bundeslandFilter),
       getContextStats(window.startIso, window.endIso, category, weaponFilter, drugFilter, pipelineRun, bundeslandFilter),
-      getLiveFeed(window.startIso, window.endIso, category, LIVE_FEED_PAGE_SIZE, liveFeedOffset, weaponFilter, drugFilter, pipelineRun, cityFilter, kreisFilter, bundeslandFilter),
+      getLiveFeed(window.startIso, window.endIso, category, LIVE_FEED_PAGE_SIZE, liveFeedOffset, weaponFilter, drugFilter, pipelineRun, cityFilter, kreisFilter, bundeslandFilter, plzFilter),
       getWeaponCounts(window.startIso, window.endIso, category, pipelineRun, bundeslandFilter),
       getDrugCounts(window.startIso, window.endIso, category, pipelineRun, bundeslandFilter),
       getBundeslandCounts(window.startIso, window.endIso, category, pipelineRun),
@@ -378,13 +383,33 @@ export async function GET(request: NextRequest) {
     );
     const topKreise = addRankChange(topKreiseBase, (row) => row.kreisAgs, previousKreisRankMap);
 
+    // ── PLZ ranking (from pre-aggregated data) ──
+    const topPlzBase = plzRanking
+      .filter((row) => Number(row.current_count) > 0)
+      .sort((a, b) => Number(b.current_count) - Number(a.current_count))
+      .slice(0, 15)
+      .map((row) => ({
+        plz: row.plz,
+        count: Number(row.current_count),
+        previousCount: Number(row.previous_count),
+      }));
+
+    const previousPlzRankMap = buildPreviousRankMap(
+      plzRanking.map((row) => ({ plz: row.plz, previousCount: Number(row.previous_count) })),
+      (row) => row.plz,
+      (row) => row.previousCount,
+    );
+    const topPlz = addRankChange(topPlzBase, (row) => row.plz, previousPlzRankMap);
+
     // ── Group C: Geocoded points (depends on Group B results) ──
     const topCityNames = new Set(topCities.map((c) => c.city));
     const topKreisAgsSet = new Set(topKreise.map((k) => k.kreisAgs));
+    const topPlzSet = new Set(topPlz.map((p) => p.plz));
 
-    const [topCityPoints, topKreisPoints] = await Promise.all([
+    const [topCityPoints, topKreisPoints, topPlzPoints] = await Promise.all([
       getGeocodedCityPoints(window.startIso, window.endIso, category, topCityNames, weaponFilter, drugFilter, pipelineRun, bundeslandFilter),
       getGeocodedKreisPoints(window.startIso, window.endIso, category, topKreisAgsSet, weaponFilter, drugFilter, pipelineRun, bundeslandFilter),
+      getGeocodedPlzPoints(window.startIso, window.endIso, category, topPlzSet, weaponFilter, drugFilter, pipelineRun, bundeslandFilter),
     ]);
 
     // ── Anomalies (from pre-aggregated city data) ──
@@ -437,6 +462,8 @@ export async function GET(request: NextRequest) {
       topCityPoints,
       topKreise,
       topKreisPoints,
+      topPlz,
+      topPlzPoints,
       anomalies,
       contextStats,
       liveFeed,
@@ -445,6 +472,7 @@ export async function GET(request: NextRequest) {
       liveFeedPageSize: LIVE_FEED_PAGE_SIZE,
       liveFeedCity: cityFilter,
       liveFeedKreis: kreisFilter,
+      liveFeedPlz: plzFilter,
     };
 
     // ── Store in cache ──

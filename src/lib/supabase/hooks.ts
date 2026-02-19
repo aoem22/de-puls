@@ -253,6 +253,7 @@ export function useSecurityOverview(
   city: string | null = null,
   kreis: string | null = null,
   bundesland: string | null = null,
+  plz: string | null = null,
 ) {
   const params = new URLSearchParams();
   if (category) params.set('category', category);
@@ -263,6 +264,7 @@ export function useSecurityOverview(
   if (city) params.set('city', city);
   if (kreis) params.set('kreis', kreis);
   if (bundesland) params.set('bundesland', bundesland);
+  if (plz) params.set('plz', plz);
   const key = `/api/dashboard/overview${params.toString() ? `?${params}` : ''}`;
 
   return useSWR<SecurityOverviewResponse, Error>(

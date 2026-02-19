@@ -370,10 +370,12 @@ class HereGeocoderClient:
                     continue
                 result_type = item.get("resultType", "")
                 precision = extract_precision({"resultType": result_type})
+                plz = item.get("address", {}).get("postalCode")
                 result = {
                     "lat": lat,
                     "lon": lng,
                     "precision": precision,
+                    "plz": plz,
                 }
                 self.cache[query] = result
                 return result
@@ -502,10 +504,13 @@ def main() -> int:
                     value = result.get("precision")
                     candidate_precision = str(value) if value else None
 
+                plz = result.get("plz") if isinstance(result, dict) else None
                 for location in locations:
                     location["lat"] = lat
                     location["lon"] = lon
                     location["precision"] = choose_precision(location, candidate_precision)
+                    if plz:
+                        location["plz"] = plz
                 geocoded_records += len(locations)
 
             if processed_addresses % 25 == 0 or processed_addresses == len(unique_addresses):

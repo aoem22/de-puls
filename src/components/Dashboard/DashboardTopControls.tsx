@@ -69,23 +69,25 @@ export function DashboardTopControls({
   isDark,
   onToggleTheme,
 }: DashboardTopControlsProps) {
+  const chipScrollerClass = '-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide scroll-touch sm:mx-0 sm:flex-wrap sm:overflow-x-visible sm:px-0 sm:pb-0';
+
   return (
     <section
-      className="dashboard-rise rounded-[2rem] border p-5 sm:p-8"
+      className="dashboard-rise rounded-[1.5rem] border p-4 sm:rounded-[2rem] sm:p-8"
       style={{
         borderColor: 'var(--border-subtle)',
         background: 'linear-gradient(145deg, var(--card) 0%, var(--card-elevated) 100%)',
       }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em]" style={{ color: 'var(--text-faint)' }}>
             Sicherheits-Dashboard Deutschland
           </p>
-          <h1 className="mt-2 text-[clamp(2rem,5vw,3.3rem)] font-bold leading-[1.02]" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="mt-2 text-[clamp(1.75rem,8vw,3.3rem)] font-bold leading-[1.04]" style={{ color: 'var(--text-primary)' }}>
             Sicherheitslage im Überblick
           </h1>
-          <p className="mt-3 max-w-2xl text-sm sm:text-base" style={{ color: 'var(--text-secondary)' }}>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed sm:text-base" style={{ color: 'var(--text-secondary)' }}>
             Über{' '}
             <span className="font-semibold tabular-nums" style={{ color: 'var(--accent)' }}>
               {totalRecords2026 != null
@@ -98,7 +100,7 @@ export function DashboardTopControls({
         </div>
         <button
           onClick={onToggleTheme}
-          className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+          className="inline-flex items-center gap-2 self-start rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
           style={{
             borderColor: 'var(--border-subtle)',
             background: 'var(--card)',
@@ -127,7 +129,7 @@ export function DashboardTopControls({
         </button>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide scroll-touch sm:mx-0 sm:mt-5 sm:flex-wrap sm:overflow-x-visible sm:px-0 sm:pb-0">
         {DASHBOARD_TIMEFRAME_OPTIONS.map((option) => {
           const active = timeframe === option.key;
           const isLive = option.key === 'today';
@@ -135,7 +137,7 @@ export function DashboardTopControls({
             <button
               key={option.key}
               onClick={() => onTimeframeChange(option.key)}
-              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
               style={{
                 borderColor: active ? (isLive ? '#ef4444' : 'var(--accent)') : 'var(--border-subtle)',
                 background: active ? (isLive ? 'color-mix(in srgb, #ef4444 15%, transparent)' : 'color-mix(in srgb, var(--accent) 15%, transparent)') : 'var(--card)',
@@ -158,10 +160,10 @@ export function DashboardTopControls({
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
           Delikte
         </p>
-        <div className="-mx-5 px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0 flex gap-1.5 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-hide">
+        <div className={chipScrollerClass}>
           <button
             onClick={() => onFocusCategoryChange(null)}
-            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
             style={{
               borderColor: focusCategory === null ? 'var(--accent)' : 'var(--border-subtle)',
               background: focusCategory === null ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--card)',
@@ -183,7 +185,7 @@ export function DashboardTopControls({
               <button
                 key={item.key}
                 onClick={() => onFocusCategoryChange(item.key)}
-                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                 style={{
                   borderColor: active ? catColor : 'var(--border-subtle)',
                   background: active ? `color-mix(in srgb, ${catColor} 15%, transparent)` : 'var(--card)',
@@ -205,42 +207,28 @@ export function DashboardTopControls({
         </div>
       </div>
 
-      {weaponChips.length > 0 && (
+      {focusCategory === 'drugs' && drugChips.length > 0 && (
         <div className="mt-3">
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
-            Tatmittel
+            Drogenart
           </p>
-          <div className="-mx-5 px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0 flex gap-1.5 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-hide">
-            {weaponChips.map((item) => {
-              const active = weaponFilter === item.key;
+          <div className={chipScrollerClass}>
+            {drugChips.map((item) => {
+              const active = drugFilter === item.key;
               return (
                 <button
                   key={item.key}
-                  onClick={() => onWeaponFilterChange(active ? null : item.key)}
-                  className="inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-all duration-200 ease-out"
+                  onClick={() => onDrugFilterChange(active ? null : item.key)}
+                  className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                   style={{
-                    borderColor: active ? '#ef4444' : 'var(--border-subtle)',
-                    background: active ? 'rgba(239,68,68,0.12)' : 'var(--card)',
-                    color: active ? '#ef4444' : 'var(--text-secondary)',
+                    borderColor: active ? '#22c55e' : 'var(--border-subtle)',
+                    background: active ? 'rgba(34,197,94,0.12)' : 'var(--card)',
+                    color: active ? '#22c55e' : 'var(--text-secondary)',
                   }}
                 >
-                  {/* Icon: visible when inactive, collapses when active */}
-                  <span
-                    className={`inline-flex items-center justify-center transition-all duration-200 ease-out ${
-                      active ? 'max-w-0 overflow-hidden opacity-0' : 'max-w-[24px] opacity-100'
-                    }`}
-                  >
-                    <WeaponIcon type={item.key} className="text-[18px]" />
-                  </span>
-                  {/* Label + count: hidden when inactive, expands when active */}
-                  <span
-                    className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out ${
-                      active ? 'max-w-[10rem] opacity-100' : 'max-w-0 opacity-0'
-                    }`}
-                  >
-                    {item.label}
-                    <span className="tabular-nums opacity-60 ml-1">{item.count.toLocaleString('de-DE')}</span>
-                  </span>
+                  <span className="text-sm leading-none">{item.icon}</span>
+                  {item.label}
+                  <span className="tabular-nums opacity-60">{item.count.toLocaleString('de-DE')}</span>
                 </button>
               );
             })}
@@ -253,14 +241,14 @@ export function DashboardTopControls({
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
             Bundesland
           </p>
-          <div className="-mx-5 px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0 flex gap-1.5 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-hide">
+          <div className={chipScrollerClass}>
             {bundeslandChips.map((item) => {
               const active = bundeslandFilter === item.key;
               return (
                 <button
                   key={item.key}
                   onClick={() => onBundeslandFilterChange(active ? null : item.key)}
-                  className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                   style={{
                     borderColor: active ? '#3b82f6' : 'var(--border-subtle)',
                     background: active ? 'rgba(59,130,246,0.12)' : 'var(--card)',
@@ -276,26 +264,26 @@ export function DashboardTopControls({
         </div>
       )}
 
-      {focusCategory === 'drugs' && drugChips.length > 0 && (
+      {weaponChips.length > 0 && (
         <div className="mt-3">
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
-            Drogenart
+            Tatmittel
           </p>
-          <div className="-mx-5 px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0 flex gap-1.5 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-hide">
-            {drugChips.map((item) => {
-              const active = drugFilter === item.key;
+          <div className={chipScrollerClass}>
+            {weaponChips.map((item) => {
+              const active = weaponFilter === item.key;
               return (
                 <button
                   key={item.key}
-                  onClick={() => onDrugFilterChange(active ? null : item.key)}
-                  className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  onClick={() => onWeaponFilterChange(active ? null : item.key)}
+                  className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                   style={{
-                    borderColor: active ? '#22c55e' : 'var(--border-subtle)',
-                    background: active ? 'rgba(34,197,94,0.12)' : 'var(--card)',
-                    color: active ? '#22c55e' : 'var(--text-secondary)',
+                    borderColor: active ? '#ef4444' : 'var(--border-subtle)',
+                    background: active ? 'rgba(239,68,68,0.12)' : 'var(--card)',
+                    color: active ? '#ef4444' : 'var(--text-secondary)',
                   }}
                 >
-                  <span className="text-sm leading-none">{item.icon}</span>
+                  <WeaponIcon type={item.key} className="text-[17px]" />
                   {item.label}
                   <span className="tabular-nums opacity-60">{item.count.toLocaleString('de-DE')}</span>
                 </button>

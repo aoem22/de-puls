@@ -598,6 +598,7 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
         "source_agency": article.get("source"),
         "location_text": location_text,
         "district": loc.get("district"),
+        "plz": loc.get("plz"),
         "latitude": lat,
         "longitude": lon,
         "precision": map_precision(article),

@@ -39,7 +39,7 @@ function applyTimeFilter(
   startIso: string,
   endIso: string,
 ) {
-  return query.gte('published_at', startIso).lt('published_at', endIso);
+  return query.gte('sort_date', startIso).lt('sort_date', endIso);
 }
 
 function applyCategoryFilter(
@@ -318,11 +318,11 @@ async function getCityRankingFallback(
   pipelineRun: string | null,
   bundesland: string | null = null,
 ): Promise<CityRankingRow[]> {
-  const rows = await fetchAllRows<{ city: string; bundesland: string | null; published_at: string; drug_type: string | null }>(
+  const rows = await fetchAllRows<{ city: string; bundesland: string | null; sort_date: string | null; drug_type: string | null }>(
     (from, to) => {
       let q = supabase
         .from('crime_records')
-        .select('city,bundesland,published_at,drug_type')
+        .select('city,bundesland,sort_date,drug_type')
         .not('city', 'is', null);
       q = applyBaseFilters(q, { startIso: previousStartIso, endIso: currentEndIso, category, weaponType, pipelineRun, bundesland });
       return q.range(from, to);
@@ -337,7 +337,8 @@ async function getCityRankingFallback(
 
   const buckets: Record<string, { current: number; previous: number }> = {};
   for (const row of filtered) {
-    const ts = Date.parse(row.published_at);
+    if (!row.sort_date) continue;
+    const ts = Date.parse(row.sort_date);
     if (Number.isNaN(ts)) continue;
     const normalizedCity = normalizeCityName(row.city, row.bundesland);
     if (!normalizedCity) continue;
@@ -409,11 +410,11 @@ async function getKreisRankingFallback(
   pipelineRun: string | null,
   bundesland: string | null = null,
 ): Promise<KreisRankingRow[]> {
-  const rows = await fetchAllRows<{ kreis_ags: string; kreis_name: string; published_at: string; drug_type: string | null }>(
+  const rows = await fetchAllRows<{ kreis_ags: string; kreis_name: string; sort_date: string | null; drug_type: string | null }>(
     (from, to) => {
       let q = supabase
         .from('crime_records')
-        .select('kreis_ags,kreis_name,published_at,drug_type')
+        .select('kreis_ags,kreis_name,sort_date,drug_type')
         .not('kreis_ags', 'is', null);
       q = applyBaseFilters(q, { startIso: previousStartIso, endIso: currentEndIso, category, weaponType, pipelineRun, bundesland });
       return q.range(from, to);
@@ -428,7 +429,8 @@ async function getKreisRankingFallback(
 
   const buckets: Record<string, { name: string; current: number; previous: number }> = {};
   for (const row of filtered) {
-    const ts = Date.parse(row.published_at);
+    if (!row.sort_date) continue;
+    const ts = Date.parse(row.sort_date);
     if (Number.isNaN(ts)) continue;
     if (!buckets[row.kreis_ags]) {
       buckets[row.kreis_ags] = { name: row.kreis_name, current: 0, previous: 0 };
@@ -534,6 +536,104 @@ export async function getGeocodedKreisPoints(
   return points;
 }
 
+// ────────────────────────── PLZ ranking (JS fallback only) ──────────────────────────
+
+export interface PlzRankingRow {
+  plz: string;
+  current_count: number;
+  previous_count: number;
+}
+
+export async function getPlzRanking(
+  currentStartIso: string,
+  currentEndIso: string,
+  previousStartIso: string,
+  previousEndIso: string,
+  category: CrimeCategory | null,
+  weaponType: string | null = null,
+  drugType: string | null = null,
+  pipelineRun: string | null = null,
+  bundesland: string | null = null,
+): Promise<PlzRankingRow[]> {
+  const rows = await fetchAllRows<{ plz: string; sort_date: string | null; drug_type: string | null }>(
+    (from, to) => {
+      let q = supabase
+        .from('crime_records')
+        .select('plz,sort_date,drug_type')
+        .not('plz', 'is', null);
+      q = applyBaseFilters(q, { startIso: previousStartIso, endIso: currentEndIso, category, weaponType, pipelineRun, bundesland });
+      return q.range(from, to);
+    },
+  );
+  const filtered = filterByDrugType(rows, drugType);
+
+  const currentStartMs = Date.parse(currentStartIso);
+  const currentEndMs = Date.parse(currentEndIso);
+  const previousStartMs = Date.parse(previousStartIso);
+  const previousEndMs = Date.parse(previousEndIso);
+
+  const buckets: Record<string, { current: number; previous: number }> = {};
+  for (const row of filtered) {
+    if (!row.sort_date) continue;
+    const ts = Date.parse(row.sort_date);
+    if (Number.isNaN(ts)) continue;
+    if (!buckets[row.plz]) buckets[row.plz] = { current: 0, previous: 0 };
+    if (ts >= currentStartMs && ts < currentEndMs) buckets[row.plz].current += 1;
+    else if (ts >= previousStartMs && ts < previousEndMs) buckets[row.plz].previous += 1;
+  }
+
+  return Object.entries(buckets)
+    .map(([plz, counts]) => ({
+      plz,
+      current_count: counts.current,
+      previous_count: counts.previous,
+    }))
+    .filter((r) => r.current_count > 0 || r.previous_count > 0);
+}
+
+export async function getGeocodedPlzPoints(
+  startIso: string,
+  endIso: string,
+  category: CrimeCategory | null,
+  plzSet: Set<string>,
+  weaponType: string | null = null,
+  drugType: string | null = null,
+  pipelineRun: string | null = null,
+  bundesland: string | null = null,
+): Promise<Array<{ plz: string; lat: number; lon: number }>> {
+  if (plzSet.size === 0) return [];
+
+  const plzArray = Array.from(plzSet);
+  const rows = await fetchAllRows<{
+    plz: string;
+    latitude: number;
+    longitude: number;
+    drug_type: string | null;
+  }>((from, to) => {
+    let q = supabase
+      .from('crime_records')
+      .select('plz,latitude,longitude,drug_type')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .not('plz', 'is', null)
+      .in('plz', plzArray);
+    q = applyBaseFilters(q, { startIso, endIso, category, weaponType, pipelineRun, bundesland });
+    return q.range(from, to);
+  });
+
+  const filtered = filterByDrugType(rows, drugType);
+
+  const seen = new Set<string>();
+  const points: Array<{ plz: string; lat: number; lon: number }> = [];
+  for (const r of filtered) {
+    const key = `${r.plz}:${r.latitude.toFixed(2)}:${r.longitude.toFixed(2)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    points.push({ plz: r.plz, lat: r.latitude, lon: r.longitude });
+  }
+  return points;
+}
+
 // ────────────────────────── Live Feed ──────────────────────────
 
 export interface LiveFeedItem {
@@ -568,6 +668,8 @@ export interface LiveFeedItem {
   source_url: string;
   sort_date: string | null;
   is_cold_case: boolean | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 const LIVE_FEED_SELECT = [
@@ -577,7 +679,7 @@ const LIVE_FEED_SELECT = [
   'victim_age', 'suspect_age', 'victim_gender', 'suspect_gender',
   'victim_herkunft', 'suspect_herkunft', 'damage_amount_eur',
   'incident_date', 'incident_time', 'pks_category', 'source_url', 'sort_date',
-  'is_cold_case',
+  'is_cold_case', 'latitude', 'longitude',
 ].join(',');
 
 export async function getLiveFeed(
@@ -592,7 +694,20 @@ export async function getLiveFeed(
   city: string | null = null,
   kreisAgs: string | null = null,
   bundesland: string | null = null,
+  plz: string | null = null,
 ): Promise<{ items: LiveFeedItem[]; total: number }> {
+  // ── Feed-specific filters ──
+  // Base filters include sort_date (Tatzeit) time window globally.
+  // Feed adds cold case exclusion and location filters.
+  const applyFeedFilters = (q: QueryBuilder) => {
+    let fq = applyBaseFilters(q, { startIso, endIso, category, weaponType, pipelineRun, bundesland });
+    fq = fq.or('is_cold_case.is.null,is_cold_case.eq.false');
+    if (city) fq = fq.eq('city', city);
+    if (kreisAgs) fq = fq.eq('kreis_ags', kreisAgs);
+    if (plz) fq = fq.eq('plz', plz);
+    return fq;
+  };
+
   // When drug filter is active, we need to fetch all rows, filter, then paginate
   if (drugType) {
     const allRows = await fetchAllRows<LiveFeedItem & { drug_type: string | null }>(
@@ -600,10 +715,8 @@ export async function getLiveFeed(
         let q = supabase
           .from('crime_records')
           .select(LIVE_FEED_SELECT)
-          .order('sort_date', { ascending: false });
-        q = applyBaseFilters(q, { startIso, endIso, category, weaponType, pipelineRun, bundesland });
-        if (city) q = q.eq('city', city);
-        if (kreisAgs) q = q.eq('kreis_ags', kreisAgs);
+          .order('sort_date', { ascending: true });
+        q = applyFeedFilters(q);
         return q.range(from, to);
       },
     );
@@ -618,21 +731,17 @@ export async function getLiveFeed(
   let countQ = supabase
     .from('crime_records')
     .select('*', { count: 'exact', head: true });
-  countQ = applyBaseFilters(countQ, { startIso, endIso, category, weaponType, pipelineRun, bundesland });
-  if (city) countQ = countQ.eq('city', city);
-  if (kreisAgs) countQ = countQ.eq('kreis_ags', kreisAgs);
+  countQ = applyFeedFilters(countQ);
   const { count, error: countErr } = await countQ;
   if (countErr) throw new Error(`getLiveFeed count error: ${countErr.message}`);
 
-  // Data query
+  // Data query — sorted by Tatzeit ascending (earliest first)
   let dataQ = supabase
     .from('crime_records')
     .select(LIVE_FEED_SELECT)
-    .order('sort_date', { ascending: false })
+    .order('sort_date', { ascending: true })
     .range(offset, offset + limit - 1);
-  dataQ = applyBaseFilters(dataQ, { startIso, endIso, category, weaponType, pipelineRun, bundesland });
-  if (city) dataQ = dataQ.eq('city', city);
-  if (kreisAgs) dataQ = dataQ.eq('kreis_ags', kreisAgs);
+  dataQ = applyFeedFilters(dataQ);
   const { data, error } = await dataQ;
   if (error) throw new Error(`getLiveFeed data error: ${error.message}`);
 
@@ -1156,6 +1265,7 @@ async function getSnapshotCountsWithDrugFilter(opts: SnapshotCountsOpts): Promis
 
   const [rows, totalRecords] = await Promise.all([
     fetchAllRows<{
+      sort_date: string | null;
       published_at: string;
       categories: CrimeCategory[];
       latitude: number | null;
@@ -1163,7 +1273,7 @@ async function getSnapshotCountsWithDrugFilter(opts: SnapshotCountsOpts): Promis
     }>((from, to) => {
       let q = supabase
         .from('crime_records')
-        .select('published_at,categories,latitude,drug_type');
+        .select('sort_date,published_at,categories,latitude,drug_type');
       q = applyBaseFilters(q, {
         startIso: minStart,
         endIso: maxEnd,
@@ -1188,10 +1298,11 @@ async function getSnapshotCountsWithDrugFilter(opts: SnapshotCountsOpts): Promis
   const catCounts: Record<string, number> = {};
 
   for (const row of filtered) {
-    const pa = row.published_at;
-    const inCurrent = pa >= opts.startIso && pa < opts.endIso;
-    const inPrevious = pa >= opts.prevStartIso && pa < opts.prevEndIso;
-    const inHour = pa >= opts.hourStartIso && pa < opts.hourEndIso;
+    const sd = row.sort_date ?? row.published_at;
+    const inCurrent = sd >= opts.startIso && sd < opts.endIso;
+    const inPrevious = sd >= opts.prevStartIso && sd < opts.prevEndIso;
+    // new_last_hour uses published_at (publication time) — sort_date is date-only
+    const inHour = row.published_at >= opts.hourStartIso && row.published_at < opts.hourEndIso;
     const isSevere = row.categories.some((c) => SEVERE_CATS.has(c));
 
     if (inCurrent) {

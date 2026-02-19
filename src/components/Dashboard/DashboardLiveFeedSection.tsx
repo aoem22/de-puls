@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { DashboardLiveFeedItem } from '@/lib/dashboard/types';
 
@@ -85,10 +85,6 @@ function formatEur(amount: number): string {
   return `${amount.toLocaleString('de-DE')} €`;
 }
 
-function hasKnownWeaponType(weaponType: string | null): weaponType is string {
-  return weaponType != null && weaponType !== 'unknown' && weaponType !== 'none';
-}
-
 function getKnownWeaponTypes(types: string[] | undefined | null): string[] {
   if (!types || !Array.isArray(types)) return [];
   return types.filter((w) => w !== 'unknown' && w !== 'none');
@@ -133,6 +129,7 @@ interface DashboardLiveFeedSectionProps {
   liveFeed: DashboardLiveFeedItem[];
   liveFeedTotal: number;
   liveFeedPageSize: number;
+  highlightedId?: string | null;
   locationFilterLabel: string | null;
   onClearLocationFilter: () => void;
 }
@@ -145,22 +142,54 @@ export function DashboardLiveFeedSection({
   liveFeed,
   liveFeedTotal,
   liveFeedPageSize,
+  highlightedId,
   locationFilterLabel,
   onClearLocationFilter,
 }: DashboardLiveFeedSectionProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const visibleExpandedId = liveFeed.some((row) => row.id === expandedId) ? expandedId : null;
 
+  // Track which item is currently highlighted (auto-clears after animation)
+  const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Scroll to + expand + highlight when highlightedId changes
+  useEffect(() => {
+    if (!highlightedId) return;
+
+    // Clear any previous highlight timer
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+
+    // Run in the next frame so state updates don't happen synchronously inside the effect.
+    const frameId = requestAnimationFrame(() => {
+      setExpandedId(highlightedId);
+      setActiveHighlight(highlightedId);
+
+      const el = document.getElementById(`feed-item-${highlightedId}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Auto-clear highlight after 2 seconds
+      highlightTimerRef.current = setTimeout(() => {
+        setActiveHighlight(null);
+      }, 2000);
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
+  }, [highlightedId]);
+
   return (
     <section
-      className="dashboard-rise dashboard-delay-3 rounded-2xl border p-4 sm:p-5"
+      className="dashboard-rise dashboard-delay-3 rounded-2xl border p-3 sm:p-5"
       style={{
         borderColor: 'var(--border-subtle)',
         background: 'linear-gradient(145deg, var(--card) 0%, var(--card-elevated) 100%)',
       }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
             Pressemeldungen ({periodLabel})
           </h2>
@@ -180,7 +209,7 @@ export function DashboardLiveFeedSection({
           )}
         </div>
         {!showLoading && liveFeed.length > 0 && (
-          <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+          <span className="text-[11px] tabular-nums sm:text-xs" style={{ color: 'var(--text-muted)' }}>
             {((feedPage - 1) * liveFeedPageSize + 1).toLocaleString('de-DE')}–{((feedPage - 1) * liveFeedPageSize + liveFeed.length).toLocaleString('de-DE')} von {liveFeedTotal.toLocaleString('de-DE')}
           </span>
         )}
@@ -195,13 +224,25 @@ export function DashboardLiveFeedSection({
             || row.victim_count || row.suspect_count || row.damage_amount_eur
             || row.victim_gender || row.suspect_gender || row.pks_category;
 
+          const isHighlighted = activeHighlight === row.id;
+
           return (
             <div
               key={row.id}
-              className="rounded-xl border transition-colors"
+              id={`feed-item-${row.id}`}
+              className="rounded-xl border transition-all duration-500"
               style={{
-                borderColor: isExpanded ? 'var(--accent)' : 'var(--border-inner)',
-                background: 'var(--card)',
+                borderColor: isHighlighted
+                  ? 'var(--accent)'
+                  : isExpanded
+                    ? 'var(--accent)'
+                    : 'var(--border-inner)',
+                background: isHighlighted
+                  ? 'color-mix(in srgb, var(--accent) 8%, var(--card))'
+                  : 'var(--card)',
+                boxShadow: isHighlighted
+                  ? '0 0 0 1px var(--accent), 0 0 12px color-mix(in srgb, var(--accent) 25%, transparent)'
+                  : 'none',
               }}
             >
               <button
@@ -209,7 +250,7 @@ export function DashboardLiveFeedSection({
                 onClick={() => setExpandedId(isExpanded ? null : row.id)}
                 className="w-full px-3 py-3 text-left"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <span
                     className="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
                     style={{
@@ -230,10 +271,10 @@ export function DashboardLiveFeedSection({
                       Nachtrag
                     </span>
                   )}
-                  <span className="truncate text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <span className="order-3 w-full text-xs sm:order-none sm:w-auto sm:truncate" style={{ color: 'var(--text-muted)' }}>
                     {[row.city, row.bundesland].filter(Boolean).join(', ')}
                   </span>
-                  <span className="ml-auto shrink-0 text-xs tabular-nums" style={{ color: 'var(--text-faint)' }}>
+                  <span className="ml-auto shrink-0 text-[11px] tabular-nums sm:text-xs" style={{ color: 'var(--text-faint)' }}>
                     {formatDate(row.sort_date ?? row.incident_date ?? row.published_at)}
                     {row.incident_date && row.incident_time ? ` ${row.incident_time}` : ''}
                   </span>
@@ -283,9 +324,9 @@ export function DashboardLiveFeedSection({
                   </div>
                 )}
 
-                <div className="mt-1.5 flex items-center gap-3 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
                   {row.location_text && <span>{row.location_text}</span>}
-                  <span className="ml-auto">{formatRelativeTime(row.published_at)}</span>
+                  <span className="sm:ml-auto">{formatRelativeTime(row.published_at)}</span>
                 </div>
               </button>
 
@@ -330,11 +371,14 @@ export function DashboardLiveFeedSection({
       </div>
 
       {!showLoading && liveFeedTotal > liveFeedPageSize && (
-        <div className="mt-4 flex items-center justify-center gap-2">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-center">
+          <span className="px-2 text-center text-xs tabular-nums sm:order-none" style={{ color: 'var(--text-muted)' }}>
+            Seite {feedPage} / {Math.ceil(liveFeedTotal / liveFeedPageSize)}
+          </span>
           <button
             onClick={() => onFeedPageChange((page) => Math.max(1, page - 1))}
             disabled={feedPage <= 1}
-            className="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-30"
+            className="w-full rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-30 sm:w-auto"
             style={{
               borderColor: 'var(--border-subtle)',
               background: 'var(--card)',
@@ -343,13 +387,10 @@ export function DashboardLiveFeedSection({
           >
             ← Zurück
           </button>
-          <span className="px-2 text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
-            Seite {feedPage} / {Math.ceil(liveFeedTotal / liveFeedPageSize)}
-          </span>
           <button
             onClick={() => onFeedPageChange((page) => Math.min(Math.ceil(liveFeedTotal / liveFeedPageSize), page + 1))}
             disabled={feedPage >= Math.ceil(liveFeedTotal / liveFeedPageSize)}
-            className="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-30"
+            className="w-full rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-30 sm:w-auto"
             style={{
               borderColor: 'var(--border-subtle)',
               background: 'var(--card)',

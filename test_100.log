@@ -1,0 +1,42 @@
+Loaded 100 articles from data/pipeline/test_100.json
+
+============================================================
+Multi-round AI enrichment: 100 articles
+============================================================
+
+--- Round 1: Triage ---
+  Triage: 100 cached, 0 to classify
+  Triage results: {'single': 64, 'feuerwehr': 9, 'junk': 14, 'multi': 13}
+  Kept: 77, Removed: 23
+
+--- Round 2: Enrichment ---
+  Singles: enriching 64 articles in 7 batches (max_tokens=8000)...
+    Singles batch 1/7: 7 records, 6 geocoded
+    Singles batch 2/7: 16 records, 15 geocoded
+    Singles batch 3/7: 26 records, 25 geocoded
+    Singles batch 4/7: 38 records, 37 geocoded
+    Singles batch 5/7: 49 records, 48 geocoded
+    Singles batch 6/7: 58 records, 57 geocoded
+    Singles batch 7/7: 62 records, 61 geocoded
+  Multis: enriching 13 articles in 5 batches (max_tokens=12000)...
+    Multis batch 1/5: 7 records, 7 geocoded
+    Multis batch 2/5: 17 records, 17 geocoded
+    Multis batch 3/5: 25 records, 25 geocoded
+    Multis batch 4/5: 30 records, 30 geocoded
+    Multis batch 5/5: 32 records, 32 geocoded
+  Total enriched records: 100 (from 77 articles)
+
+--- Round 3: Clustering ---
+  Clustering: 10 candidate buckets, 25 articles to compare
+  Clustering: 3 groups with 6 articles
+
+============================================================
+Final: 100 records, 93 geocoded, 94 classified
+Removed: 23 articles (triage)
+============================================================
+
+Saved 23 removed articles to data/pipeline/test_100_removed.json
+
+Saved 100 articles to data/pipeline/test_100_enriched.json
+  Geocoded: 93
+  Classified: 94

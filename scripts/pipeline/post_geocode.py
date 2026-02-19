@@ -66,6 +66,7 @@ def geocode(address: str, api_key: str, geocode_cache: dict) -> dict:
                 "lon": lng,
                 "formatted_address": item.get("address", {}).get("label", ""),
                 "precision": precision,
+                "plz": item.get("address", {}).get("postalCode"),
             }
             geocode_cache[address] = cached
             return cached
@@ -216,6 +217,8 @@ def main():
         entry["location"]["lat"] = geo["lat"]
         entry["location"]["lon"] = geo["lon"]
         entry["location"]["precision"] = geo.get("precision", "city")
+        if geo.get("plz"):
+            entry["location"]["plz"] = geo["plz"]
         if bundesland:
             entry["location"]["bundesland"] = bundesland
         updated += 1

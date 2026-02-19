@@ -1,0 +1,671 @@
+================================================================================
+  PROMPT REVIEW — INPUT → OUTPUT → REASONING
+  22 articles | 3 batches | 20,534 input tokens | 11,580 output tokens
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+  #1 [junk_demo]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-HH: 230501-5. Tag der Arbeit in Hamburg - Abschlussmeldung zum heutigen Polizeieinsatz
+  ├─ Source: Polizei Hamburg
+  ├─ Date:   2023-05-01T23:00:00
+  ├─ City:   Hamburg
+  └─ Body:   (436 chars) Hamburg(ots) ↵  ↵ Zeit: 01.05.2023 ↵  ↵ Ort: Hamburger Stadtgebiet ↵  ↵ Am Tag der Arbeit haben in Hamburg wieder tausende Menschen demonstriert. Die Polizei Hamburg war mit einem Großaufgebot an Kräften im Einsatz und zieht eine überwiegend positive Bilanz. ↵  ↵ De...
+
+  OUTPUT
+  ├─ Klassifikation: 🗑️  JUNK
+  └─ Grund: Reine Versammlungsberichte ohne Straftaten
+
+  WARUM?
+  └─ Kein polizeirelevanter Einzelvorfall — gefiltert (kein Eintrag auf der Karte)
+     → Bilanz/Statistik-Artikel → kein Einzelvorfall
+     → Versammlungsbericht → kein Einzelvorfall (wenn keine Straftaten)
+
+────────────────────────────────────────────────────────────────────────────────
+  #2 [junk_housing]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  IM-MV: Hilfe für Wohnungsunternehmen bei unverschuldeten Geld-Engpässen
+  ├─ Source: Innenministerium Mecklenburg-Vorpommern
+  ├─ Date:   2023-05-01T09:00:00
+  ├─ City:   Schwerin
+  └─ Body:   (160 chars) Schwerin(ots) ↵  ↵ Mit den aktuell stark gestiegenen Energiekosten sind erhebliche Belastungen in Bezug auf die Zahlungsfähigkeit von Wohnungsunternehmen verbunden.
+
+  OUTPUT
+  ├─ Klassifikation: 🗑️  JUNK
+  └─ Grund: Hilfsmaßnahme für Wohnungsunternehmen
+
+  WARUM?
+  └─ Kein polizeirelevanter Einzelvorfall — gefiltert (kein Eintrag auf der Karte)
+     → Hilfsprogramm/Fördermaßnahme → administrativ, kein Vorfall
+
+────────────────────────────────────────────────────────────────────────────────
+  #3 [junk_vermisst]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-MA: Mannheim: 85-Jähriger aus Mannheim vermisst - Polizei bittet um Mithilfe
+  ├─ Source: Polizeipräsidium Mannheim
+  ├─ Date:   2023-05-01T15:00:00
+  ├─ City:   Mannheim
+  └─ Body:   (283 chars) Mannheim(ots) ↵  ↵ Seit dem 29.04.2023 wird der 85-jährige Helmut S. aus Mannheim vermisst. Er verließ am Samstag gegen 10:00 Uhr seine Wohnung und kehrte seitdem nicht mehr zurück. Er ist dement und orientierungslos. Hinweise an das Polizeirevier Mannhe...
+
+  OUTPUT
+  ├─ Klassifikation: 🗑️  JUNK
+  └─ Grund: Vermisstensuche
+
+  WARUM?
+  └─ Kein polizeirelevanter Einzelvorfall — gefiltert (kein Eintrag auf der Karte)
+     → Titel/Body enthält 'vermisst' → Vermisstensuche, keine Straftat
+     → Hilfsprogramm/Fördermaßnahme → administrativ, kein Vorfall
+
+────────────────────────────────────────────────────────────────────────────────
+  #4 [junk_kontrolle]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  HZA-HB: Bundesweite Schwerpunktaktion gegen Schwarzarbeit
+  ├─ Source: Hauptzollamt Bremen
+  ├─ Date:   2023-04-27T10:00:00
+  ├─ City:   Bremen
+  └─ Body:   (228 chars) Bremen(ots) ↵  ↵ Am vergangenen Dienstag hat die Finanzkontrolle Schwarzarbeit des Zolls (FKS) im Rahmen einer bundesweiten Schwerpunktaktion Baustellen kontrolliert. Bei 139 befragten Personen wurden 23 Verdachtsfälle festgestellt.
+
+  OUTPUT
+  ├─ Klassifikation: 🗑️  JUNK
+  └─ Grund: Kontrollaktion ohne konkreten Einzelvorfall
+
+  WARUM?
+  └─ Kein polizeirelevanter Einzelvorfall — gefiltert (kein Eintrag auf der Karte)
+     → Kontroll-/Schwerpunktaktion → kein konkreter Einzelvorfall
+     → Zoll-Quelle: oft Kontrollberichte ohne Einzelvorfall
+
+────────────────────────────────────────────────────────────────────────────────
+  #5 [fw_gas]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  FW Bremerhaven: Gasausströmung in einem Mehrfamilienhaus
+  ├─ Source: Feuerwehr Bremerhaven
+  ├─ Date:   2023-05-01T23:43:08
+  ├─ City:   Bremerhaven
+  └─ Body:   (380 chars) Bremerhaven(ots) ↵  ↵ Über die Notrufnummer 112 meldete am Montagabend ein aufmerksamer Hausbewohner Gasgeruch in einer Wohnung in einem Mehrfamilienhaus im Stadtteil Geestemünde. ↵  ↵ Um kurz vor 22 Uhr rückten der Löschzug, ein Spezialfahrzeug mit Messtech...
+
+  OUTPUT
+  ├─ Klassifikation: 🚒  FEUERWEHR
+  └─ Grund: Gasausströmung ohne Straftatverdacht
+
+  WARUM?
+  └─ Feuerwehreinsatz ohne Straftatverdacht — gefiltert
+     → Quelle ist Feuerwehr: 'Feuerwehr Bremerhaven'
+     → Kein Hinweis auf Straftat im Body (keine Kripo, keine Brandstiftung)
+     → Gasaustritt → typischer Feuerwehr-Einsatz ohne Straftatbezug
+
+────────────────────────────────────────────────────────────────────────────────
+  #6 [fw_vegetation]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  FW Bremerhaven: Feuerwehr Bremerhaven löscht Vegetationsbrand im Forst Reinkenheide
+  ├─ Source: Feuerwehr Bremerhaven
+  ├─ Date:   2023-04-22T21:15:17
+  ├─ City:   Bremerhaven
+  └─ Body:   (188 chars) Bremerhaven(ots) ↵  ↵ Die Feuerwehr Bremerhaven wurde am frühen Abend zu einem Flächenbrand im Forst Reinkenheide alarmiert. Auf einer Fläche von circa 250qm hatte sich das Feuer ausgebreitet.
+
+  OUTPUT
+  ├─ Klassifikation: 🚒  FEUERWEHR
+  └─ Grund: Vegetationsbrand ohne Straftatverdacht
+
+  WARUM?
+  └─ Feuerwehreinsatz ohne Straftatverdacht — gefiltert
+     → Quelle ist Feuerwehr: 'Feuerwehr Bremerhaven'
+     → Kein Hinweis auf Straftat im Body (keine Kripo, keine Brandstiftung)
+
+────────────────────────────────────────────────────────────────────────────────
+  #7 [crime_kv]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-NB: Gefährlich Körperverletzung in Neubrandenburg
+  ├─ Source: Polizeipräsidium Neubrandenburg
+  ├─ Date:   2023-05-01T20:58:54
+  ├─ City:   Neubrandenburg
+  └─ Body:   (595 chars) Neubrandenburg(ots) ↵  ↵ Am 30.04.2023 wurde ein 42-jähriger deutscher Staatsangehöriger gegen 23:00 Uhr Opfer eines tätlichen Angriffs im Ponyweg in Neubrandenburg. ↵  ↵ Zuvor waren Geschädigte und auch der bislang unbekannte Angreifer Gast einer öffentlich...
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Gefährliche Körperverletzung in Neubrandenburg — 42-Jähriger mit Platzwunde
+  ├─ Tatort: Ponyweg, (Bistro), Neubrandenburg  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-30 23:00 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 2200: Körperverletzung → Gefährliche Körperverletzung mit Teleskopschlagstock  (Konfidenz: 1.0)
+  ├─ Details: Waffe: Schlagwaffe | Schwere: schwer | Motiv: Streit | Opfer: 1 | Verdächtige: 1
+  ├─ Personen: Opfer: 42J, male, deutsch
+  └─
+
+  WARUM?
+     → Stadt 'Neubrandenburg' aus Body-Anfang 'Neubrandenburg(ots)' extrahiert
+     → Straße 'Ponyweg' direkt im Body erwähnt
+     → Delikt PKS 2200 (Körperverletzung) → 'Gefährliche Körperverletzung mit Teleskopschlagstock'
+     → Ungefähre Uhrzeit '23:00' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Opfer Herkunft 'deutsch' — explizit im Text als Staatsangehörigkeit erwähnt
+     → Waffe 'blunt' — Schlüsselwort 'schlagstock' im Text
+
+────────────────────────────────────────────────────────────────────────────────
+  #8 [crime_hitlergruss]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-HB: Nr.: 0271 --Hitlergruß vor Kindern gezeigt--
+  ├─ Source: Polizei Bremen
+  ├─ Date:   2023-05-01T12:38:24
+  ├─ City:   Bremen
+  └─ Body:   (502 chars) Bremen(ots) ↵  ↵ Am Sonntagabend zeigte ein 39 Jahre alter Mann in Hemelingen gegenüber einer Gruppe Kinder den Hitlergruß und äußerte rassistische Beleidigungen. ↵  ↵ Gegen 18 Uhr spielten fünf Kinder in der Wehrheimer Straße, als sich zunächst ein Junge ge...
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Hitlergruß in Bremen-Hemelingen — Rassistische Beleidigungen vor Kindern
+  ├─ Tatort: Wehrheimer Straße, [Hemelingen], Bremen  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-30 18:00 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 6260: Volksverhetzung/NS-Symbole → Hitlergruß und rassistische Beleidigungen  (Konfidenz: 1.0)
+  ├─ Details: Schwere: leicht | Motiv: Hass | Opfer: 5 | Verdächtige: 1
+  ├─ Personen: Opfer: 11-12J | Tatverdächtige(r): 39J, male
+  └─
+
+  WARUM?
+     → Stadt 'Bremen' aus Body-Anfang 'Bremen(ots)' extrahiert
+     → Straße 'Wehrheimer Straße' direkt im Body erwähnt
+     → Delikt PKS 6260 (Volksverhetzung/NS-Symbole) → 'Hitlergruß und rassistische Beleidigungen'
+     → Ungefähre Uhrzeit '18:00' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+
+────────────────────────────────────────────────────────────────────────────────
+  #9 [crime_waffe]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  BPOLI-OG: Messer sichergestellt
+  ├─ Source: Bundespolizeiinspektion Offenburg
+  ├─ Date:   2023-04-27T10:07:09
+  ├─ City:   Baden-Baden
+  └─ Body:   (366 chars) Baden-Baden(ots) ↵  ↵ Die Beamten der Bundespolizei in Offenburg haben gestern Nachmittag am Bahnhof in Baden-Baden ein verbotenes Einhandmesser sichergestellt. Bei der Kontrolle eines 25-jährigen griechischen Staatsangehörigen wurde das Messer zugriffsb...
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Verstoß gegen Waffengesetz in Baden-Baden — Einhandmesser sichergestellt
+  ├─ Tatort: (Bahnhof), Baden-Baden  (Konfidenz: 0.7)
+  ├─ Tatzeit: 2023-04-26 15:00 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 8900: Waffengesetz → Verbotenes Einhandmesser  (Konfidenz: 1.0)
+  ├─ Details: Waffe: Messer | Schwere: nur Sachschaden | Opfer: 0 | Verdächtige: 1
+  ├─ Personen: Tatverdächtige(r): 25J, griechisch
+  └─
+
+  WARUM?
+     → Stadt 'Baden-Baden' aus Body-Anfang 'Baden-Baden(ots)' extrahiert
+     → Delikt PKS 8900 (Waffengesetz) → 'Verbotenes Einhandmesser'
+     → Ungefähre Uhrzeit '15:00' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Verdächtige(r) Herkunft 'griechisch' — explizit im Text als Staatsangehörigkeit erwähnt
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+     → Waffe 'knife' — Schlüsselwort 'messer' im Text
+
+────────────────────────────────────────────────────────────────────────────────
+  #10 [crime_diebstahl]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-FR: Zell im Wiesental: SB-Automaten an Autowaschanlage aufgebrochen
+  ├─ Source: Polizeipräsidium Freiburg
+  ├─ Date:   2023-04-28T13:12:56
+  ├─ City:   Freiburg
+  └─ Body:   (288 chars) Freiburg(ots) ↵  ↵ Am Donnerstag, 27.04.2023, in dem Zeitraum zwischen 02.40 Uhr bis 03.00 Uhr, hebelte ein Unbekannter in der Schopfheimer Straße einen SB-Staubsaugerautomaten und einen SB-Automaten einer Autowaschanlage auf. Aus den Automaten wurde das...
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Automaten aufgebrochen in Zell im Wiesental — Geld entwendet
+  ├─ Tatort: Schopfheimer Straße, (Autowaschanlage), Zell im Wiesental  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-27 02:40 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 4000: Schwerer Diebstahl → Aufgebrochene Automaten  (Konfidenz: 0.9)
+  ├─ Details: Schwere: nur Sachschaden | Motiv: Raub | Opfer: 0 | Verdächtige: 1
+  └─
+
+  WARUM?
+     → Stadt 'Zell im Wiesental' aus dem Titel extrahiert
+     → Straße 'Schopfheimer Straße' direkt im Body erwähnt
+     → Delikt PKS 4000 (Schwerer Diebstahl) → 'Aufgebrochene Automaten'
+     → Ungefähre Uhrzeit '02:40' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+────────────────────────────────────────────────────────────────────────────────
+  #11 [crime_trunkenheit]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-UL: (GP) Göppingen - Betrunken unterwegs
+  ├─ Source: Polizeipräsidium Ulm
+  ├─ Date:   2023-05-01T09:44:14
+  ├─ City:   Ulm
+  └─ Body:   (470 chars) Ulm(ots) ↵  ↵ So kontrollierte die Göppinger Polizei, zwischen Mitternacht und frühem Morgen, zwei Fahrer, die durch ihre Fahrweise auffielen. Beide waren in Schlangenlinien unterwegs. So musste eine 30-Jährige, die kurz nach Mitternacht auf der B10 von ...
+
+  OUTPUT (Vorfall 1 von 2)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Trunkenheit im Verkehr in Göppingen — 30-Jährige kontrolliert
+  ├─ Tatort: B10, Göppingen  (Konfidenz: 0.7)
+  ├─ Tatzeit: 2023-05-01 00:15 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 7300: Trunkenheit im Verkehr → Fahrstil auffällig  (Konfidenz: 1.0)
+  ├─ Details: Schwere: unklar | Opfer: 0 | Verdächtige: 1
+  ├─ Personen: Tatverdächtige(r): 30J, female
+  └─
+
+  WARUM?
+     → Stadt 'Göppingen' aus dem Titel extrahiert
+     → Straße 'B10' direkt im Body erwähnt
+     → Delikt PKS 7300 (Trunkenheit im Verkehr) → 'Fahrstil auffällig'
+     → Ungefähre Uhrzeit '00:15' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+
+  OUTPUT (Vorfall 2 von 2)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Trunkenheit im Verkehr in Göppingen — 23-Jähriger kontrolliert
+  ├─ Tatort: Boller Straße, Göppingen  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-05-01 01:50 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 7300: Trunkenheit im Verkehr → Fahrstil auffällig  (Konfidenz: 1.0)
+  ├─ Details: Schwere: unklar | Opfer: 0 | Verdächtige: 1
+  ├─ Personen: Tatverdächtige(r): 23J
+  └─
+
+  WARUM?
+     → Stadt 'Göppingen' aus dem Titel extrahiert
+     → Straße 'Boller Straße' direkt im Body erwähnt
+     → Delikt PKS 7300 (Trunkenheit im Verkehr) → 'Fahrstil auffällig'
+     → Ungefähre Uhrzeit '01:50' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+
+────────────────────────────────────────────────────────────────────────────────
+  #12 [crime_kfz_diebstahl]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-KN: (Singen, Lkr. Konstanz) Grauer Hyundai i30 vom Parkplatz einer Autovermietung gestohlen
+  ├─ Source: Polizeipräsidium Konstanz
+  ├─ Date:   2023-04-25T12:00:12
+  ├─ City:   Singen
+  └─ Body:   (324 chars) Singen(ots) ↵  ↵ Bereits vergangenen Woche haben unbekannte Täter ein Auto vom Parkplatz einer Autovermietung in der Marie-Curie-Straße gestohlen. Im Zeitraum zwischen Donnerstag, 20.04.2023 - 18:20 Uhr, und Freitag, 21.04.2023 - 10:00 Uhr, entwendeten d...
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Kfz-Diebstahl in Singen — Hyundai i30 entwendet
+  ├─ Tatort: Marie-Curie-Straße, (Parkplatz Autovermietung), Singen  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-20 18:20 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 4780: Kfz-Diebstahl → Von Parkplatz gestohlen  (Konfidenz: 1.0)
+  ├─ Details: Schwere: nur Sachschaden | Motiv: Raub | Opfer: 0 | Verdächtige: 1
+  └─
+
+  WARUM?
+     → Stadt 'Singen' aus Body-Anfang 'Singen(ots)' extrahiert
+     → Straße 'Marie-Curie-Straße' direkt im Body erwähnt
+     → Delikt PKS 4780 (Kfz-Diebstahl) → 'Von Parkplatz gestohlen'
+     → Ungefähre Uhrzeit '18:20' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+────────────────────────────────────────────────────────────────────────────────
+  #13 [multi_2incidents]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-AA: Rems-Murr-Kreis - Stand: 29.04.2023/13:30 Uhr - 2 Verkehrsunfälle
+  ├─ Source: Polizeipräsidium Aalen
+  ├─ Date:   2023-04-29T13:31:47
+  ├─ City:   Aalen
+  └─ Body:   (701 chars) Aalen(ots) ↵  ↵ Kernen-Rommelshausen - Beim Aussteigen nicht aufgepasst ↵  ↵ Am Freitag gegen 14:35 Uhr wollte ein 58 Jahre alter Renaultfahrer in Kernen-Rommelshausen in der Karlstraße aus seinem Auto aussteigen. Jedoch übersah er beim Öffnen der Türe einen...
+
+  OUTPUT (Vorfall 1 von 2)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Verkehrsunfall in Kernen-Rommelshausen — Radfahrer verletzt
+  ├─ Tatort: Karlstraße, [Rommelshausen], Kernen  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-28 14:35 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 7100: Verkehrsunfall mit Personenschaden → Tür auf Radfahrer  (Konfidenz: 1.0)
+  ├─ Details: Schwere: leicht | Opfer: 1 | Verdächtige: 1
+  ├─ Personen: Tatverdächtige(r): 58J
+  └─
+
+  WARUM?
+     → Stadt 'Kernen' aus dem Body-Kontext extrahiert
+     → Straße 'Karlstraße' direkt im Body erwähnt
+     → Delikt PKS 7100 (Verkehrsunfall mit Personenschaden) → 'Tür auf Radfahrer'
+     → Ungefähre Uhrzeit '14:35' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+
+  OUTPUT (Vorfall 2 von 2)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Verkehrsunfall in Backnang — Beifahrerin verletzt
+  ├─ Tatort: Wiener Straße, Ecke B14, [Maubach], Backnang  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-29 10:19 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 7100: Verkehrsunfall mit Personenschaden → Vorfahrt missachtet  (Konfidenz: 1.0)
+  ├─ Details: Schwere: leicht | Opfer: 1 | Verdächtige: 1
+  ├─ Personen: Opfer: 44J | Tatverdächtige(r): 64J, female
+  └─
+
+  WARUM?
+     → Stadt 'Backnang' aus dem Body-Kontext extrahiert
+     → Straße 'Wiener Straße' direkt im Body erwähnt
+     → Delikt PKS 7100 (Verkehrsunfall mit Personenschaden) → 'Vorfahrt missachtet'
+     → Ungefähre Uhrzeit '10:19' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+
+────────────────────────────────────────────────────────────────────────────────
+  #14 [multi_digest]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-AA: Ostalbkreis: Erneut eingeschlagene Scheiben, weiterer Einbruchsversuch und Unfälle
+  ├─ Source: Polizeipräsidium Aalen
+  ├─ Date:   2023-04-24T15:16:05
+  ├─ City:   Aalen
+  └─ Body:   (712 chars) Aalen(ots) ↵  ↵ Aalen: Eingeschlagene Scheiben bei der Agentur für Arbeit ↵  ↵ Erneut schlug ein Unbekannter mehr als 30 Scheiben am Gebäude der Agentur für Arbeit in der Julius-Bausch-Straße ein. Der Sachschaden, der am Sonntag gegen 17 Uhr bekannt wurde, w...
+
+  OUTPUT (Vorfall 1 von 3)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Sachbeschädigung in Aalen — Scheiben bei Agentur für Arbeit eingeschlagen
+  ├─ Tatort: Julius-Bausch-Straße, (Agentur für Arbeit), Aalen  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-23 17:00 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 6750: Sachbeschädigung → Eingeschlagene Scheiben  (Konfidenz: 1.0)
+  ├─ Details: Schwere: nur Sachschaden | Opfer: 0 | Verdächtige: 1
+  └─
+
+  WARUM?
+     → Stadt 'Aalen' aus Body-Anfang 'Aalen(ots)' extrahiert
+     → Straße 'Julius-Bausch-Straße' direkt im Body erwähnt
+     → Delikt PKS 6750 (Sachbeschädigung) → 'Eingeschlagene Scheiben'
+     → Ungefähre Uhrzeit '17:00' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+  OUTPUT (Vorfall 2 von 3)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Einbruchsversuch in Aalen — Schule beschädigt
+  ├─ Tatort: Galgenbergstraße, (Schule), Aalen  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-22 10:00 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 4350: Wohnungseinbruchdiebstahl → Versuch in Schule  (Konfidenz: 0.8)
+  ├─ Details: Schwere: nur Sachschaden | Motiv: Raub | Opfer: 0 | Verdächtige: 1
+  └─
+
+  WARUM?
+     → Stadt 'Aalen' aus Body-Anfang 'Aalen(ots)' extrahiert
+     → Straße 'Galgenbergstraße' direkt im Body erwähnt
+     → Delikt PKS 4350 (Wohnungseinbruchdiebstahl) → 'Versuch in Schule'
+     → Ungefähre Uhrzeit '10:00' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+  OUTPUT (Vorfall 3 von 3)
+  ├─ Klassifikation: 🗑️  JUNK
+  └─ Grund: Verkehrsunfall ohne Personenschaden
+
+  WARUM?
+  └─ Kein polizeirelevanter Einzelvorfall — gefiltert (kein Eintrag auf der Karte)
+     → LLM-Grund: 'Verkehrsunfall ohne Personenschaden'
+
+────────────────────────────────────────────────────────────────────────────────
+  #15 [crime_herkunft_explicit]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-HH: Mehrere Zuführungen nach Einbrüchen in Hamburg-Marmstorf und Hamburg-Langenhorn
+  ├─ Source: Polizei Hamburg
+  ├─ Date:   2023-04-28T16:00:00
+  ├─ City:   Hamburg
+  └─ Body:   (461 chars) Hamburg(ots) ↵  ↵ Tatzeiten: a) 28.04.2023, 15:00 Uhr, b) 28.04.2023, 17:30 Uhr ↵  ↵ a) Freitagnachmittag nahmen Polizisten in Marmstorf drei Rumänen und in Langenhorn einen Polen vorläufig fest. Die Männer sind tatverdächtig, in Einfamilienhäuser eingebroch...
+
+  OUTPUT (Vorfall 1 von 2)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Einbrüche in Hamburg-Marmstorf und Langenhorn — Verdächtige festgenommen
+  ├─ Tatort: (Einfamilienhäuser), [Marmstorf], Hamburg  (Konfidenz: 0.7)
+  ├─ Tatzeit: 2023-04-28 15:00 Uhr  ⏱️ (exact)
+  ├─ Delikt: PKS 4350: Wohnungseinbruchdiebstahl → In Einfamilienhäuser  (Konfidenz: 1.0)
+  ├─ Details: Schwere: nur Sachschaden | Motiv: Raub | Opfer: 0 | Verdächtige: 4
+  ├─ Personen: Tatverdächtige(r):, rumänisch
+  └─
+
+  WARUM?
+     → Stadt 'Hamburg' aus Body-Anfang 'Hamburg(ots)' extrahiert
+     → Delikt PKS 4350 (Wohnungseinbruchdiebstahl) → 'In Einfamilienhäuser'
+     → Exakte Uhrzeit '15:00' mit 'um' im Text
+     → Verdächtige(r) Herkunft 'rumänisch' — explizit im Text als Staatsangehörigkeit erwähnt
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+  OUTPUT (Vorfall 2 von 2)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Einbruchsversuch in Hamburg-Langenhorn — 24-Jähriger festgenommen
+  ├─ Tatort: (Einfamilienhaus Fenster), [Langenhorn], Hamburg  (Konfidenz: 0.7)
+  ├─ Tatzeit: 2023-04-28 17:30 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 4350: Wohnungseinbruchdiebstahl → Versuch am Fenster  (Konfidenz: 0.9)
+  ├─ Details: Schwere: nur Sachschaden | Motiv: Raub | Opfer: 0 | Verdächtige: 1
+  ├─ Personen: Tatverdächtige(r): 24J, polnisch
+  └─
+
+  WARUM?
+     → Stadt 'Hamburg' aus Body-Anfang 'Hamburg(ots)' extrahiert
+     → Delikt PKS 4350 (Wohnungseinbruchdiebstahl) → 'Versuch am Fenster'
+     → Ungefähre Uhrzeit '17:30' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Verdächtige(r) Herkunft 'polnisch' — explizit im Text als Staatsangehörigkeit erwähnt
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+────────────────────────────────────────────────────────────────────────────────
+  #16 [crime_herkunft_false_positive]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-RT: Tödlicher Verkehrsunfall
+  ├─ Source: Polizeipräsidium Reutlingen
+  ├─ Date:   2023-05-01T08:00:00
+  ├─ City:   Reutlingen
+  └─ Body:   (354 chars) Reutlingen(ots) ↵  ↵ Ein 27-jähriger Fahrer eines Pkw Toyota Yaris mit polnischer Zulassung war in Richtung Trochtelfingen unterwegs und kam im Auslauf einer Rechtskurve aus bislang ungeklärter Ursache auf die Gegenfahrbahn. Dort kollidierte er frontal m...
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Tödlicher Verkehrsunfall bei Reutlingen — 27-Jähriger stirbt
+  ├─ Tatort: Trochtelfingen  (Konfidenz: 0.5)
+  ├─ Tatzeit: 2023-05-01 ? Uhr  ? (unknown)
+  ├─ Delikt: PKS 7100: Verkehrsunfall mit Personenschaden → Frontalcrash  (Konfidenz: 1.0)
+  ├─ Details: Waffe: Fahrzeug | Schwere: tödlich | Opfer: 1 | Verdächtige: 1
+  ├─ Personen: Opfer: 27J | Tatverdächtige(r): 27J
+  └─
+
+  WARUM?
+     → Stadt 'Trochtelfingen' aus dem Body-Kontext extrahiert
+     → Delikt PKS 7100 (Verkehrsunfall mit Personenschaden) → 'Frontalcrash'
+     → Keine Zeitangabe im Text gefunden → precision='unknown'
+     → Schwere 'fatal' — Todesfall im Text erwähnt
+
+────────────────────────────────────────────────────────────────────────────────
+  #17 [update_nachtrag]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-NB: Nachtrag: Brand mehrerer Fahrzeuge in Barth
+  ├─ Source: Polizeipräsidium Neubrandenburg
+  ├─ Date:   2023-05-01T10:00:00
+  ├─ City:   Barth
+  └─ Body:   (207 chars) Barth (LK VR)(ots) ↵  ↵ Wie bereits berichtet, brannten in der Nacht mehrere Fahrzeuge. Die Kriminalpolizei hat die Ermittlungen wegen Brandstiftung aufgenommen. Der Sachschaden beläuft sich auf ca. 80.000 Euro.
+
+  OUTPUT (Vorfall 1 von 2)
+  ├─ Klassifikation: 🔄  UPDATE
+  ├─ Update-Typ: nachtrag
+  └─ Grund: Nachtrag zu Brandfall
+
+  WARUM?
+  └─ Nachtrag/Korrektur/Folgemeldung — wird als Update verarbeitet
+
+  OUTPUT (Vorfall 2 von 2)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Brandstiftung an mehreren Fahrzeugen in Barth
+  ├─ Update-Typ: nachtrag
+  ├─ Tatort: Barth  (Konfidenz: 0.5)
+  ├─ Tatzeit: 2023-05-01 01:00 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 6740: Brandstiftung → vorsätzliche Brandstiftung  (Konfidenz: 0.9)
+  ├─ Details: Schwere: nur Sachschaden | Opfer: 0 | Verdächtige: 0
+  └─
+
+  WARUM?
+     → Update erkannt: 'nachtrag' im Text gefunden
+     → Stadt 'Barth' aus dem Titel extrahiert
+     → Delikt PKS 6740 (Brandstiftung) → 'vorsätzliche Brandstiftung'
+     → Ungefähre Uhrzeit '01:00' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+────────────────────────────────────────────────────────────────────────────────
+  #18 [update_korrektur]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-RT: Betrunken, zu schnell und ohne Führerschein - Korrektur zur Pressemeldung
+  ├─ Source: Polizeipräsidium Reutlingen
+  ├─ Date:   2023-04-28T11:00:00
+  ├─ City:   Reutlingen
+  └─ Body:   (355 chars) Reutlingen(ots) ↵  ↵ In der oben genannten Pressemeldung hat sich ein Tippfehler eingeschlichen. Die Unfallörtlichkeit ist auf der B465. ↵ Wir bitten, diese korrigierte Pressemeldung zu verwenden: ↵  ↵ Bad Urach: Betrunken, zu schnell und ohne Führerschein. Am...
+
+  OUTPUT (Vorfall 1 von 2)
+  ├─ Klassifikation: 🔄  UPDATE
+  ├─ Update-Typ: korrektur
+  └─ Grund: Korrektur zu Verkehrsunfall
+
+  WARUM?
+  └─ Nachtrag/Korrektur/Folgemeldung — wird als Update verarbeitet
+
+  OUTPUT (Vorfall 2 von 2)
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Verkehrsunfall durch Trunkenheit und ohne Führerschein in Bad Urach
+  ├─ Update-Typ: nachtrag
+  ├─ Tatort: B465, Bad Urach  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-28 22:00 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 7300: Trunkenheit im Verkehr → Fahren unter Alkoholeinfluss ohne Führerschein  (Konfidenz: 0.95)
+  ├─ Details: Schwere: nur Sachschaden | Opfer: 0 | Verdächtige: 1
+  ├─ Personen: Tatverdächtige(r): 24J, male
+  └─
+
+  WARUM?
+     → Update erkannt: 'korrektur' im Text gefunden
+     → Stadt 'Bad Urach' aus dem Body-Kontext extrahiert
+     → Straße 'B465' direkt im Body erwähnt
+     → Delikt PKS 7300 (Trunkenheit im Verkehr) → 'Fahren unter Alkoholeinfluss ohne Führerschein'
+     → Ungefähre Uhrzeit '22:00' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+────────────────────────────────────────────────────────────────────────────────
+  #19 [update_erledigung]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-HH: 230427-2. Erledigung der Öffentlichkeitsfahndung nach 65-jähriger Frau
+  ├─ Source: Polizei Hamburg
+  ├─ Date:   2023-04-27T18:00:00
+  ├─ City:   Hamburg
+  └─ Body:   (99 chars) Hamburg(ots) ↵  ↵ Die Vermisste ist wohlbehalten aufgefunden worden. Wir bedanken uns für die Mithilfe.
+
+  OUTPUT
+  ├─ Klassifikation: 🗑️  JUNK
+  └─ Grund: Erledigung der Öffentlichkeitsfahndung nach Vermisster
+
+  WARUM?
+  └─ Kein polizeirelevanter Einzelvorfall — gefiltert (kein Eintrag auf der Karte)
+     → Titel/Body enthält 'vermisst' → Vermisstensuche, keine Straftat
+
+────────────────────────────────────────────────────────────────────────────────
+  #20 [edge_empty_body]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  Zivilcourage vereitelt Raub auf Supermarkt
+  ├─ Source: Polizei Berlin
+  ├─ Date:   2025-12-15T10:00:00
+  ├─ City:   
+  └─ Body:   (0 chars) 
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Vereitelter Raub auf Supermarkt in Berlin
+  ├─ Tatort: (Supermarkt), Berlin  (Konfidenz: 0.5)
+  ├─ Tatzeit: 2025-12-15 ? Uhr  ? (unknown)
+  ├─ Delikt: PKS 2100: Raub/räuberische Erpressung → versuchter Raub  (Konfidenz: 0.8)
+  ├─ Details: Schwere: unklar | Motiv: Raub | Opfer: 0 | Verdächtige: 0
+  └─
+
+  WARUM?
+     → Stadt 'Berlin' aus dem Body-Kontext extrahiert
+     → Delikt PKS 2100 (Raub/räuberische Erpressung) → 'versuchter Raub'
+     → Keine Zeitangabe im Text gefunden → precision='unknown'
+
+────────────────────────────────────────────────────────────────────────────────
+  #21 [edge_brandstiftung_feuerwehr]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-KN: (Konstanz) Balkonbrand mit hohem Sachschaden
+  ├─ Source: Polizeipräsidium Konstanz
+  ├─ Date:   2023-04-30T10:20:00
+  ├─ City:   Konstanz
+  └─ Body:   (294 chars) Konstanz(ots) ↵  ↵ Am Samstagnachmittag, gg. 16.00 Uhr, gingen mehrere Notrufe ein, dass es in einem Mehrfamilienhaus in Konstanz, Wallgutstraße, brennen würde. Durch die Feuerwehr wurden 10 Personen evakuiert. Die Brandursache ist noch unklar. Die Krimi...
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Balkonbrand mit unklarer Ursache in Konstanz
+  ├─ Tatort: Wallgutstraße, (Mehrfamilienhaus), Konstanz  (Konfidenz: 0.9)
+  ├─ Tatzeit: 2023-04-29 16:00 Uhr  ~ (approximate)
+  ├─ Delikt: PKS 6740: Brandstiftung → Brand mit unklarer Ursache  (Konfidenz: 0.85)
+  ├─ Details: Schwere: nur Sachschaden | Opfer: 0 | Verdächtige: 0
+  └─
+
+  WARUM?
+     → Stadt 'Konstanz' aus Body-Anfang 'Konstanz(ots)' extrahiert
+     → Straße 'Wallgutstraße' direkt im Body erwähnt
+     → Delikt PKS 6740 (Brandstiftung) → 'Brand mit unklarer Ursache'
+     → Ungefähre Uhrzeit '16:00' — Schlüsselwort 'gegen'/'kurz vor'/'am Abend'/etc.
+     → Schwere 'property_only' — nur Sachschaden, keine Verletzten
+
+────────────────────────────────────────────────────────────────────────────────
+  #22 [edge_demo_with_crime]
+────────────────────────────────────────────────────────────────────────────────
+
+  INPUT
+  ├─ Title:  POL-MA: Heidelberg: Störung einer Veranstaltung und Hausfriedensbruch
+  ├─ Source: Polizeipräsidium Mannheim
+  ├─ Date:   2023-04-27T22:00:46
+  ├─ City:   Heidelberg
+  └─ Body:   (358 chars) Heidelberg(ots) ↵  ↵ Im Rahmen einer Podiumsdiskussion in der Friedrich-Ebert-Gedenkstätte kam es zu einer Störung. Bis zu 30 Personen störten die Diskussion durch Zwischenrufe. Der Aufforderung des Veranstalters das Gebäude zu verlassen kamen sie nicht ...
+
+  OUTPUT
+  ├─ Klassifikation: 🔴  CRIME
+  ├─ Titel (neu): Störung einer Veranstaltung und Hausfriedensbruch in Heidelberg
+  ├─ Tatort: (Friedrich-Ebert-Gedenkstätte), Heidelberg  (Konfidenz: 0.7)
+  ├─ Tatzeit: 2023-04-27 ? Uhr  ? (unknown)
+  ├─ Delikt: PKS 6220: Hausfriedensbruch → Störung einer Veranstaltung mit Körperverletzung  (Konfidenz: 0.9)
+  ├─ Details: Schwere: leicht | Motiv: Streit | Opfer: 1 | Verdächtige: 30
+  └─
+
+  WARUM?
+     → Stadt 'Heidelberg' aus Body-Anfang 'Heidelberg(ots)' extrahiert
+     → Delikt PKS 6220 (Hausfriedensbruch) → 'Störung einer Veranstaltung mit Körperverletzung'
+     → Keine Zeitangabe im Text gefunden → precision='unknown'
+
+================================================================================
+  ZUSAMMENFASSUNG
+================================================================================
+
+  Artikel gesamt: 22
+  LLM-Ergebnisse: 29 (inkl. Multi-Incident-Splits)
+    🔴 crime: 19
+    🚒 feuerwehr: 2
+    🗑️ junk: 6
+    🔄 update: 2
+
+  Token-Verbrauch: 20,534 Input + 11,580 Output = 32,114 gesamt
+  Geschätzte Kosten (OpenRouter): ~$0.2006
+
+  PKS-Verteilung:
+    7300 Trunkenheit im Verkehr: 3
+    7100 Verkehrsunfall mit Personenschaden: 3
+    4350 Wohnungseinbruchdiebstahl: 3
+    6740 Brandstiftung: 2
+    2200 Körperverletzung: 1
+    6260 Volksverhetzung/NS-Symbole: 1
+    8900 Waffengesetz: 1
+    4000 Schwerer Diebstahl: 1
+    4780 Kfz-Diebstahl: 1
+    6750 Sachbeschädigung: 1
+    2100 Raub/räuberische Erpressung: 1
+    6220 Hausfriedensbruch: 1
+

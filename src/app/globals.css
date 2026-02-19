@@ -888,6 +888,26 @@ input[type="range"].blaulicht-slider::-moz-range-thumb {
   animation-delay: -5s;
 }
 
+@media (max-width: 768px) {
+  .dashboard-orb {
+    filter: blur(72px);
+  }
+
+  .dashboard-orb-a {
+    top: -120px;
+    left: -90px;
+    width: 260px;
+    height: 260px;
+  }
+
+  .dashboard-orb-b {
+    right: -90px;
+    top: 180px;
+    width: 220px;
+    height: 220px;
+  }
+}
+
 /* League table dot pulse animation */
 @keyframes league-dot-pulse {
   0%, 100% { opacity: 1; }

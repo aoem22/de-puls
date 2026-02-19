@@ -122,7 +122,7 @@ interface SnapshotTileProps {
 function SnapshotTile({ label, value, helper, delta }: SnapshotTileProps) {
   return (
     <article
-      className="rounded-2xl border p-4"
+      className="rounded-2xl border p-3.5 sm:p-4"
       style={{
         borderColor: 'var(--border-subtle)',
         background: 'linear-gradient(145deg, var(--card) 0%, var(--card-elevated) 100%)',
@@ -131,7 +131,7 @@ function SnapshotTile({ label, value, helper, delta }: SnapshotTileProps) {
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
         {label}
       </p>
-      <p className="mt-2 text-3xl font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>
+      <p className="mt-2 text-[1.7rem] font-bold tabular-nums leading-none sm:text-3xl" style={{ color: 'var(--text-primary)' }}>
         {value}
       </p>
       <div className="mt-2 flex items-center justify-between gap-2">

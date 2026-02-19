@@ -54,6 +54,8 @@ export interface DashboardLiveFeedItem {
   source_url: string;
   sort_date: string | null;
   is_cold_case: boolean | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface SecurityOverviewResponse {
@@ -94,6 +96,8 @@ export interface SecurityOverviewResponse {
   topCityPoints: Array<{ city: string; lat: number; lon: number }>;
   topKreise: Array<{ kreisAgs: string; kreisName: string; count: number; previousCount: number; rankChange: number | null }>;
   topKreisPoints: Array<{ kreis_ags: string; lat: number; lon: number }>;
+  topPlz: Array<{ plz: string; count: number; previousCount: number; rankChange: number | null }>;
+  topPlzPoints: Array<{ plz: string; lat: number; lon: number }>;
   anomalies: Array<{ city: string; current: number; previous: number; delta: number }>;
   contextStats: DashboardContextStats;
   liveFeedTotal: number;
@@ -102,4 +106,5 @@ export interface SecurityOverviewResponse {
   liveFeed: DashboardLiveFeedItem[];
   liveFeedCity: string | null;
   liveFeedKreis: string | null;
+  liveFeedPlz: string | null;
 }

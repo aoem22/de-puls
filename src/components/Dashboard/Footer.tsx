@@ -23,12 +23,12 @@ const LEGAL_LINKS = [
 
 export function Footer() {
   return (
-    <footer className="mt-10 border-t pt-10 pb-8 px-4 sm:px-8"
+    <footer className="mt-8 border-t px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-8 sm:mt-10 sm:px-8 sm:pb-8 sm:pt-10"
       style={{ borderColor: 'var(--border-subtle)', background: 'var(--card)' }}
     >
-      <div className="max-w-5xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
         {/* Brand */}
-        <div className="col-span-2 lg:col-span-1">
+        <div className="sm:col-span-2 lg:col-span-1">
           <div className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
             DE-PULS
           </div>
@@ -93,7 +93,7 @@ export function Footer() {
       </div>
 
       {/* Bottom bar */}
-      <div className="max-w-5xl mx-auto mt-8 pt-4 border-t flex flex-col sm:flex-row items-center justify-between gap-1 text-[11px]"
+      <div className="mx-auto mt-8 flex max-w-5xl flex-col items-center justify-between gap-2 border-t pt-4 text-center text-[11px] sm:flex-row sm:gap-1 sm:text-left"
         style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-faint)' }}
       >
         <span>&copy; 2026 De-Puls &middot; Alle Angaben ohne Gewähr</span>

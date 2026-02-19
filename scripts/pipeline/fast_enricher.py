@@ -575,7 +575,7 @@ class FastEnricher:
                     for entry in entries:
                         loc = entry.get("location", {})
                         if isinstance(loc, dict) and not loc.get("lat") and (loc.get("street") or loc.get("city")):
-                            lat, lon, precision = self._geocode(
+                            lat, lon, precision, plz = self._geocode(
                                 street=loc.get("street"),
                                 city=loc.get("city") or art.get("city"),
                                 district=loc.get("district"),
@@ -587,6 +587,8 @@ class FastEnricher:
                             loc["lon"] = lon
                             loc["precision"] = precision
                             loc["bundesland"] = art.get("bundesland")
+                            if plz:
+                                loc["plz"] = plz
                             updated = True
                             regeocode_count += 1
                     if updated:
@@ -671,7 +673,7 @@ class FastEnricher:
 
                         # Geocode if we have location data
                         if loc.get("street") or loc.get("city") or loc.get("district"):
-                            lat, lon, precision = self._geocode(
+                            lat, lon, precision, plz = self._geocode(
                                 street=loc.get("street"),
                                 city=loc.get("city") or art.get("city"),
                                 district=loc.get("district"),
@@ -683,6 +685,8 @@ class FastEnricher:
                             enrichment["location"]["lon"] = lon
                             enrichment["location"]["precision"] = precision
                             enrichment["location"]["bundesland"] = art.get("bundesland")
+                            if plz:
+                                enrichment["location"]["plz"] = plz
 
                         enrichments.append(enrichment)
 
@@ -730,10 +734,13 @@ class FastEnricher:
     # ── Geocoding ────────────────────────────────────────────────
 
     def _geocode(self, street: str, city: str, district: str = None, bundesland: str = None,
-                 location_hint: str = None, cross_street: str = None) -> tuple[float, float, str]:
-        """Geocode an address using HERE Geocoding API."""
+                 location_hint: str = None, cross_street: str = None) -> tuple[float, float, str, str]:
+        """Geocode an address using HERE Geocoding API.
+
+        Returns (lat, lon, precision, plz).
+        """
         if self.no_geocode:
-            return None, None, "none"
+            return None, None, "none", None
 
         # Build street part with cross_street / location_hint for better precision
         if cross_street and street:
@@ -752,8 +759,8 @@ class FastEnricher:
         if address in self.geocode_cache:
             cached = self.geocode_cache[address]
             if not cached:
-                return None, None, "none"
-            return cached.get("lat"), cached.get("lon"), cached.get("precision", "cached")
+                return None, None, "none", None
+            return cached.get("lat"), cached.get("lon"), cached.get("precision", "cached"), cached.get("plz")
 
         url = "https://geocode.search.hereapi.com/v1/geocode"
 
@@ -794,7 +801,7 @@ class FastEnricher:
 
                 if lat_val is None or lon_val is None:
                     self.geocode_cache[address] = {}
-                    return None, None, "none"
+                    return None, None, "none", None
 
                 # Map HERE resultType to precision
                 result_type = item.get("resultType", "")
@@ -813,19 +820,23 @@ class FastEnricher:
                     print(f"    WARNING: Geocoded outside Germany: {address} → ({lat_val}, {lon_val})")
                     precision = "outside_germany"
 
+                # Extract postal code from HERE response
+                plz = item.get("address", {}).get("postalCode")
+
                 self.geocode_cache[address] = {
                     "lat": lat_val,
                     "lon": lon_val,
                     "precision": precision,
+                    "plz": plz,
                 }
-                return lat_val, lon_val, precision
+                return lat_val, lon_val, precision, plz
 
             self.geocode_cache[address] = {}
-            return None, None, "none"
+            return None, None, "none", None
 
         except Exception as e:
             print(f"    Geocoding error: {e}")
-            return None, None, "none"
+            return None, None, "none", None
 
     # ── Main Entry Point ─────────────────────────────────────────
 
