@@ -2,7 +2,7 @@
 """
 Post-geocode enrichment cache entries that lack coordinates.
 
-Reads the enrichment cache, geocodes locations using Google Maps API
+Reads the enrichment cache, geocodes locations using HERE Geocoding API
 (with geocode cache), and updates the enrichment cache with lat/lon.
 
 Usage:
@@ -24,36 +24,47 @@ os.environ['SSL_CERT_FILE'] = certifi.where()
 
 
 def geocode(address: str, api_key: str, geocode_cache: dict) -> dict:
-    """Geocode an address, using cache if available."""
+    """Geocode an address using HERE API, with cache."""
     if address in geocode_cache:
         return geocode_cache[address]
 
-    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    url = "https://geocode.search.hereapi.com/v1/geocode"
     params = {
-        "address": address,
-        "key": api_key,
-        "region": "de",
-        "language": "de",
+        "q": address,
+        "apiKey": api_key,
+        "limit": 1,
+        "lang": "de",
+        "in": "countryCode:DEU",
     }
 
     try:
         resp = requests.get(url, params=params, timeout=10)
         data = resp.json()
 
-        if data.get("status") == "OK" and data.get("results"):
-            result = data["results"][0]
-            geo = result["geometry"]["location"]
-            loc_type = result["geometry"].get("location_type", "")
+        items = data.get("items", [])
+        if items:
+            item = items[0]
+            position = item.get("position", {})
+            lat = position.get("lat")
+            lng = position.get("lng")
+
+            if lat is None or lng is None:
+                geocode_cache[address] = {}
+                return {}
+
+            result_type = item.get("resultType", "")
             precision = {
-                "ROOFTOP": "street",
-                "RANGE_INTERPOLATED": "street",
-                "GEOMETRIC_CENTER": "neighborhood",
-            }.get(loc_type, "city")
+                "houseNumber": "street",
+                "street": "street",
+                "intersection": "street",
+                "district": "neighborhood",
+                "locality": "city",
+            }.get(result_type, "city")
 
             cached = {
-                "lat": geo["lat"],
-                "lon": geo["lng"],
-                "formatted_address": result.get("formatted_address"),
+                "lat": lat,
+                "lon": lng,
+                "formatted_address": item.get("address", {}).get("label", ""),
                 "precision": precision,
             }
             geocode_cache[address] = cached
@@ -101,9 +112,9 @@ def main():
     enrichment_file = cache_dir / "enrichment_cache.json"
     geocode_file = cache_dir / "geocode_cache.json"
 
-    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    api_key = os.environ.get("HERE_API_KEY")
     if not api_key and not args.dry_run:
-        print("ERROR: GOOGLE_MAPS_API_KEY not set")
+        print("ERROR: HERE_API_KEY not set")
         sys.exit(1)
 
     # Load caches
@@ -150,7 +161,7 @@ def main():
     print(f"  New (need API call): {new_addrs}")
 
     if args.dry_run:
-        print(f"\n[DRY RUN] Would make ~{new_addrs} Google Maps API calls")
+        print(f"\n[DRY RUN] Would make ~{new_addrs} HERE API calls")
         return
 
     # Geocode all unique addresses first
@@ -178,9 +189,8 @@ def main():
             with open(geocode_file, "w", encoding="utf-8") as f:
                 json.dump(geocode_cache, f, ensure_ascii=False)
 
-        # Rate limiting: ~45 requests/sec
-        if api_calls % 45 == 0:
-            time.sleep(1)
+        # Rate limiting: HERE allows 5 req/s
+        time.sleep(0.2)
 
     print(f"  Done: {geocoded_count} geocoded, {failed_count} failed out of {api_calls} API calls")
 

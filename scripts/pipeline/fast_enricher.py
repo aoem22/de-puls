@@ -427,7 +427,7 @@ def _try_split_zeit_sections(body: str, incident_count: int) -> list[str] | None
 
 
 class FastEnricher:
-    """Single-round article enricher with Google Maps geocoding."""
+    """Single-round article enricher with HERE geocoding."""
 
     def __init__(self, cache_dir: str = ".cache", no_geocode: bool = False, model: str = None,
                  prompt_version: str = None, provider: str = None):
@@ -441,9 +441,9 @@ class FastEnricher:
         if not api_key:
             raise ValueError(f"{prov['api_key_env']} required")
 
-        self.google_maps_key = os.environ.get("GOOGLE_MAPS_API_KEY")
-        if not no_geocode and not self.google_maps_key:
-            raise ValueError("GOOGLE_MAPS_API_KEY required for geocoding")
+        self.here_api_key = os.environ.get("HERE_API_KEY")
+        if not no_geocode and not self.here_api_key:
+            raise ValueError("HERE_API_KEY required for geocoding")
 
         self.client = OpenAI(base_url=prov["base_url"], api_key=api_key)
         self.model = model or self.prompt_config.get("model") or prov["default_model"]
@@ -731,13 +731,14 @@ class FastEnricher:
 
     def _geocode(self, street: str, city: str, district: str = None, bundesland: str = None,
                  location_hint: str = None, cross_street: str = None) -> tuple[float, float, str]:
-        """Geocode an address using Google Maps API."""
+        """Geocode an address using HERE Geocoding API."""
         if self.no_geocode:
             return None, None, "none"
 
         # Build street part with cross_street / location_hint for better precision
         if cross_street and street:
-            street_part = f"{street} & {cross_street}"
+            # HERE's native intersection syntax
+            street_part = f"{street} @ {cross_street}"
         elif location_hint and street:
             street_part = f"{location_hint}, {street}"
         elif location_hint and not street:
@@ -754,35 +755,58 @@ class FastEnricher:
                 return None, None, "none"
             return cached.get("lat"), cached.get("lon"), cached.get("precision", "cached")
 
-        url = "https://maps.googleapis.com/maps/api/geocode/json"
-        params = {
-            "address": address,
-            "key": self.google_maps_key,
-            "region": "de",
-            "language": "de",
-        }
-        if city:
-            params["components"] = f"locality:{city}|country:DE"
+        url = "https://geocode.search.hereapi.com/v1/geocode"
+
+        # Use structured query (qq) when we have discrete fields, free-form (q) otherwise
+        if street_part and city:
+            qq_parts = [f"street={street_part}", f"city={city}"]
+            if district:
+                qq_parts.append(f"district={district}")
+            if bundesland:
+                qq_parts.append(f"state={bundesland}")
+            qq_parts.append("country=Germany")
+            params = {
+                "qq": ";".join(qq_parts),
+                "apiKey": self.here_api_key,
+                "limit": 1,
+                "lang": "de",
+                "in": "countryCode:DEU",
+            }
+        else:
+            params = {
+                "q": address,
+                "apiKey": self.here_api_key,
+                "limit": 1,
+                "lang": "de",
+                "in": "countryCode:DEU",
+            }
 
         try:
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
 
-            if data["status"] == "OK" and data["results"]:
-                result = data["results"][0]
-                location = result["geometry"]["location"]
-                location_type = result["geometry"]["location_type"]
+            items = data.get("items", [])
+            if items:
+                item = items[0]
+                position = item.get("position", {})
+                lat_val = position.get("lat")
+                lon_val = position.get("lng")
 
+                if lat_val is None or lon_val is None:
+                    self.geocode_cache[address] = {}
+                    return None, None, "none"
+
+                # Map HERE resultType to precision
+                result_type = item.get("resultType", "")
                 precision_map = {
-                    "ROOFTOP": "rooftop",
-                    "RANGE_INTERPOLATED": "range",
-                    "GEOMETRIC_CENTER": "center",
-                    "APPROXIMATE": "approximate",
+                    "houseNumber": "rooftop",
+                    "street": "street",
+                    "intersection": "street",
+                    "district": "neighborhood",
+                    "locality": "city",
+                    "administrativeArea": "region",
                 }
-                precision = precision_map.get(location_type, "approximate")
-
-                lat_val = location["lat"]
-                lon_val = location["lng"]
+                precision = precision_map.get(result_type, "approximate")
 
                 # Validate against Germany bounding box
                 if not is_in_germany(lat_val, lon_val):

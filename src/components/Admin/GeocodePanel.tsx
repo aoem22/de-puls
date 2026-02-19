@@ -60,7 +60,7 @@ export function GeocodePanel() {
     [setSelectedArr],
   );
 
-  const [maxRps, setMaxRps] = usePersistedState<number>('geocode.maxRps', 1);
+  const [maxRps, setMaxRps] = usePersistedState<number>('geocode.maxRps', 5);
   const [force, setForce] = usePersistedState<boolean>('geocode.force', false);
 
   const {
@@ -159,7 +159,7 @@ export function GeocodePanel() {
           Geocoder
         </h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-          Select period and states, then geocode enriched records with Geocodify.
+          Select period and states, then geocode enriched records with HERE API.
           Existing coordinates are skipped unless force mode is enabled.
         </p>
       </div>
@@ -374,7 +374,7 @@ export function GeocodePanel() {
               }}
             />
             <p className="mt-1 text-[10px]" style={{ color: 'var(--text-faint)' }}>
-              Geocodify free trial: 1 req/s. Paid tiers allow higher limits.
+              HERE free tier: 250K/month, 5 req/s.
             </p>
             <label className="mt-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
               <input

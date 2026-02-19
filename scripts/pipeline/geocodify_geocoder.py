@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Geocode enriched articles with the Geocodify API.
+Geocode enriched articles with the HERE Geocoding API.
 
 This reads an enriched JSON file (either a list or {"articles": [...]}) and
 fills missing location.lat/location.lon fields in-place (or to a separate
@@ -24,8 +24,8 @@ from typing import Any
 import requests
 from dotenv import load_dotenv
 
-API_URL = "https://api.geocodify.com/v2/geocode"
-DEFAULT_CACHE_FILE = Path(".cache/geocodify_geocode_cache.json")
+API_URL = "https://geocode.search.hereapi.com/v1/geocode"
+DEFAULT_CACHE_FILE = Path(".cache/here_geocode_cache.json")
 CACHE_SAVE_INTERVAL = 100
 
 
@@ -187,7 +187,10 @@ def extract_precision(candidate: Any) -> str | None:
     if not isinstance(candidate, dict):
         return None
 
-    value = candidate.get("precision") or candidate.get("accuracy") or candidate.get("location_type") or candidate.get("type")
+    # HERE uses resultType; keep fallbacks for cached Geocodify entries
+    value = (candidate.get("resultType") or candidate.get("precision")
+             or candidate.get("accuracy") or candidate.get("location_type")
+             or candidate.get("type"))
     if value is None:
         return None
 
@@ -195,11 +198,24 @@ def extract_precision(candidate: Any) -> str | None:
     if not text:
         return None
 
+    # HERE resultType values
+    if text in ("housenumber", "houseNumber"):
+        return "street"
+    if text in ("street", "intersection"):
+        return "street"
+    if text in ("district",):
+        return "neighborhood"
+    if text in ("locality",):
+        return "city"
+    if text in ("administrativearea", "administrativeArea"):
+        return "region"
+
+    # Legacy token matching for old cache entries
     if any(token in text for token in ("rooftop", "address", "house", "street")):
         return "street"
     if any(token in text for token in ("range", "interpolated", "parcel")):
         return "street"
-    if any(token in text for token in ("district", "neighborhood", "locality", "quarter")):
+    if any(token in text for token in ("neighborhood", "quarter")):
         return "neighborhood"
     if any(token in text for token in ("city", "town", "village", "municipality")):
         return "city"
@@ -234,7 +250,7 @@ def write_json_atomic(path: Path, value: Any) -> None:
     tmp_path.replace(path)
 
 
-class GeocodifyClient:
+class HereGeocoderClient:
     def __init__(
         self,
         api_key: str,
@@ -293,8 +309,11 @@ class GeocodifyClient:
                 response = self.session.get(
                     API_URL,
                     params={
-                        "api_key": self.api_key,
+                        "apiKey": self.api_key,
                         "q": query,
+                        "limit": 1,
+                        "lang": "de",
+                        "in": "countryCode:DEU",
                     },
                     timeout=self.timeout_s,
                 )
@@ -318,18 +337,9 @@ class GeocodifyClient:
                 backoff_s = min(backoff_s * 2, 10.0)
                 continue
 
-            meta = payload.get("meta") if isinstance(payload, dict) else None
-            api_code = None
-            if isinstance(meta, dict):
-                api_code = meta.get("code")
-
-            if response.status_code in (401, 403) or str(api_code) in {"401", "403", "601"}:
-                error_detail = ""
-                if isinstance(meta, dict):
-                    detail = meta.get("error_detail") or meta.get("error_type")
-                    if detail:
-                        error_detail = f": {detail}"
-                raise FatalGeocodeError(f"Geocodify authentication failed{error_detail}")
+            if response.status_code in (401, 403):
+                error_detail = payload.get("error_description", "") if isinstance(payload, dict) else ""
+                raise FatalGeocodeError(f"HERE authentication failed: {error_detail}".rstrip(": "))
 
             if response.status_code == 429:
                 if attempt == self.max_retries:
@@ -351,15 +361,18 @@ class GeocodifyClient:
                 self.cache[query] = {}
                 return {}
 
-            candidates = extract_response_candidates(payload)
-            for candidate in candidates:
-                coords = extract_lat_lon(candidate)
-                if not coords:
+            items = payload.get("items", [])
+            for item in items:
+                position = item.get("position", {})
+                lat = to_float(position.get("lat"))
+                lng = to_float(position.get("lng"))
+                if lat is None or lng is None:
                     continue
-                precision = extract_precision(candidate)
+                result_type = item.get("resultType", "")
+                precision = extract_precision({"resultType": result_type})
                 result = {
-                    "lat": coords[0],
-                    "lon": coords[1],
+                    "lat": lat,
+                    "lon": lng,
                     "precision": precision,
                 }
                 self.cache[query] = result
@@ -372,13 +385,16 @@ class GeocodifyClient:
         return {}
 
 
+GeocodifyClient = HereGeocoderClient  # backwards compat alias
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Geocode enriched articles with Geocodify")
+    parser = argparse.ArgumentParser(description="Geocode enriched articles with HERE API")
     parser.add_argument("--input", "-i", required=True, help="Input JSON file")
     parser.add_argument("--output", "-o", help="Output JSON file (defaults to --input)")
     parser.add_argument("--cache-file", default=str(DEFAULT_CACHE_FILE), help="Geocode cache JSON path")
     parser.add_argument("--country", default="Germany", help="Country suffix appended to geocoding queries")
-    parser.add_argument("--max-rps", type=float, default=1.0, help="Max requests per second (default: 1)")
+    parser.add_argument("--max-rps", type=float, default=5.0, help="Max requests per second (default: 5)")
     parser.add_argument("--timeout", type=float, default=12.0, help="HTTP timeout seconds per request")
     parser.add_argument("--max-retries", type=int, default=4, help="Max retries for transient failures")
     parser.add_argument("--save-every", type=int, default=CACHE_SAVE_INTERVAL, help="Persist cache every N API calls")
@@ -388,9 +404,9 @@ def main() -> int:
 
     load_env()
 
-    api_key = os.environ.get("GEOCODIFY_API_KEY")
+    api_key = os.environ.get("HERE_API_KEY")
     if not api_key:
-        print("ERROR: GEOCODIFY_API_KEY is not set", flush=True)
+        print("ERROR: HERE_API_KEY is not set", flush=True)
         return 1
 
     input_path = Path(args.input)
@@ -417,7 +433,7 @@ def main() -> int:
         print("ERROR: Input must be a JSON array or an object with an 'articles' array", flush=True)
         return 1
 
-    client = GeocodifyClient(
+    client = HereGeocoderClient(
         api_key=api_key,
         cache_file=cache_file,
         max_rps=max(args.max_rps, 0.1),

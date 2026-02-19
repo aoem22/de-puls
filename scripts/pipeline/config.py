@@ -97,7 +97,7 @@ ASYNC_RETRY_BASE_DELAY = 1.0    # Exponential backoff base (seconds)
 ASYNC_RETRY_MAX_DELAY = 60.0    # Cap on retry delay
 
 # API Keys (loaded from environment)
-# GOOGLE_MAPS_API_KEY - Required for geocoding (set in .env)
+# HERE_API_KEY - Required for geocoding (set in .env)
 # OPENROUTER_API_KEY - Required for LLM enrichment (set in .env)
 
 # Filter configuration

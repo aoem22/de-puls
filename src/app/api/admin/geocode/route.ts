@@ -11,7 +11,7 @@ import {
 } from '@/lib/admin/process-store';
 
 const DATA_ROOT = path.join(process.cwd(), 'data', 'pipeline');
-const CACHE_FILE = path.join(process.cwd(), '.cache', 'geocodify_geocode_cache.json');
+const CACHE_FILE = path.join(process.cwd(), '.cache', 'here_geocode_cache.json');
 
 interface GeocodeRequest {
   files: Array<{ path: string }>;
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   }
 
   const files = Array.isArray(body.files) ? body.files : [];
-  const maxRps = Number.isFinite(body.maxRps) ? Math.max(0.1, Number(body.maxRps)) : 1;
+  const maxRps = Number.isFinite(body.maxRps) ? Math.max(0.1, Number(body.maxRps)) : 5;
   const force = !!body.force;
 
   if (files.length === 0) {
