@@ -175,7 +175,7 @@ Für JEDEN Straftat-Vorfall, extrahiere:
 
 3. DELIKT (PKS): pks_code (4-stellig), pks_category, sub_type, confidence (0-1)
 
-4. DETAILS: weapon_type, drug_type, victim_count, suspect_count, victim_age, suspect_age, victim_gender, suspect_gender, victim_herkunft, suspect_herkunft, victim_description, suspect_description, severity, motive, damage_amount_eur, damage_estimate
+4. DETAILS: weapon_types, drug_type, victim_count, suspect_count, victim_age, suspect_age, victim_gender, suspect_gender, victim_herkunft, suspect_herkunft, victim_description, suspect_description, severity, motive, damage_amount_eur, damage_estimate
 
 5. TITEL: Kurzer, sachlicher Titel (max 80 Zeichen).
    - Kein Polizeikürzel (POL-MA, etc.), keine PM-Nummern, kein reißerischer Stil.
@@ -207,7 +207,7 @@ Sonstiges:
 Bei Unsicherheit: Wähle den übergeordneten Code (z.B. 2200 statt 2210 wenn unklar ob einfach oder gefährlich).
 
 Feldwerte (NUR diese verwenden):
-- weapon_type: knife|gun|blunt|axe|explosive|vehicle|pepper_spray|other|none|unknown
+- weapon_types: Array aller Tatmittel als deutsche Freitext-Bezeichnung, wortwörtlich aus dem Artikel. z.B. ["Messer"], ["Machete", "Pfefferspray"], ["Schusswaffe"], ["Baseballschläger"]. Primäres Tatmittel zuerst. null wenn keine Waffe erwähnt.
 - drug_type: cannabis|cocaine|amphetamine|heroin|ecstasy|meth|other|null
 - severity: minor|serious|critical|fatal|property_only|unknown
 - motive: domestic|robbery|hate|drugs|road_rage|dispute|sexual|unknown|null
@@ -224,7 +224,7 @@ ARTIKEL:
 Antworte NUR mit einem JSON-Array. Keine Erklärungen, kein Markdown:
 [
   {{"article_index": 0, "classification": "junk", "reason": "Verkehrshinweis"}},
-  {{"article_index": 1, "classification": "crime", "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt", "is_update": false, "location": {{"street": "Breite Straße", "house_number": "12", "district": "Innenstadt", "city": "Mannheim", "location_hint": null, "cross_street": null, "confidence": 1.0}}, "incident_time": {{"date": "2025-01-15", "time": "21:15", "precision": "exact"}}, "crime": {{"pks_code": "2200", "pks_category": "Körperverletzung", "sub_type": "Gefährliche Körperverletzung mit Messer", "confidence": 0.95}}, "details": {{"weapon_type": "knife", "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "victim_description": null, "suspect_description": "ca. 180 cm, schlanke Statur, kurze dunkle Haare, bekleidet mit schwarzer Jacke und Jeans", "severity": "serious", "motive": "dispute", "damage_amount_eur": 5000, "damage_estimate": "approximate"}}}},
+  {{"article_index": 1, "classification": "crime", "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt", "is_update": false, "location": {{"street": "Breite Straße", "house_number": "12", "district": "Innenstadt", "city": "Mannheim", "location_hint": null, "cross_street": null, "confidence": 1.0}}, "incident_time": {{"date": "2025-01-15", "time": "21:15", "precision": "exact"}}, "crime": {{"pks_code": "2200", "pks_category": "Körperverletzung", "sub_type": "Gefährliche Körperverletzung mit Messer", "confidence": 0.95}}, "details": {{"weapon_types": ["Messer"], "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "victim_description": null, "suspect_description": "ca. 180 cm, schlanke Statur, kurze dunkle Haare, bekleidet mit schwarzer Jacke und Jeans", "severity": "serious", "motive": "dispute", "damage_amount_eur": 5000, "damage_estimate": "approximate"}}}},
   {{"article_index": 2, "classification": "feuerwehr", "reason": "Gasausströmung ohne Straftatverdacht"}},
   {{"article_index": 3, "classification": "update", "reason": "Nachtrag zu Brandfall", "update_type": "nachtrag"}}
 ]
@@ -295,6 +295,113 @@ def is_in_germany(lat: float, lon: float) -> bool:
         GERMANY_BBOX["lat_min"] <= lat <= GERMANY_BBOX["lat_max"]
         and GERMANY_BBOX["lon_min"] <= lon <= GERMANY_BBOX["lon_max"]
     )
+
+
+# ── Body section splitter for multi-incident digests ──────────────────
+
+# Patterns that mark the start of a numbered section in digest articles
+_NUMBERED_RE = re.compile(r'(?:^|\n)\s*(\d+)\.\s', re.MULTILINE)
+# POL- agency prefix headers (e.g. "POL-MA:", "POL-KN:")
+_POL_HEADER_RE = re.compile(r'(?:^|\n)(POL-[A-Z]{2,4}\s*:)', re.MULTILINE)
+# Bold sub-headings with city names (e.g. "**Schorndorf:**" or "Schorndorf:")
+_BOLD_CITY_RE = re.compile(r'(?:^|\n)(?:\*\*)?[A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?(?:\*\*)?:\s', re.MULTILINE)
+# Sachsen medienservice: title line + "Zeit:\t" block marks each incident
+_ZEIT_SECTION_RE = re.compile(r'\n\n([A-ZÄÖÜ][^\n]{3,120})\n\nZeit:\t', re.MULTILINE)
+# Preamble before the first incident (e.g. "Hofheim(ots)\n\n")
+_PREAMBLE_RE = re.compile(r'^.*?\(ots\)\s*[-–—]?\s*\n', re.DOTALL)
+
+
+def _split_body_sections(body: str, incident_count: int) -> list[str] | None:
+    """Split a digest article body into per-incident sections.
+
+    Tries numbered sections first, then POL- headers, then bold city headings.
+    Returns a list of section texts (one per incident), or None if splitting
+    fails or produces a mismatched count.
+    """
+    if not body or incident_count <= 1:
+        return None
+
+    # Strategy 1: Numbered sections ("1. ", "2. ", ...)
+    sections = _try_split_numbered(body, incident_count)
+    if sections:
+        return sections
+
+    # Strategy 2: POL- headers ("POL-MA:", "POL-KN:")
+    sections = _try_split_by_pattern(body, incident_count, _POL_HEADER_RE)
+    if sections:
+        return sections
+
+    # Strategy 3: Bold city headings ("Schorndorf:", "Mannheim:")
+    sections = _try_split_by_pattern(body, incident_count, _BOLD_CITY_RE)
+    if sections:
+        return sections
+
+    # Strategy 4: Sachsen "Title\n\nZeit:\t" blocks
+    sections = _try_split_zeit_sections(body, incident_count)
+    if sections:
+        return sections
+
+    return None
+
+
+def _try_split_numbered(body: str, incident_count: int) -> list[str] | None:
+    """Split on numbered section markers (1., 2., 3., ...)."""
+    matches = list(_NUMBERED_RE.finditer(body))
+    if not matches:
+        return None
+
+    # Find consecutive numbered sections starting from 1
+    numbered_starts = []
+    for m in matches:
+        num = int(m.group(1))
+        expected = len(numbered_starts) + 1
+        if num == expected:
+            numbered_starts.append(m.start())
+        elif num == 1 and numbered_starts:
+            # Restart — possibly nested numbering; take the later sequence
+            numbered_starts = [m.start()]
+
+    if len(numbered_starts) != incident_count:
+        return None
+
+    # Extract sections between consecutive starts
+    sections = []
+    for i, start in enumerate(numbered_starts):
+        end = numbered_starts[i + 1] if i + 1 < len(numbered_starts) else len(body)
+        sections.append(body[start:end].strip())
+
+    return sections
+
+
+def _try_split_by_pattern(body: str, incident_count: int, pattern: re.Pattern) -> list[str] | None:
+    """Split on a regex pattern that marks section boundaries."""
+    matches = list(pattern.finditer(body))
+    if len(matches) != incident_count:
+        return None
+
+    sections = []
+    for i, m in enumerate(matches):
+        start = m.start()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
+        sections.append(body[start:end].strip())
+
+    return sections
+
+
+def _try_split_zeit_sections(body: str, incident_count: int) -> list[str] | None:
+    """Split on Sachsen medienservice 'Title + Zeit:' blocks."""
+    matches = list(_ZEIT_SECTION_RE.finditer(body))
+    if len(matches) != incident_count:
+        return None
+
+    sections = []
+    for i, m in enumerate(matches):
+        # Section starts at the title line (group 1), which begins after \n\n
+        start = m.start() + 2  # skip the leading \n\n
+        end = matches[i + 1].start() + 2 if i + 1 < len(matches) else len(body)
+        sections.append(body[start:end].strip())
+
+    return sections
 
 
 class FastEnricher:
@@ -555,6 +662,13 @@ class FastEnricher:
                             enrichment["location"]["bundesland"] = art.get("bundesland")
 
                         enrichments.append(enrichment)
+
+                    # Split body into per-incident sections for digests
+                    if len(enrichments) > 1:
+                        sections = _split_body_sections(art.get("body", ""), len(enrichments))
+                        if sections:
+                            for enrichment, section_body in zip(enrichments, sections):
+                                enrichment["incident_body"] = section_body
 
                     self.cache[key] = enrichments
                     results_by_idx[orig_idx] = [{**art, **e} for e in enrichments]

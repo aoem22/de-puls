@@ -8,7 +8,7 @@ year filtering (--year).
 
 Usage:
     python3 scripts/pipeline/push_to_supabase.py --input-dir data/pipeline/chunks/enriched/ --year 2026 --dry-run
-    python3 scripts/pipeline/push_to_supabase.py --input-dir data/pipeline/chunks/enriched/ --year 2026 --run-name v1_2026
+    python3 scripts/pipeline/push_to_supabase.py --input-dir data/pipeline/chunks/enriched/ --year 2026 --run-name cron_2026
     python3 scripts/pipeline/push_to_supabase.py --input path/to/enriched.json
 """
 import hashlib
@@ -242,6 +242,129 @@ def sanitize_timestamp(ts: str) -> str:
     return ts
 
 
+# ---------------------------------------------------------------------------
+# Weapon keyword → category mapping
+# ---------------------------------------------------------------------------
+# The LLM returns the actual German weapon name as free text.  We map to
+# normalised categories for filtering.  New keywords can be added over time as
+# we encounter more weapon names in the data.
+
+_WEAPON_KEYWORDS: dict[str, list[str]] = {
+    "knife": [
+        "messer", "messern", "messers",
+        "messerangriff", "messerattacke", "messerstich", "messerstiche", "messerähnlich",
+        "machete",
+        "butterflymesser", "cuttermesser", "cuttermessers",
+        "klappmesser", "küchenmesser", "taschenmesser", "taschenmessers", "teppichmesser",
+        "einhandmesser",
+        "rasierklinge",
+        "samuraischwert", "schwert", "säbel", "katana",
+        "stichwaffe", "stichwaffen", "stichwerkzeug",
+        "stichverletzung", "stichverletzungen", "stichwunde",
+        "schnittverletzung", "schnittverletzungen",
+        "spitzen gegenstand", "spitzem gegenstand",
+        "stach", "stiche",
+    ],
+    "gun": [
+        "schusswaffe", "schusswaffen", "pistole", "revolver", "gewehr",
+        "schreckschusswaffe", "schreckschusspistole",
+        "softairwaffe", "softair",
+        "schüsse", "schuss",
+    ],
+    "blunt": [
+        "schlagstock", "schlagstöcke", "baseballschläger",
+        "knüppel", "stock", "eisenstange", "metallstange",
+        "hammer", "flasche", "stein", "stuhl",
+        "teleskopschlagstock",
+    ],
+    "axe": [
+        "axt", "beil", "hatchet",
+    ],
+    "explosive": [
+        "sprengstoff", "bombe", "granate", "feuerwerkskörper", "böller",
+    ],
+    "vehicle": [
+        "fahrzeug", "pkw", "auto", "transporter", "lkw",
+    ],
+    "pepper_spray": [
+        "pfefferspray", "reizgas", "tierabwehrspray", "cs-gas",
+    ],
+}
+
+# Build a reverse lookup: keyword → category (longest keywords first for greedy match)
+_WEAPON_KEYWORD_MAP: list[tuple[str, str]] = sorted(
+    [(kw, cat) for cat, kws in _WEAPON_KEYWORDS.items() for kw in kws],
+    key=lambda x: -len(x[0]),
+)
+
+# Old enum values from cached enrichments that should pass through directly
+_LEGACY_WEAPON_ENUMS = {"knife", "gun", "blunt", "axe", "explosive", "vehicle", "pepper_spray", "other"}
+
+
+def _classify_weapon(raw: str) -> str | None:
+    """Map a free-text German weapon name to a normalised category.
+
+    Returns the category string or 'other' if unrecognised non-empty input.
+    Returns None for empty/null input.
+    """
+    if not raw or raw in ("none", "unknown", "null"):
+        return None
+    # Pass through legacy enum values from old cached enrichments
+    if raw in _LEGACY_WEAPON_ENUMS:
+        return raw
+    for keyword, category in _WEAPON_KEYWORD_MAP:
+        if keyword in raw:
+            return category
+    return "other"
+
+
+# Ordered most-specific-first so the body scan returns the best match.
+_KNIFE_BODY_SCAN: list[tuple[str, str]] = [
+    ("butterflymesser", "Butterflymesser"),
+    ("cuttermesser", "Cuttermesser"),
+    ("klappmesser", "Klappmesser"),
+    ("küchenmesser", "Küchenmesser"),
+    ("taschenmesser", "Taschenmesser"),
+    ("teppichmesser", "Teppichmesser"),
+    ("einhandmesser", "Einhandmesser"),
+    ("machete", "Machete"),
+    ("samuraischwert", "Samuraischwert"),
+    ("schwert", "Schwert"),
+    ("säbel", "Säbel"),
+    ("katana", "Katana"),
+    ("rasierklinge", "Rasierklinge"),
+    ("stichwaffe", "Stichwaffe"),
+    ("stichwaffen", "Stichwaffe"),
+    ("stichwerkzeug", "Stichwerkzeug"),
+    ("stichverletzung", "Stichverletzung"),
+    ("stichverletzungen", "Stichverletzung"),
+    ("stichwunde", "Stichwunde"),
+    ("schnittverletzung", "Schnittverletzung"),
+    ("schnittverletzungen", "Schnittverletzung"),
+    ("spitzen gegenstand", "spitzer Gegenstand"),
+    ("spitzem gegenstand", "spitzer Gegenstand"),
+    ("messerangriff", "Messer"),
+    ("messerattacke", "Messer"),
+    ("messerstich", "Messer"),
+    ("messerstiche", "Messer"),
+    ("messer", "Messer"),
+]
+
+
+def _scan_body_for_knife(body: str) -> str | None:
+    """Scan article body for knife-related keywords.
+
+    Returns the display name of the most specific match, or None.
+    """
+    if not body:
+        return None
+    body_lower = body.lower()
+    for keyword, display in _KNIFE_BODY_SCAN:
+        if keyword in body_lower:
+            return display
+    return None
+
+
 def transform_article(article: dict, pipeline_run: str = "default") -> dict | None:
     """Transform enriched article to Supabase crime_records row."""
     loc = article.get("location", {})
@@ -256,11 +379,40 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
     url = article.get("url", "")
     published_at = sanitize_timestamp(article.get("date", ""))
 
-    # Extract weapon_type from details, validate against known values
-    weapon_type = details.get("weapon_type")
-    valid_weapons = {"knife", "gun", "blunt", "axe", "explosive", "vehicle", "pepper_spray", "other", "none", "unknown"}
-    if weapon_type not in valid_weapons:
-        weapon_type = None
+    # Extract weapon_types: LLM now returns free-text German names (e.g. "Machete", "Messer").
+    # We store the raw name in weapon_detail and map to categories via keywords.
+    raw_weapon_types = details.get("weapon_types")
+    if not isinstance(raw_weapon_types, list):
+        # Fallback for old cached enrichment results with singular weapon_type
+        old_wt = details.get("weapon_type")
+        raw_weapon_types = [old_wt] if old_wt and old_wt not in ("none", "unknown") else []
+
+    # Join raw weapon names into a single detail string (skip none/unknown/null)
+    _skip_detail = {"none", "unknown", "null", ""}
+    detail_parts = [str(w) for w in raw_weapon_types if w and str(w).lower() not in _skip_detail]
+    weapon_detail = ", ".join(detail_parts) if detail_parts else None
+
+    # Map free-text weapon names to categories
+    weapon_types = []
+    for raw in raw_weapon_types:
+        cat = _classify_weapon(str(raw).lower()) if raw else None
+        if cat and cat not in weapon_types:
+            weapon_types.append(cat)
+
+    # Primary weapon for backward compat (weapon_type column)
+    weapon_type = weapon_types[0] if weapon_types else None
+
+    # Fallback: if LLM missed a knife, scan body text for knife keywords
+    if "knife" not in weapon_types:
+        body_text = article.get("body", "")
+        body_knife = _scan_body_for_knife(body_text)
+        if body_knife:
+            if not weapon_detail:
+                weapon_detail = body_knife
+            if "knife" not in weapon_types:
+                weapon_types.append("knife")
+            if weapon_type is None:
+                weapon_type = "knife"
 
     # Extract drug_type, validate against known values
     drug_type = details.get("drug_type")
@@ -397,7 +549,7 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
         "id": make_id(url, published_at, location_text or "", pks_code, pipeline_run),
         "title": article.get("title", ""),
         "clean_title": clean_title,
-        "body": article.get("body"),
+        "body": article.get("incident_body") or article.get("body"),
         "published_at": published_at,
         "source_url": url,
         "source_agency": article.get("source"),
@@ -408,6 +560,8 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
         "precision": map_precision(article),
         "categories": map_category(crime),
         "weapon_type": weapon_type,
+        "weapon_types": weapon_types,
+        "weapon_detail": weapon_detail,
         "confidence": loc.get("confidence", 0.5),
         "incident_date": incident_date,
         "incident_time": incident_time,
