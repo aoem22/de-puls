@@ -43,7 +43,7 @@ from .push_to_supabase import transform_article
 LIVE_POLL_INTERVAL_MINUTES = 15
 LIVE_MAX_ARTICLES_PER_SOURCE = 200
 LIVE_CONCURRENT_REQUESTS = 5
-LIVE_PIPELINE_RUN_NAME = "v1_2026"
+LIVE_PIPELINE_RUN_NAME = "cron_2026"
 PUSH_QUEUE_FILE = CACHE_DIR / "push_queue.json"
 LOCK_FILE = CACHE_DIR / "live_pipeline.lock"
 
