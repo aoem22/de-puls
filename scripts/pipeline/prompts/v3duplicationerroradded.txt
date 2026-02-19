@@ -104,7 +104,7 @@ Für JEDEN Straftat-Vorfall, extrahiere:
 
 3. DELIKT (PKS): pks_code (4-stellig), pks_category, sub_type, confidence (0-1)
 
-4. DETAILS: weapon_type, drug_type, victim_count, suspect_count, victim_age, suspect_age, victim_gender, suspect_gender, victim_herkunft, suspect_herkunft, severity, motive, damage_amount_eur, damage_estimate
+4. DETAILS: weapon_types, drug_type, victim_count, suspect_count, victim_age, suspect_age, victim_gender, suspect_gender, victim_herkunft, suspect_herkunft, severity, motive, damage_amount_eur, damage_estimate
 
 5. TITEL: Kurzer, sachlicher Titel (max 80 Zeichen).
    - Kein Polizeikürzel (POL-MA, etc.), keine PM-Nummern, kein reißerischer Stil.
@@ -112,6 +112,11 @@ Für JEDEN Straftat-Vorfall, extrahiere:
    - Beispiel: "Messerangriff in Mannheimer Innenstadt — Mann schwer verletzt"
 
 6. is_update: true wenn der Artikel eine Folgemeldung/Nachtrag zu einem früheren Vorfall ist, sonst false.
+
+7. INCIDENT_BODY: NUR bei Sammelartikeln (mehrere Vorfälle im selben article_index):
+   Gib den relevanten Textabschnitt aus dem Body zurück, der zu DIESEM Vorfall gehört.
+   Kopiere den Originaltext wortwörtlich — nicht umschreiben oder zusammenfassen.
+   Bei Einzelmeldungen (nur 1 Vorfall pro Artikel): Feld weglassen.
 
 PKS-Kategorien (häufigste zuerst):
 Gewalt:
@@ -136,7 +141,7 @@ Sonstiges:
 Bei Unsicherheit: Wähle den übergeordneten Code (z.B. 2200 statt 2210 wenn unklar ob einfach oder gefährlich).
 
 Feldwerte (NUR diese verwenden):
-- weapon_type: knife|gun|blunt|axe|explosive|vehicle|pepper_spray|other|none|unknown
+- weapon_types: Array aller Tatmittel, z.B. ["knife", "gun"]. Werte: knife|gun|blunt|axe|explosive|vehicle|pepper_spray|other|none|unknown. Primäres Tatmittel zuerst.
 - drug_type: cannabis|cocaine|amphetamine|heroin|ecstasy|meth|other|null
 - severity: minor|serious|critical|fatal|property_only|unknown
 - motive: domestic|robbery|hate|drugs|road_rage|dispute|sexual|unknown|null
@@ -152,7 +157,7 @@ ARTIKEL:
 Antworte NUR mit einem JSON-Array. Keine Erklärungen, kein Markdown:
 [
   {{"article_index": 0, "classification": "junk", "reason": "Verkehrshinweis"}},
-  {{"article_index": 1, "classification": "crime", "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt", "is_update": false, "location": {{"street": "Breite Straße", "house_number": "12", "district": "Innenstadt", "city": "Mannheim", "location_hint": null, "cross_street": null, "confidence": 1.0}}, "incident_time": {{"date": "2025-01-15", "time": "21:15", "precision": "exact"}}, "crime": {{"pks_code": "2200", "pks_category": "Körperverletzung", "sub_type": "Gefährliche Körperverletzung mit Messer", "confidence": 0.95}}, "details": {{"weapon_type": "knife", "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "severity": "serious", "motive": "dispute", "damage_amount_eur": 5000, "damage_estimate": "approximate"}}}},
+  {{"article_index": 1, "classification": "crime", "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt", "is_update": false, "location": {{"street": "Breite Straße", "house_number": "12", "district": "Innenstadt", "city": "Mannheim", "location_hint": null, "cross_street": null, "confidence": 1.0}}, "incident_time": {{"date": "2025-01-15", "time": "21:15", "precision": "exact"}}, "crime": {{"pks_code": "2200", "pks_category": "Körperverletzung", "sub_type": "Gefährliche Körperverletzung mit Messer", "confidence": 0.95}}, "details": {{"weapon_types": ["knife"], "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "severity": "serious", "motive": "dispute", "damage_amount_eur": 5000, "damage_estimate": "approximate"}}}},
   {{"article_index": 2, "classification": "feuerwehr", "reason": "Gasausströmung ohne Straftatverdacht"}},
   {{"article_index": 3, "classification": "update", "reason": "Nachtrag zu Brandfall", "update_type": "nachtrag"}}
 ]

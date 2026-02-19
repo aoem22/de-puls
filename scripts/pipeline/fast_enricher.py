@@ -64,7 +64,7 @@ DEFAULT_PROVIDER = "openrouter"
 
 # Batch sizes
 UNIFIED_BATCH_SIZE = 8      # Articles per LLM call (unified enrichment + classification)
-UNIFIED_MAX_TOKENS = 10000  # Max tokens for unified prompt response
+UNIFIED_MAX_TOKENS = 16000  # Max tokens for unified prompt response
 
 
 # ── Unified Prompt (classification + enrichment in 1 round) ──────
@@ -183,6 +183,11 @@ Für JEDEN Straftat-Vorfall, extrahiere:
    - Beispiel: "Messerangriff in Mannheimer Innenstadt — Mann schwer verletzt"
 
 6. is_update: true wenn der Artikel eine Folgemeldung/Nachtrag zu einem früheren Vorfall ist, sonst false.
+
+7. INCIDENT_BODY: NUR bei Sammelartikeln (mehrere Vorfälle im selben article_index):
+   Gib den relevanten Textabschnitt aus dem Body zurück, der zu DIESEM Vorfall gehört.
+   Kopiere den Originaltext wortwörtlich — nicht umschreiben oder zusammenfassen.
+   Bei Einzelmeldungen (nur 1 Vorfall pro Artikel): Feld weglassen.
 
 PKS-Kategorien (häufigste zuerst):
 Gewalt:
@@ -303,8 +308,9 @@ def is_in_germany(lat: float, lon: float) -> bool:
 _NUMBERED_RE = re.compile(r'(?:^|\n)\s*(\d+)\.\s', re.MULTILINE)
 # POL- agency prefix headers (e.g. "POL-MA:", "POL-KN:")
 _POL_HEADER_RE = re.compile(r'(?:^|\n)(POL-[A-Z]{2,4}\s*:)', re.MULTILINE)
-# Bold sub-headings with city names (e.g. "**Schorndorf:**" or "Schorndorf:")
-_BOLD_CITY_RE = re.compile(r'(?:^|\n)(?:\*\*)?[A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?(?:\*\*)?:\s', re.MULTILINE)
+# "City: Title" sub-headings (e.g. "Heilbronn: Tätliche Auseinandersetzung",
+# "A6/ Erlenbach: Unter Drogen", "Bad Wimpfen: Drei Unfälle")
+_CITY_TITLE_RE = re.compile(r'\n\n([A-ZÄÖÜ0-9][^\n:]{0,60}:\s[^\n]+)\n\n')
 # Sachsen medienservice: title line + "Zeit:\t" block marks each incident
 _ZEIT_SECTION_RE = re.compile(r'\n\n([A-ZÄÖÜ][^\n]{3,120})\n\nZeit:\t', re.MULTILINE)
 # Preamble before the first incident (e.g. "Hofheim(ots)\n\n")
@@ -331,8 +337,8 @@ def _split_body_sections(body: str, incident_count: int) -> list[str] | None:
     if sections:
         return sections
 
-    # Strategy 3: Bold city headings ("Schorndorf:", "Mannheim:")
-    sections = _try_split_by_pattern(body, incident_count, _BOLD_CITY_RE)
+    # Strategy 3: "City: Title" sub-headings ("Heilbronn: Einbruch", "A6/ Erlenbach: ...")
+    sections = _try_split_city_title(body, incident_count)
     if sections:
         return sections
 
@@ -383,6 +389,22 @@ def _try_split_by_pattern(body: str, incident_count: int, pattern: re.Pattern) -
     for i, m in enumerate(matches):
         start = m.start()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
+        sections.append(body[start:end].strip())
+
+    return sections
+
+
+def _try_split_city_title(body: str, incident_count: int) -> list[str] | None:
+    """Split on 'City: Title' sub-headings separated by blank lines."""
+    matches = list(_CITY_TITLE_RE.finditer(body))
+    if len(matches) != incident_count:
+        return None
+
+    sections = []
+    for i, m in enumerate(matches):
+        # Section starts at the title line (after the leading \n\n)
+        start = m.start() + 2
+        end = matches[i + 1].start() + 2 if i + 1 < len(matches) else len(body)
         sections.append(body[start:end].strip())
 
     return sections
@@ -642,6 +664,7 @@ class FastEnricher:
                             "crime": llm_result.get("crime") or {},
                             "details": llm_result.get("details") or {},
                             "is_update": is_update,
+                            "incident_body": llm_result.get("incident_body"),
                         }
                         if is_update:
                             enrichment["update_type"] = first.get("update_type", "nachtrag")
@@ -665,10 +688,14 @@ class FastEnricher:
 
                     # Split body into per-incident sections for digests
                     if len(enrichments) > 1:
-                        sections = _split_body_sections(art.get("body", ""), len(enrichments))
-                        if sections:
-                            for enrichment, section_body in zip(enrichments, sections):
-                                enrichment["incident_body"] = section_body
+                        # LLM may have returned incident_body directly
+                        has_llm_bodies = all(e.get("incident_body") for e in enrichments)
+                        if not has_llm_bodies:
+                            # Regex fallback for when LLM didn't provide body sections
+                            sections = _split_body_sections(art.get("body", ""), len(enrichments))
+                            if sections:
+                                for enrichment, section_body in zip(enrichments, sections):
+                                    enrichment["incident_body"] = section_body
 
                     self.cache[key] = enrichments
                     results_by_idx[orig_idx] = [{**art, **e} for e in enrichments]
