@@ -89,6 +89,11 @@ function hasKnownWeaponType(weaponType: string | null): weaponType is string {
   return weaponType != null && weaponType !== 'unknown' && weaponType !== 'none';
 }
 
+function getKnownWeaponTypes(types: string[] | undefined | null): string[] {
+  if (!types || !Array.isArray(types)) return [];
+  return types.filter((w) => w !== 'unknown' && w !== 'none');
+}
+
 function LoadingCard() {
   return (
     <div
@@ -183,8 +188,9 @@ export function DashboardLiveFeedSection({
       <div className="mt-3 space-y-2">
         {(!showLoading ? liveFeed : []).map((row) => {
           const isExpanded = visibleExpandedId === row.id;
-          const weaponType = hasKnownWeaponType(row.weapon_type) ? row.weapon_type : null;
-          const hasWeaponTag = weaponType != null;
+          const knownWeapons = getKnownWeaponTypes(row.weapon_types);
+          const hasWeaponTag = knownWeapons.length > 0;
+          const isColdCase = row.is_cold_case === true;
           const hasTags = hasWeaponTag || row.motive || row.drug_type
             || row.victim_count || row.suspect_count || row.damage_amount_eur
             || row.victim_gender || row.suspect_gender || row.pks_category;
@@ -213,12 +219,23 @@ export function DashboardLiveFeedSection({
                   >
                     {SEVERITY_LABELS[row.severity ?? ''] ?? row.severity ?? 'Vorfall'}
                   </span>
+                  {isColdCase && (
+                    <span
+                      className="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                      style={{
+                        background: 'rgba(251,191,36,0.15)',
+                        color: '#b45309',
+                      }}
+                    >
+                      Nachtrag
+                    </span>
+                  )}
                   <span className="truncate text-xs" style={{ color: 'var(--text-muted)' }}>
                     {[row.city, row.bundesland].filter(Boolean).join(', ')}
                   </span>
                   <span className="ml-auto shrink-0 text-xs tabular-nums" style={{ color: 'var(--text-faint)' }}>
-                    {row.incident_date ? formatDate(row.incident_date) : formatDate(row.published_at)}
-                    {row.incident_time ? ` ${row.incident_time}` : ''}
+                    {formatDate(row.sort_date ?? row.incident_date ?? row.published_at)}
+                    {row.incident_date && row.incident_time ? ` ${row.incident_time}` : ''}
                   </span>
                 </div>
 
@@ -231,13 +248,14 @@ export function DashboardLiveFeedSection({
                     {row.pks_category && (
                       <DetailTag label="Delikt" value={row.pks_category} />
                     )}
-                    {hasWeaponTag && (
+                    {knownWeapons.map((wt) => (
                       <DetailTag
+                        key={wt}
                         label="Waffe"
-                        value={WEAPON_LABELS[weaponType] ?? weaponType}
-                        tone={weaponType === 'knife' || weaponType === 'gun' ? '#ef4444' : undefined}
+                        value={WEAPON_LABELS[wt] ?? wt}
+                        tone={wt === 'knife' || wt === 'gun' ? '#ef4444' : undefined}
                       />
-                    )}
+                    ))}
                     {row.motive && (
                       <DetailTag label="Motiv" value={MOTIVE_LABELS[row.motive] ?? row.motive} />
                     )}

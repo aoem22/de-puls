@@ -47,7 +47,7 @@ export async function GET() {
     const { count: recentCount } = await supabase
       .from('crime_records')
       .select('id', { count: 'exact', head: true })
-      .eq('pipeline_run', 'v1_2026')
+      .eq('pipeline_run', 'cron_2026')
       .gte('created_at', oneDayAgo);
 
     return NextResponse.json({

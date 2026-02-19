@@ -41,4 +41,4 @@ export const DASHBOARD_PREVIOUS_TIMEFRAME_LABELS: Record<DashboardTimeframe, str
 };
 
 export const DEFAULT_DASHBOARD_TIMEFRAME: DashboardTimeframe = 'today';
-export const DEFAULT_PIPELINE_RUN = 'v1_2026';
+export const DEFAULT_PIPELINE_RUN = 'all';

@@ -36,6 +36,7 @@ export interface DashboardLiveFeedItem {
   confidence: number | null;
   body: string | null;
   weapon_type: string | null;
+  weapon_types: string[];
   drug_type: string | null;
   motive: string | null;
   victim_count: number | null;
@@ -51,6 +52,8 @@ export interface DashboardLiveFeedItem {
   incident_time: string | null;
   pks_category: string | null;
   source_url: string;
+  sort_date: string | null;
+  is_cold_case: boolean | null;
 }
 
 export interface SecurityOverviewResponse {

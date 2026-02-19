@@ -57,7 +57,7 @@ function applyWeaponFilter(
   weaponType: string | null,
 ) {
   if (weaponType) {
-    return query.eq('weapon_type', weaponType);
+    return query.contains('weapon_types', [weaponType]);
   }
   return query;
 }
@@ -550,6 +550,7 @@ export interface LiveFeedItem {
   confidence: number;
   body: string | null;
   weapon_type: string | null;
+  weapon_types: string[];
   drug_type: string | null;
   motive: string | null;
   victim_count: number | null;
@@ -565,15 +566,18 @@ export interface LiveFeedItem {
   incident_time: string | null;
   pks_category: string | null;
   source_url: string;
+  sort_date: string | null;
+  is_cold_case: boolean | null;
 }
 
 const LIVE_FEED_SELECT = [
   'id', 'title', 'clean_title', 'published_at', 'location_text', 'district', 'city',
   'bundesland', 'categories', 'severity', 'confidence', 'body',
-  'weapon_type', 'drug_type', 'motive', 'victim_count', 'suspect_count',
+  'weapon_type', 'weapon_types', 'drug_type', 'motive', 'victim_count', 'suspect_count',
   'victim_age', 'suspect_age', 'victim_gender', 'suspect_gender',
   'victim_herkunft', 'suspect_herkunft', 'damage_amount_eur',
-  'incident_date', 'incident_time', 'pks_category', 'source_url',
+  'incident_date', 'incident_time', 'pks_category', 'source_url', 'sort_date',
+  'is_cold_case',
 ].join(',');
 
 export async function getLiveFeed(
@@ -596,8 +600,7 @@ export async function getLiveFeed(
         let q = supabase
           .from('crime_records')
           .select(LIVE_FEED_SELECT)
-          .order('incident_date', { ascending: false, nullsFirst: false })
-          .order('published_at', { ascending: false });
+          .order('sort_date', { ascending: false });
         q = applyBaseFilters(q, { startIso, endIso, category, weaponType, pipelineRun, bundesland });
         if (city) q = q.eq('city', city);
         if (kreisAgs) q = q.eq('kreis_ags', kreisAgs);
@@ -625,8 +628,7 @@ export async function getLiveFeed(
   let dataQ = supabase
     .from('crime_records')
     .select(LIVE_FEED_SELECT)
-    .order('incident_date', { ascending: false, nullsFirst: false })
-    .order('published_at', { ascending: false })
+    .order('sort_date', { ascending: false })
     .range(offset, offset + limit - 1);
   dataQ = applyBaseFilters(dataQ, { startIso, endIso, category, weaponType, pipelineRun, bundesland });
   if (city) dataQ = dataQ.eq('city', city);

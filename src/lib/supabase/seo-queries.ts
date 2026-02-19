@@ -113,7 +113,7 @@ export async function fetchCrimeRecordsByBbox(
       .lte('latitude', maxLat)
       .gte('longitude', minLon)
       .lte('longitude', maxLon)
-      .order('published_at', { ascending: false })
+      .order('sort_date', { ascending: false })
       .limit(limit);
 
     if (category) {
@@ -143,7 +143,7 @@ export async function fetchCrimeRecordsByBbox(
       .lte('latitude', maxLat)
       .gte('longitude', minLon)
       .lte('longitude', maxLon)
-      .order('published_at', { ascending: false })
+      .order('sort_date', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
     if (category) {

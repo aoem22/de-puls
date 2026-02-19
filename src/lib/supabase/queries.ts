@@ -97,7 +97,7 @@ export async function fetchCrimesFromSupabase(category?: CrimeCategory, pipeline
       .from('crime_records')
       .select(SLIM_COLUMNS)
       .eq('hidden', false)
-      .order('published_at', { ascending: false })
+      .order('sort_date', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
     if (category) {
@@ -201,7 +201,7 @@ export async function fetchRelatedArticles(groupId: string): Promise<CrimeRecord
     .select('*')
     .eq('incident_group_id', groupId)
     .eq('hidden', false)
-    .order('published_at', { ascending: true });
+    .order('sort_date', { ascending: true });
 
   if (error) {
     console.error('Error fetching related articles:', error);
@@ -368,7 +368,7 @@ export async function fetchDashboardStats(
       .from('crime_records')
       .select('categories, weapon_type')
       .eq('hidden', false)
-      .order('published_at', { ascending: false })
+      .order('sort_date', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
     if (cutoff) {
@@ -498,7 +498,7 @@ export async function fetchLiveFeed(
     .from('crime_records')
     .select('id, title, clean_title, published_at, source_url, latitude, longitude, location_text, categories, weapon_type, severity')
     .eq('hidden', false)
-    .order('published_at', { ascending: false })
+    .order('sort_date', { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (categories.length === 1) {

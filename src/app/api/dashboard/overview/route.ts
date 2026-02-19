@@ -265,9 +265,8 @@ export async function GET(request: NextRequest) {
     const page = parsePage(pageParam);
     const weaponFilter = weaponParam && weaponParam !== 'all' ? weaponParam : null;
     const drugFilter = drugParam && drugParam !== 'all' ? drugParam : null;
-    const pipelineRun = pipelineRunParam === 'all'
-      ? null
-      : (pipelineRunParam || DEFAULT_PIPELINE_RUN);
+    const rawPipelineRun = pipelineRunParam || DEFAULT_PIPELINE_RUN;
+    const pipelineRun = rawPipelineRun === 'all' ? null : rawPipelineRun;
     const cityFilter = cityParam || null;
     const kreisFilter = kreisParam || null;
     const bundeslandFilter = bundeslandParam || null;
