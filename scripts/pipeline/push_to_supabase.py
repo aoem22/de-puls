@@ -318,51 +318,95 @@ def _classify_weapon(raw: str) -> str | None:
     return "other"
 
 
-# Ordered most-specific-first so the body scan returns the best match.
-_KNIFE_BODY_SCAN: list[tuple[str, str]] = [
-    ("butterflymesser", "Butterflymesser"),
-    ("cuttermesser", "Cuttermesser"),
-    ("klappmesser", "Klappmesser"),
-    ("küchenmesser", "Küchenmesser"),
-    ("taschenmesser", "Taschenmesser"),
-    ("teppichmesser", "Teppichmesser"),
-    ("einhandmesser", "Einhandmesser"),
-    ("machete", "Machete"),
-    ("samuraischwert", "Samuraischwert"),
-    ("schwert", "Schwert"),
-    ("säbel", "Säbel"),
-    ("katana", "Katana"),
-    ("rasierklinge", "Rasierklinge"),
-    ("stichwaffe", "Stichwaffe"),
-    ("stichwaffen", "Stichwaffe"),
-    ("stichwerkzeug", "Stichwerkzeug"),
-    ("stichverletzung", "Stichverletzung"),
-    ("stichverletzungen", "Stichverletzung"),
-    ("stichwunde", "Stichwunde"),
-    ("schnittverletzung", "Schnittverletzung"),
-    ("schnittverletzungen", "Schnittverletzung"),
-    ("spitzen gegenstand", "spitzer Gegenstand"),
-    ("spitzem gegenstand", "spitzer Gegenstand"),
-    ("messerangriff", "Messer"),
-    ("messerattacke", "Messer"),
-    ("messerstich", "Messer"),
-    ("messerstiche", "Messer"),
-    ("messer", "Messer"),
+# Body-text scan: (keyword, display_name, category) ordered most-specific-first
+# per category so the scan returns the best match for each weapon type.
+_WEAPON_BODY_SCAN: list[tuple[str, str, str]] = [
+    # ── knife ──
+    ("butterflymesser", "Butterflymesser", "knife"),
+    ("cuttermesser", "Cuttermesser", "knife"),
+    ("klappmesser", "Klappmesser", "knife"),
+    ("küchenmesser", "Küchenmesser", "knife"),
+    ("taschenmesser", "Taschenmesser", "knife"),
+    ("teppichmesser", "Teppichmesser", "knife"),
+    ("einhandmesser", "Einhandmesser", "knife"),
+    ("machete", "Machete", "knife"),
+    ("samuraischwert", "Samuraischwert", "knife"),
+    ("schwert", "Schwert", "knife"),
+    ("säbel", "Säbel", "knife"),
+    ("katana", "Katana", "knife"),
+    ("rasierklinge", "Rasierklinge", "knife"),
+    ("stichwaffe", "Stichwaffe", "knife"),
+    ("stichwaffen", "Stichwaffe", "knife"),
+    ("stichwerkzeug", "Stichwerkzeug", "knife"),
+    ("stichverletzung", "Stichverletzung", "knife"),
+    ("stichverletzungen", "Stichverletzung", "knife"),
+    ("stichwunde", "Stichwunde", "knife"),
+    ("schnittverletzung", "Schnittverletzung", "knife"),
+    ("schnittverletzungen", "Schnittverletzung", "knife"),
+    ("spitzen gegenstand", "spitzer Gegenstand", "knife"),
+    ("spitzem gegenstand", "spitzer Gegenstand", "knife"),
+    ("messerangriff", "Messer", "knife"),
+    ("messerattacke", "Messer", "knife"),
+    ("messerstich", "Messer", "knife"),
+    ("messerstiche", "Messer", "knife"),
+    ("messer", "Messer", "knife"),
+    # ── gun ──
+    ("schreckschusspistole", "Schreckschusspistole", "gun"),
+    ("schreckschusswaffe", "Schreckschusswaffe", "gun"),
+    ("schreckschusswaffen", "Schreckschusswaffe", "gun"),
+    ("softairpistole", "Softairpistole", "gun"),
+    ("softair-pistole", "Softairpistole", "gun"),
+    ("softairwaffe", "Softairwaffe", "gun"),
+    ("luftdruckwaffe", "Luftdruckwaffe", "gun"),
+    ("luftdruckpistole", "Luftdruckpistole", "gun"),
+    ("luftgewehr", "Luftgewehr", "gun"),
+    ("gaspistole", "Gaspistole", "gun"),
+    ("schusswaffe", "Schusswaffe", "gun"),
+    ("schusswaffen", "Schusswaffe", "gun"),
+    ("pistole", "Pistole", "gun"),
+    ("revolver", "Revolver", "gun"),
+    ("gewehr", "Gewehr", "gun"),
+    ("schüsse", "Schusswaffe", "gun"),
+    # ── blunt ──
+    ("teleskopschlagstock", "Teleskopschlagstock", "blunt"),
+    ("baseballschläger", "Baseballschläger", "blunt"),
+    ("schlagstock", "Schlagstock", "blunt"),
+    ("schlagstöcke", "Schlagstock", "blunt"),
+    ("eisenstange", "Eisenstange", "blunt"),
+    ("metallstange", "Metallstange", "blunt"),
+    ("glasflasche", "Glasflasche", "blunt"),
+    ("hammer", "Hammer", "blunt"),
+    # ── axe ──
+    ("axt", "Axt", "axe"),
+    ("beil", "Beil", "axe"),
+    # ── pepper_spray ──
+    ("tierabwehrspray", "Tierabwehrspray", "pepper_spray"),
+    ("pfefferspray", "Pfefferspray", "pepper_spray"),
+    ("reizgas", "Reizgas", "pepper_spray"),
+    ("cs-gas", "CS-Gas", "pepper_spray"),
+    # ── explosive ──
+    ("feuerwerkskörper", "Feuerwerkskörper", "explosive"),
+    ("sprengstoff", "Sprengstoff", "explosive"),
+    ("granate", "Granate", "explosive"),
+    ("bombe", "Bombe", "explosive"),
+    ("böller", "Böller", "explosive"),
 ]
 
 
-def _scan_body_for_knife(body: str) -> str | None:
-    """Scan article body for knife-related keywords.
+def _scan_body_for_weapons(body: str) -> list[tuple[str, str]]:
+    """Scan article body for weapon keywords across all categories.
 
-    Returns the display name of the most specific match, or None.
+    Returns a list of (display_name, category) for the first match per category.
+    Most specific keywords match first within each category.
     """
     if not body:
-        return None
+        return []
     body_lower = body.lower()
-    for keyword, display in _KNIFE_BODY_SCAN:
-        if keyword in body_lower:
-            return display
-    return None
+    found: dict[str, str] = {}  # category → display_name (first match wins)
+    for keyword, display, category in _WEAPON_BODY_SCAN:
+        if category not in found and keyword in body_lower:
+            found[category] = display
+    return [(display, cat) for cat, display in found.items()]
 
 
 def transform_article(article: dict, pipeline_run: str = "default") -> dict | None:
@@ -402,17 +446,16 @@ def transform_article(article: dict, pipeline_run: str = "default") -> dict | No
     # Primary weapon for backward compat (weapon_type column)
     weapon_type = weapon_types[0] if weapon_types else None
 
-    # Fallback: if LLM missed a knife, scan body text for knife keywords
-    if "knife" not in weapon_types:
-        body_text = article.get("body", "")
-        body_knife = _scan_body_for_knife(body_text)
-        if body_knife:
-            if not weapon_detail:
-                weapon_detail = body_knife
-            if "knife" not in weapon_types:
-                weapon_types.append("knife")
+    # Fallback: scan body text for weapon keywords the LLM missed
+    body_text = article.get("body", "")
+    body_weapons = _scan_body_for_weapons(body_text)
+    for display, cat in body_weapons:
+        if cat not in weapon_types:
+            weapon_types.append(cat)
             if weapon_type is None:
-                weapon_type = "knife"
+                weapon_type = cat
+            if not weapon_detail:
+                weapon_detail = display
 
     # Extract drug_type, validate against known values
     drug_type = details.get("drug_type")
