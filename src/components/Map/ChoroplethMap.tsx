@@ -21,7 +21,7 @@ import { KreisDetailPanel } from './KreisDetailPanel';
 import { TimelineFloatingControl } from './TimelineFloatingControl';
 import { BlaulichtPlaybackControl } from './BlaulichtPlaybackControl';
 import { PulseMarkerOverlay } from './PulseMarkerOverlay';
-import { CRIME_CATEGORIES, type CrimeRecord } from '@/lib/types/crime';
+import { CRIME_CATEGORIES, type CrimeRecord, type MapLocationFilter } from '@/lib/types/crime';
 import { useFavorites } from '@/lib/useFavorites';
 import { DEFAULT_PIPELINE_RUN } from '@/lib/dashboard/timeframes';
 import type { CrimeTypeKey } from '../../../lib/types/cityCrime';
@@ -141,7 +141,7 @@ export function ChoroplethMap() {
   const [selectedBlaulichtCategory, setSelectedBlaulichtCategory] = useState<CrimeCategory | null>(null);
   const [selectedWeaponType, setSelectedWeaponType] = useState<string | null>(null);
   const [selectedDrugType, setSelectedDrugType] = useState<string | null>(null);
-  const [selectedBundesland, setSelectedBundesland] = useState<string | null>(null);
+  const [locationFilter, setLocationFilter] = useState<MapLocationFilter | null>(null);
   const [selectedPipelineRun, setSelectedPipelineRun] = useState<string | undefined>(DEFAULT_PIPELINE_RUN);
   const [isBlaulichtPlaying, setIsBlaulichtPlaying] = useState(false);
   const [blaulichtPlaybackIndex, setBlaulichtPlaybackIndex] = useState<number | null>(null);
@@ -324,17 +324,23 @@ export function ChoroplethMap() {
     return counts;
   }, [filteredBlaulichtCrimes, selectedBlaulichtCategory]);
 
-  const bundeslandCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
+  const locationOptions = useMemo(() => {
+    const blCounts: Record<string, number> = {};
+    const cityCounts: Record<string, number> = {};
+    const plzCounts: Record<string, number> = {};
     for (const crime of filteredBlaulichtCrimes) {
       if (crime.latitude == null || crime.longitude == null) continue;
       if (selectedBlaulichtCategory && !crime.categories.includes(selectedBlaulichtCategory)) continue;
-      const bl = crime.bundesland;
-      if (bl) {
-        counts[bl] = (counts[bl] || 0) + 1;
-      }
+      if (crime.bundesland) blCounts[crime.bundesland] = (blCounts[crime.bundesland] || 0) + 1;
+      if (crime.city) cityCounts[crime.city] = (cityCounts[crime.city] || 0) + 1;
+      if (crime.plz) plzCounts[crime.plz] = (plzCounts[crime.plz] || 0) + 1;
     }
-    return counts;
+    const opts: Array<{ type: 'bundesland' | 'city' | 'plz'; value: string; count: number }> = [];
+    for (const [v, c] of Object.entries(blCounts)) opts.push({ type: 'bundesland', value: v, count: c });
+    for (const [v, c] of Object.entries(cityCounts)) opts.push({ type: 'city', value: v, count: c });
+    for (const [v, c] of Object.entries(plzCounts)) opts.push({ type: 'plz', value: v, count: c });
+    opts.sort((a, b) => b.count - a.count);
+    return opts;
   }, [filteredBlaulichtCrimes, selectedBlaulichtCategory]);
 
   const orderedBlaulichtCrimes = useMemo(() => {
@@ -343,7 +349,13 @@ export function ChoroplethMap() {
       .filter((crime) => !selectedBlaulichtCategory || crime.categories.includes(selectedBlaulichtCategory))
       .filter((crime) => !selectedWeaponType || crime.weaponType === selectedWeaponType)
       .filter((crime) => !selectedDrugType || crime.drugType === selectedDrugType)
-      .filter((crime) => !selectedBundesland || crime.bundesland === selectedBundesland)
+      .filter((crime) => {
+        if (!locationFilter) return true;
+        if (locationFilter.type === 'bundesland') return crime.bundesland === locationFilter.value;
+        if (locationFilter.type === 'city') return crime.city === locationFilter.value;
+        if (locationFilter.type === 'plz') return crime.plz === locationFilter.value;
+        return true;
+      })
       .filter((crime) => !searchIdSet || searchIdSet.has(crime.id))
       .filter((crime) => !showFavoritesOnly || favoriteIds.has(crime.id))
       .filter((crime) => {
@@ -356,7 +368,7 @@ export function ChoroplethMap() {
       });
     filtered.sort((left, right) => getCrimeTimestamp(left) - getCrimeTimestamp(right));
     return filtered;
-  }, [filteredBlaulichtCrimes, selectedBlaulichtCategory, selectedWeaponType, selectedDrugType, selectedBundesland, searchIdSet, showFavoritesOnly, favoriteIds, dateFilterFrom, dateFilterTo]);
+  }, [filteredBlaulichtCrimes, selectedBlaulichtCategory, selectedWeaponType, selectedDrugType, locationFilter, searchIdSet, showFavoritesOnly, favoriteIds, dateFilterFrom, dateFilterTo]);
 
   const clampedBlaulichtIndex = useMemo(() => {
     if (orderedBlaulichtCrimes.length === 0) return -1;
@@ -593,8 +605,8 @@ export function ChoroplethMap() {
     setFlashingCrimeIds(new Set());
   }, []);
 
-  const handleBundeslandChange = useCallback((bundesland: string | null) => {
-    setSelectedBundesland(bundesland);
+  const handleLocationFilterChange = useCallback((filter: MapLocationFilter | null) => {
+    setLocationFilter(filter);
     setIsBlaulichtPlaying(false);
     setBlaulichtPlaybackIndex(null);
     setSelectedCrime(null);
@@ -753,7 +765,7 @@ export function ChoroplethMap() {
       setSelectedBlaulichtCategory(null);
       setSelectedWeaponType(null);
       setSelectedDrugType(null);
-      setSelectedBundesland(null);
+      setLocationFilter(null);
       setSearchQuery('');
       setBlaulichtPlaybackIndex(null);
       setFlashingCrimeIds(new Set());
@@ -776,9 +788,9 @@ export function ChoroplethMap() {
     drugCounts,
     selectedDrugType,
     onDrugTypeChange: handleDrugTypeChange,
-    bundeslandCounts,
-    selectedBundesland,
-    onBundeslandChange: handleBundeslandChange,
+    locationOptions,
+    locationFilter,
+    onLocationFilterChange: handleLocationFilterChange,
     searchQuery,
     onSearchQueryChange: setSearchQuery,
     searchResultCount: searchResultIds?.length ?? null,

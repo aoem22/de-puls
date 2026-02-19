@@ -55,12 +55,14 @@ function rowToCrimeRecord(row: Partial<CrimeRecordRow>): CrimeRecord {
     groupRole: row.group_role,
     pipelineRun: row.pipeline_run,
     classification: row.classification,
+    city: row.city,
+    plz: row.plz,
     bundesland: row.bundesland,
   };
 }
 
 // Slim column set for map rendering & filtering (excludes heavy text fields)
-const SLIM_COLUMNS = 'id, title, clean_title, published_at, source_url, latitude, longitude, categories, weapon_type, confidence, incident_group_id, group_role, pipeline_run, classification, bundesland';
+const SLIM_COLUMNS = 'id, title, clean_title, published_at, source_url, latitude, longitude, categories, weapon_type, confidence, incident_group_id, group_role, pipeline_run, classification, bundesland, city, plz';
 
 /**
  * Fetch all crime records via the cached server API route.

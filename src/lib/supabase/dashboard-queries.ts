@@ -715,7 +715,8 @@ export async function getLiveFeed(
         let q = supabase
           .from('crime_records')
           .select(LIVE_FEED_SELECT)
-          .order('sort_date', { ascending: true });
+          .order('sort_date', { ascending: false })
+          .order('incident_time', { ascending: false, nullsFirst: false });
         q = applyFeedFilters(q);
         return q.range(from, to);
       },
@@ -735,11 +736,12 @@ export async function getLiveFeed(
   const { count, error: countErr } = await countQ;
   if (countErr) throw new Error(`getLiveFeed count error: ${countErr.message}`);
 
-  // Data query — sorted by Tatzeit ascending (earliest first)
+  // Data query — sorted by Tatzeit descending (latest first), then by time (nulls at end)
   let dataQ = supabase
     .from('crime_records')
     .select(LIVE_FEED_SELECT)
-    .order('sort_date', { ascending: true })
+    .order('sort_date', { ascending: false })
+    .order('incident_time', { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);
   dataQ = applyFeedFilters(dataQ);
   const { data, error } = await dataQ;

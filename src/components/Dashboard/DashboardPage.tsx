@@ -56,25 +56,6 @@ function buildDrugChips(drugCounts?: Record<string, number>): DrugChip[] {
     }));
 }
 
-interface BundeslandChip {
-  key: string;
-  label: string;
-  count: number;
-}
-
-function buildBundeslandChips(bundeslandCounts?: Record<string, number>): BundeslandChip[] {
-  if (!bundeslandCounts) return [];
-
-  return Object.entries(bundeslandCounts)
-    .filter(([, count]) => count > 0)
-    .sort((left, right) => right[1] - left[1])
-    .map(([key, count]) => ({
-      key,
-      label: key,
-      count,
-    }));
-}
-
 function categoryLabel(category: CrimeCategory | null): string {
   if (!category) return 'Alle Kategorien';
   return CRIME_CATEGORIES.find((item) => item.key === category)?.label ?? category;
@@ -183,7 +164,6 @@ export function DashboardPage() {
   const categoryChips = data?.categoryCounts ?? [];
   const weaponChips = buildWeaponChips(data?.weaponCounts);
   const drugChips = buildDrugChips(data?.drugCounts);
-  const bundeslandChips = buildBundeslandChips(data?.bundeslandCounts);
   const periodLabel = data?.period.label ?? 'Zeitraum';
   const previousLabel = data?.period.previousLabel ?? 'Vorperiode';
   const isYearView = timeframe === 'year_to_date';
@@ -209,9 +189,6 @@ export function DashboardPage() {
             categoryChips={categoryChips}
             weaponChips={weaponChips}
             drugChips={drugChips}
-            bundeslandChips={bundeslandChips}
-            bundeslandFilter={bundeslandFilter}
-            onBundeslandFilterChange={handleBundeslandFilterChange}
             incidentsCurrent={data?.snapshot.incidentsCurrent}
             totalRecords2026={data?.snapshot.totalRecords2026}
             isDark={theme === 'dark'}
@@ -256,6 +233,11 @@ export function DashboardPage() {
                   onFilterModeChange={setRanglisteMode}
                   liveFeedItems={data.liveFeed}
                   onFeedItemClick={setHighlightedFeedId}
+                  bundeslandCounts={data.bundeslandCounts}
+                  bundeslandFilter={bundeslandFilter}
+                  onBundeslandFilterChange={handleBundeslandFilterChange}
+                  focusCategoryLabel={focusCategory ? categoryLabel(focusCategory) : null}
+                  weaponFilterLabel={weaponFilter ? (WEAPON_LABELS_TYPED[weaponFilter]?.de ?? weaponFilter) : null}
                 />
                 {showLoading && (
                   <div

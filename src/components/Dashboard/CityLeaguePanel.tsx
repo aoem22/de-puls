@@ -62,6 +62,11 @@ interface CityLeaguePanelProps {
   onFilterModeChange: (mode: RanglisteFilterMode) => void;
   liveFeedItems?: DashboardLiveFeedItem[];
   onFeedItemClick?: (feedId: string) => void;
+  bundeslandCounts?: Record<string, number>;
+  bundeslandFilter?: string | null;
+  onBundeslandFilterChange?: (bundesland: string | null) => void;
+  focusCategoryLabel?: string | null;
+  weaponFilterLabel?: string | null;
 }
 
 // Generic row for the reusable table
@@ -72,11 +77,12 @@ interface LeagueRow {
   rankChange: number | null;
 }
 
-export type RanglisteFilterMode = 'staedte' | 'plz';
+export type RanglisteFilterMode = 'staedte' | 'plz' | 'bundesland';
 
 const FILTER_TABS: Array<{ mode: RanglisteFilterMode; label: string }> = [
-  { mode: 'staedte', label: 'St\u00e4dte' },
+  { mode: 'staedte', label: 'Stadt' },
   { mode: 'plz', label: 'PLZ' },
+  { mode: 'bundesland', label: 'Bundesland' },
 ];
 
 // ────────────────────────── Shared sub-components ──────────────────────────
@@ -282,6 +288,11 @@ export function CityLeaguePanel({
   onFilterModeChange,
   liveFeedItems = [],
   onFeedItemClick,
+  bundeslandCounts,
+  bundeslandFilter,
+  onBundeslandFilterChange,
+  focusCategoryLabel,
+  weaponFilterLabel,
 }: CityLeaguePanelProps) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
@@ -307,6 +318,22 @@ export function CityLeaguePanel({
         rankChange: p.rankChange,
       })),
     [topPlz],
+  );
+
+  const bundeslandRows: LeagueRow[] = useMemo(
+    () =>
+      bundeslandCounts
+        ? Object.entries(bundeslandCounts)
+            .filter(([, count]) => count > 0)
+            .sort(([, a], [, b]) => b - a)
+            .map(([bl, count]) => ({
+              key: bl,
+              label: bl,
+              count,
+              rankChange: null,
+            }))
+        : [],
+    [bundeslandCounts],
   );
 
   // ── Merge ALL points into one array for the map ──
@@ -375,8 +402,11 @@ export function CityLeaguePanel({
       case 'plz':
         onPlzClick(key);
         break;
+      case 'bundesland':
+        onBundeslandFilterChange?.(bundeslandFilter === key ? null : key);
+        break;
     }
-  }, [filterMode, onCityClick, onPlzClick]);
+  }, [filterMode, onCityClick, onPlzClick, onBundeslandFilterChange, bundeslandFilter]);
 
   // Clear other-mode selections when switching tabs
   const handleTabChange = useCallback((mode: RanglisteFilterMode) => {
@@ -400,13 +430,19 @@ export function CityLeaguePanel({
           nameHeader: 'PLZ',
           selectedKey: selectedPlz,
         };
+      case 'bundesland':
+        return {
+          activeRows: bundeslandRows,
+          nameHeader: 'Bundesland',
+          selectedKey: bundeslandFilter ?? null,
+        };
     }
   }, [
-    filterMode, cityRows, plzRows,
-    selectedCity, selectedPlz,
+    filterMode, cityRows, plzRows, bundeslandRows,
+    selectedCity, selectedPlz, bundeslandFilter,
   ]);
 
-  const hasData = cityRows.length > 0 || plzRows.length > 0;
+  const hasData = cityRows.length > 0 || plzRows.length > 0 || bundeslandRows.length > 0;
 
   if (!hasData) {
     return (
@@ -435,14 +471,14 @@ export function CityLeaguePanel({
 
   return (
     <article
-      className="rounded-2xl border p-3 sm:p-4"
+      className="overflow-hidden rounded-2xl border p-3 sm:p-4"
       style={{
         borderColor: 'var(--border-subtle)',
         background: 'linear-gradient(145deg, var(--card) 0%, var(--card-elevated) 100%)',
       }}
     >
-      {/* Header row */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      {/* Header row: title + filter tags (left) | segmented control (right) */}
+      <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
         <h2
           className="text-[11px] font-bold uppercase tracking-[0.2em]"
           style={{ color: 'var(--text-faint)' }}
@@ -458,45 +494,73 @@ export function CityLeaguePanel({
         >
           {periodLabel}
         </span>
-        <span className="w-full text-[10px] sm:ml-auto sm:w-auto sm:text-right" style={{ color: 'var(--text-faint)' }}>
-          {categoryLabel}
-        </span>
+        {focusCategoryLabel && (
+          <span
+            className="rounded-md px-2 py-0.5 text-[10px] font-bold"
+            style={{
+              background: 'color-mix(in srgb, var(--text-muted) 12%, transparent)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {focusCategoryLabel}
+          </span>
+        )}
+        {weaponFilterLabel && (
+          <span
+            className="rounded-md px-2 py-0.5 text-[10px] font-bold"
+            style={{
+              background: 'color-mix(in srgb, var(--text-muted) 12%, transparent)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {weaponFilterLabel}
+          </span>
+        )}
+
+        {/* Spacer pushes segmented control right on desktop */}
+        <div className="hidden sm:block sm:flex-1" />
+
+        {/* Segmented control */}
+        <div className="inline-flex w-full shrink-0 rounded-lg border p-1 sm:w-auto" style={{ borderColor: 'var(--border-inner)' }}>
+          {FILTER_TABS.map((tab) => {
+            const active = filterMode === tab.mode;
+            return (
+              <button
+                key={tab.mode}
+                onClick={() => handleTabChange(tab.mode)}
+                className="flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors sm:flex-none"
+                style={{
+                  background: active
+                    ? 'color-mix(in srgb, var(--accent) 20%, transparent)'
+                    : 'transparent',
+                  color: active ? 'var(--accent)' : 'var(--text-muted)',
+                  border: active
+                    ? '1px solid color-mix(in srgb, var(--accent) 35%, transparent)'
+                    : '1px solid transparent',
+                }}
+              >
+                {active && '\u25CF '}
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Segmented control */}
-      <div className="mt-3 inline-flex w-full rounded-lg border p-1 sm:w-auto" style={{ borderColor: 'var(--border-inner)' }}>
-        {FILTER_TABS.map((tab) => {
-          const active = filterMode === tab.mode;
-          return (
-            <button
-              key={tab.mode}
-              onClick={() => handleTabChange(tab.mode)}
-              className="flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors sm:flex-none"
-              style={{
-                background: active
-                  ? 'color-mix(in srgb, var(--accent) 20%, transparent)'
-                  : 'transparent',
-                color: active ? 'var(--accent)' : 'var(--text-muted)',
-                border: active
-                  ? '1px solid color-mix(in srgb, var(--accent) 35%, transparent)'
-                  : '1px solid transparent',
-              }}
-            >
-              {active && '\u25CF '}
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Separator between header and content — negative margins to hit card edges */}
+      <div
+        className="-mx-3 mt-3 sm:-mx-4"
+        style={{ borderTop: '1px solid var(--border-inner)' }}
+      />
 
-      {/* Grid: Table left | Map right */}
-      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr] lg:gap-4">
+      {/* Grid: Table left | separator | Map right */}
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:gap-0">
         {/* Table */}
-        <div className="min-w-0">
+        <div className="min-w-0 lg:pr-4">
           <LeagueTable
             nameHeader={nameHeader}
             rows={activeRows}
-            isYearView={isYearView}
+            isYearView={filterMode === 'bundesland' || isYearView}
             hoveredKey={hoveredKey}
             onHover={setHoveredKey}
             selectedKey={selectedKey}
@@ -504,9 +568,15 @@ export function CityLeaguePanel({
           />
         </div>
 
-        {/* Mini Map (hidden on mobile) */}
+        {/* Vertical separator (desktop only) — extends top to horizontal rule, bottom to card edge */}
         <div
-          className="hidden overflow-hidden rounded-xl md:block"
+          className="hidden lg:block -mt-3 -mb-3 sm:-mb-4"
+          style={{ width: 1, background: 'var(--border-inner)' }}
+        />
+
+        {/* Mini Map — fills its separator-enclosed box with no whitespace */}
+        <div
+          className="hidden overflow-hidden md:block -mr-3 sm:-mr-4 -mb-3 sm:-mb-4 lg:-mt-3"
           style={{ background: 'var(--card-inner)', minHeight: 280 }}
         >
           <DashboardMiniMap

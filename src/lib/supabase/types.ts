@@ -50,6 +50,7 @@ export interface CrimeRecordRow {
   pipeline_run: string;
   classification: string | null;
   city: string | null;
+  plz: string | null;
   bundesland: string | null;
   kreis_ags: string | null;
   kreis_name: string | null;

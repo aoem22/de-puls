@@ -103,10 +103,10 @@ function resolveContextCard(
   return { label, value: displayValue, helper: stat.helper };
 }
 
-function LoadingCard() {
+function LoadingCard({ className = '' }: { className?: string }) {
   return (
     <div
-      className="h-28 animate-pulse rounded-2xl border"
+      className={`h-28 animate-pulse rounded-xl border sm:rounded-2xl ${className}`}
       style={{ borderColor: 'var(--border-subtle)', background: 'var(--loading-skeleton)' }}
     />
   );
@@ -122,25 +122,25 @@ interface SnapshotTileProps {
 function SnapshotTile({ label, value, helper, delta }: SnapshotTileProps) {
   return (
     <article
-      className="rounded-2xl border p-3.5 sm:p-4"
+      className="rounded-xl border p-2.5 sm:rounded-2xl sm:p-4"
       style={{
         borderColor: 'var(--border-subtle)',
         background: 'linear-gradient(145deg, var(--card) 0%, var(--card-elevated) 100%)',
       }}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
+      <p className="text-[8px] font-semibold uppercase tracking-[0.2em] sm:text-[10px]" style={{ color: 'var(--text-faint)' }}>
         {label}
       </p>
-      <p className="mt-2 text-[1.7rem] font-bold tabular-nums leading-none sm:text-3xl" style={{ color: 'var(--text-primary)' }}>
+      <p className="mt-1 text-lg font-bold tabular-nums leading-none sm:mt-2 sm:text-[1.7rem]" style={{ color: 'var(--text-primary)' }}>
         {value}
       </p>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+      <div className="mt-1 flex items-center justify-between gap-2 sm:mt-2">
+        <p className="text-[10px] sm:text-xs" style={{ color: 'var(--text-muted)' }}>
           {helper}
         </p>
         {delta !== undefined && (
           <span
-            className="text-xs font-semibold tabular-nums"
+            className="text-[10px] font-semibold tabular-nums sm:text-xs"
             style={{ color: trendTone(delta) }}
           >
             {formatDelta(delta)}
@@ -169,22 +169,24 @@ export function DashboardSnapshotGrid({
   contextStats,
 }: DashboardSnapshotGridProps) {
   return (
-    <section className="dashboard-rise dashboard-delay-1 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="dashboard-rise dashboard-delay-1 grid grid-cols-3 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
       {showLoading ? (
         <>
-          <LoadingCard />
+          <LoadingCard className="hidden sm:block" />
           <LoadingCard />
           <LoadingCard />
           <LoadingCard />
         </>
       ) : (
         <>
-          <SnapshotTile
-            label={categoryLabel(focusCategory)}
-            value={(snapshot?.focusCountCurrent ?? 0).toLocaleString('de-DE')}
-            helper={isYearView ? `Gesamtes Jahr ${DASHBOARD_YEAR}` : `ggü. ${previousLabel}`}
-            delta={isYearView ? undefined : snapshot?.incidentsTrendPct}
-          />
+          <div className="hidden sm:block">
+            <SnapshotTile
+              label={categoryLabel(focusCategory)}
+              value={(snapshot?.focusCountCurrent ?? 0).toLocaleString('de-DE')}
+              helper={isYearView ? `Gesamtes Jahr ${DASHBOARD_YEAR}` : `ggü. ${previousLabel}`}
+              delta={isYearView ? undefined : snapshot?.incidentsTrendPct}
+            />
+          </div>
           {(CATEGORY_CARD_MAP[focusCategory ?? '_default'] ?? CATEGORY_CARD_MAP._default).map((cardType) => {
             const card = contextStats
               ? resolveContextCard(cardType, contextStats)

@@ -22,12 +22,6 @@ interface DrugChip {
   count: number;
 }
 
-interface BundeslandChip {
-  key: string;
-  label: string;
-  count: number;
-}
-
 interface DashboardTopControlsProps {
   timeframe: DashboardTimeframe;
   onTimeframeChange: (timeframe: DashboardTimeframe) => void;
@@ -37,9 +31,6 @@ interface DashboardTopControlsProps {
   onWeaponFilterChange: (weapon: string | null) => void;
   drugFilter: string | null;
   onDrugFilterChange: (drug: string | null) => void;
-  bundeslandChips: BundeslandChip[];
-  bundeslandFilter: string | null;
-  onBundeslandFilterChange: (bundesland: string | null) => void;
   categoryChips: SecurityOverviewResponse['categoryCounts'];
   weaponChips: WeaponChip[];
   drugChips: DrugChip[];
@@ -58,9 +49,6 @@ export function DashboardTopControls({
   onWeaponFilterChange,
   drugFilter,
   onDrugFilterChange,
-  bundeslandChips,
-  bundeslandFilter,
-  onBundeslandFilterChange,
   categoryChips,
   weaponChips,
   drugChips,
@@ -227,34 +215,6 @@ export function DashboardTopControls({
                   }}
                 >
                   <span className="text-sm leading-none">{item.icon}</span>
-                  {item.label}
-                  <span className="tabular-nums opacity-60">{item.count.toLocaleString('de-DE')}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {bundeslandChips.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
-            Bundesland
-          </p>
-          <div className={chipScrollerClass}>
-            {bundeslandChips.map((item) => {
-              const active = bundeslandFilter === item.key;
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => onBundeslandFilterChange(active ? null : item.key)}
-                  className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors"
-                  style={{
-                    borderColor: active ? '#3b82f6' : 'var(--border-subtle)',
-                    background: active ? 'rgba(59,130,246,0.12)' : 'var(--card)',
-                    color: active ? '#3b82f6' : 'var(--text-secondary)',
-                  }}
-                >
                   {item.label}
                   <span className="tabular-nums opacity-60">{item.count.toLocaleString('de-DE')}</span>
                 </button>

@@ -15,7 +15,8 @@ import {
   DEUTSCHLANDATLAS_META,
   isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
-import { CRIME_CATEGORIES, WEAPON_LABELS, DRUG_LABELS, type CrimeCategory } from '@/lib/types/crime';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { CRIME_CATEGORIES, WEAPON_LABELS, DRUG_LABELS, type CrimeCategory, type MapLocationFilter } from '@/lib/types/crime';
 import { WeaponIcon } from './BlaulichtPlaybackControl';
 import { useTranslation, translations, tNested } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
@@ -49,10 +50,10 @@ export interface LayerControlProps {
   drugCounts?: Record<string, number>;
   selectedDrugType?: string | null;
   onDrugTypeChange?: (drugType: string | null) => void;
-  // Blaulicht Bundesland filter
-  bundeslandCounts?: Record<string, number>;
-  selectedBundesland?: string | null;
-  onBundeslandChange?: (bundesland: string | null) => void;
+  // Blaulicht location filter (Bundesland / Stadt / PLZ)
+  locationOptions?: Array<{ type: 'bundesland' | 'city' | 'plz'; value: string; count: number }>;
+  locationFilter?: MapLocationFilter | null;
+  onLocationFilterChange?: (filter: MapLocationFilter | null) => void;
   // Blaulicht full-text search
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
@@ -159,9 +160,9 @@ export function LayerControl({
   drugCounts,
   selectedDrugType,
   onDrugTypeChange,
-  bundeslandCounts,
-  selectedBundesland,
-  onBundeslandChange,
+  locationOptions,
+  locationFilter,
+  onLocationFilterChange,
   searchQuery,
   onSearchQueryChange,
   searchResultCount,
@@ -640,54 +641,14 @@ export function LayerControl({
         </div>
       )}
 
-      {/* Bundesland filter */}
-      {selectedIndicator === 'blaulicht' && bundeslandCounts && onBundeslandChange && Object.keys(bundeslandCounts).length > 0 && (
-        <div className="hidden md:block pt-2 border-t border-[var(--border)]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">{lang === 'de' ? 'Bundesland' : 'State'}</span>
-          </div>
-          <div className="space-y-1">
-            {/* All states button */}
-            <button
-              onClick={() => onBundeslandChange(null)}
-              className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
-                selectedBundesland === null
-                  ? 'bg-[var(--card-elevated)] border border-[var(--foreground)]/80'
-                  : 'hover:bg-[var(--card-elevated)] active:bg-[var(--card-elevated)] border border-transparent'
-              }`}
-            >
-              <span className="w-4 text-center text-xs flex-shrink-0">🗺️</span>
-              <span className={`text-sm md:text-xs flex-1 text-left no-select ${selectedBundesland === null ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
-                {lang === 'de' ? 'Alle' : 'All'}
-              </span>
-              <span className="text-xs text-[var(--text-tertiary)] tabular-nums">
-                {Object.values(bundeslandCounts).reduce((a, b) => a + b, 0)}
-              </span>
-            </button>
-
-            {Object.entries(bundeslandCounts)
-              .sort(([, a], [, b]) => b - a)
-              .map(([bl, count]) => {
-                const isSelected = selectedBundesland === bl;
-                return (
-                  <button
-                    key={bl}
-                    onClick={() => onBundeslandChange(isSelected ? null : bl)}
-                    className={`w-full flex items-center gap-2 px-2 py-2 md:py-1.5 rounded-md transition-colors touch-feedback ${
-                      isSelected
-                        ? 'bg-[var(--card-elevated)] border border-[var(--foreground)]/80'
-                        : 'hover:bg-[var(--card-elevated)] active:bg-[var(--card-elevated)] border border-transparent'
-                    }`}
-                  >
-                    <span className={`text-sm md:text-xs flex-1 text-left no-select ${isSelected ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
-                      {bl}
-                    </span>
-                    <span className="text-xs text-[var(--text-tertiary)] tabular-nums">{count}</span>
-                  </button>
-                );
-              })}
-          </div>
-        </div>
+      {/* Location filter (Stadt / PLZ / Bundesland) */}
+      {selectedIndicator === 'blaulicht' && locationOptions && onLocationFilterChange && locationOptions.length > 0 && (
+        <LocationFilterSection
+          locationOptions={locationOptions}
+          locationFilter={locationFilter ?? null}
+          onLocationFilterChange={onLocationFilterChange}
+          lang={lang}
+        />
       )}
 
       {/* Full-text search across all Polizeimeldungen */}
@@ -1027,6 +988,156 @@ function CityCrimeLegend({
           </>
         )}
       </p>
+    </div>
+  );
+}
+
+// ── Location autocomplete filter (Stadt / PLZ / Bundesland) ──────────────
+const LOCATION_TYPE_LABELS: Record<string, Record<'de' | 'en', string>> = {
+  bundesland: { de: 'Bundesland', en: 'State' },
+  city: { de: 'Stadt', en: 'City' },
+  plz: { de: 'PLZ', en: 'ZIP' },
+};
+
+function LocationFilterSection({
+  locationOptions,
+  locationFilter,
+  onLocationFilterChange,
+  lang,
+}: {
+  locationOptions: Array<{ type: 'bundesland' | 'city' | 'plz'; value: string; count: number }>;
+  locationFilter: MapLocationFilter | null;
+  onLocationFilterChange: (filter: MapLocationFilter | null) => void;
+  lang: 'de' | 'en';
+}) {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!query || query.length < 1) return [];
+    const q = query.toLowerCase();
+    return locationOptions
+      .filter((opt) => opt.value.toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [query, locationOptions]);
+
+  const grouped = useMemo(() => {
+    const groups: Record<string, typeof filtered> = {};
+    for (const opt of filtered) {
+      if (!groups[opt.type]) groups[opt.type] = [];
+      groups[opt.type].push(opt);
+    }
+    return groups;
+  }, [filtered]);
+
+  const handleSelect = (opt: { type: 'bundesland' | 'city' | 'plz'; value: string }) => {
+    onLocationFilterChange({ type: opt.type, value: opt.value });
+    setQuery('');
+    setIsOpen(false);
+  };
+
+  const handleClear = () => {
+    onLocationFilterChange(null);
+    setQuery('');
+  };
+
+  return (
+    <div className="hidden md:block pt-2 border-t border-[var(--border)]" ref={wrapperRef}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">
+          {lang === 'de' ? 'Standort' : 'Location'}
+        </span>
+      </div>
+
+      {/* Active filter pill */}
+      {locationFilter && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-blue-500/20 border border-blue-500/60 text-blue-300">
+            <span className="text-[10px] text-blue-400/70 uppercase">{LOCATION_TYPE_LABELS[locationFilter.type]?.[lang]}</span>
+            {locationFilter.value}
+            <button
+              type="button"
+              onClick={handleClear}
+              className="ml-0.5 hover:text-blue-100 transition-colors"
+              aria-label={lang === 'de' ? 'Filter entfernen' : 'Remove filter'}
+            >
+              <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </span>
+        </div>
+      )}
+
+      {/* Search input */}
+      <div className="relative">
+        <svg
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => { if (query.length >= 1) setIsOpen(true); }}
+          placeholder={lang === 'de' ? 'Stadt, PLZ, Bundesland…' : 'City, ZIP, State…'}
+          className="w-full pl-8 pr-3 py-2 md:py-1.5 text-sm md:text-xs bg-[var(--background)] border border-[var(--border)] rounded-md text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+        />
+
+        {/* Dropdown */}
+        {isOpen && filtered.length > 0 && (
+          <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--card)] shadow-lg">
+            {(['bundesland', 'city', 'plz'] as const).map((type) => {
+              const items = grouped[type];
+              if (!items || items.length === 0) return null;
+              return (
+                <div key={type}>
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--text-muted)] bg-[var(--background)]">
+                    {LOCATION_TYPE_LABELS[type][lang]}
+                  </div>
+                  {items.map((opt) => (
+                    <button
+                      key={`${opt.type}-${opt.value}`}
+                      type="button"
+                      onClick={() => handleSelect(opt)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--card-elevated)] transition-colors"
+                    >
+                      <span>{opt.value}</span>
+                      <span className="text-[var(--text-muted)] tabular-nums">{opt.count.toLocaleString('de-DE')}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

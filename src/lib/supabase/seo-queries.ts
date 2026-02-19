@@ -58,6 +58,9 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
     incidentGroupId: row.incident_group_id,
     groupRole: row.group_role,
     pipelineRun: row.pipeline_run,
+    city: row.city,
+    plz: row.plz,
+    bundesland: row.bundesland,
   };
 }
 

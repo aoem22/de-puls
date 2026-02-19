@@ -127,7 +127,14 @@ export interface CrimeRecord {
   groupRole?: string | null;
   pipelineRun?: string | null;
   classification?: string | null;
+  city?: string | null;
+  plz?: string | null;
   bundesland?: string | null;
+}
+
+export interface MapLocationFilter {
+  type: 'bundesland' | 'city' | 'plz';
+  value: string;
 }
 
 export const CRIME_CATEGORIES: Array<{
