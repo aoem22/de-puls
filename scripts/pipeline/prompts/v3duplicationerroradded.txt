@@ -45,9 +45,15 @@ D) "update" — Nachtrag/Korrektur/Folgemeldung zu einem früheren Vorfall. Zur�
   Bei reinen Korrekturen ohne neue Sachinformationen (z.B. "Alter war 16, nicht 18"): NUR update-Objekt.
 
 === REGEL 1: MULTI-INCIDENT ERKENNUNG ===
+KRITISCH: Sammelartikel mit N verschiedenen Vorfällen MÜSSEN in N separate JSON-Objekte aufgeteilt werden.
+Ein einziges JSON-Objekt für einen Sammelartikel ist IMMER FALSCH.
+FAUSTREGEL: Body > 3000 Zeichen mit verschiedenen Ortsnamen/Straßen → fast sicher ein Sammelartikel!
 Sammelartikel enthalten MEHRERE separate Vorfälle. Erkenne an:
 - Semikolon-getrennte Themen im Titel (z.B. "Messerangriff; Verkehrsunfälle; Brandstiftung")
 - Fettgedruckte Zwischen-Überschriften mit Ortsnamen (z.B. "Schorndorf: Radlader verliert Ladung")
+- "City (Landkreis): Title" Zwischen-Überschriften (z.B. "Kirchentellinsfurt (TÜ): Verkehrsunfall")
+- Erster Vorfall oft ohne eigene Überschrift direkt nach "City(ots)" Einleitung
+- Absätze die mit Datum beginnen: "Am DD.MM.YYYY gegen HH:MM Uhr..." = separate Vorfälle
 - Titelformat "Pressemitteilung ... mit Berichten aus dem [Kreis]"
 - Mehrere Orts-Absätze mit jeweils eigener Straße/Stadt
 - "a)", "b)" oder "1.", "2.", "3." nummerierte Abschnitte mit verschiedenen Vorfällen
@@ -113,10 +119,11 @@ Für JEDEN Straftat-Vorfall, extrahiere:
 
 6. is_update: true wenn der Artikel eine Folgemeldung/Nachtrag zu einem früheren Vorfall ist, sonst false.
 
-7. INCIDENT_BODY: NUR bei Sammelartikeln (mehrere Vorfälle im selben article_index):
-   Gib den relevanten Textabschnitt aus dem Body zurück, der zu DIESEM Vorfall gehört.
-   Kopiere den Originaltext wortwörtlich — nicht umschreiben oder zusammenfassen.
+7. INCIDENT_BODY: **PFLICHT** bei Sammelartikeln (mehrere Vorfälle im selben article_index):
+   Für JEDEN Vorfall im Sammelartikel MUSS "incident_body" angegeben werden.
+   Kopiere den relevanten Textabschnitt aus dem Body wortwörtlich — nicht umschreiben.
    Bei Einzelmeldungen (nur 1 Vorfall pro Artikel): Feld weglassen.
+   FEHLT incident_body bei einem Sammelartikel, werden die Daten FALSCH zugeordnet!
 
 PKS-Kategorien (häufigste zuerst):
 Gewalt:
@@ -159,5 +166,7 @@ Antworte NUR mit einem JSON-Array. Keine Erklärungen, kein Markdown:
   {{"article_index": 0, "classification": "junk", "reason": "Verkehrshinweis"}},
   {{"article_index": 1, "classification": "crime", "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt", "is_update": false, "location": {{"street": "Breite Straße", "house_number": "12", "district": "Innenstadt", "city": "Mannheim", "location_hint": null, "cross_street": null, "confidence": 1.0}}, "incident_time": {{"date": "2025-01-15", "time": "21:15", "precision": "exact"}}, "crime": {{"pks_code": "2200", "pks_category": "Körperverletzung", "sub_type": "Gefährliche Körperverletzung mit Messer", "confidence": 0.95}}, "details": {{"weapon_types": ["knife"], "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "severity": "serious", "motive": "dispute", "damage_amount_eur": 5000, "damage_estimate": "approximate"}}}},
   {{"article_index": 2, "classification": "feuerwehr", "reason": "Gasausströmung ohne Straftatverdacht"}},
-  {{"article_index": 3, "classification": "update", "reason": "Nachtrag zu Brandfall", "update_type": "nachtrag"}}
+  {{"article_index": 3, "classification": "update", "reason": "Nachtrag zu Brandfall", "update_type": "nachtrag"}},
+  {{"article_index": 4, "classification": "crime", "clean_title": "Einbruch in Aalen — Schule betroffen", "is_update": false, "incident_body": "Aalen: Einbruch in Schule\n\nEin Unbekannter brach in der Nacht zum Montag in eine Schule in der Friedrichstraße ein...", "location": {{"street": "Friedrichstraße", "house_number": null, "district": null, "city": "Aalen", "location_hint": "Schule", "cross_street": null, "confidence": 0.9}}, "incident_time": {{"date": "2025-01-20", "time": "02:00", "precision": "approximate"}}, "crime": {{"pks_code": "4350", "pks_category": "Wohnungseinbruchdiebstahl", "sub_type": "Einbruch in Schule", "confidence": 0.9}}, "details": {{"weapon_types": null, "drug_type": null, "victim_count": 0, "suspect_count": 1, "victim_age": null, "suspect_age": null, "victim_gender": null, "suspect_gender": null, "victim_herkunft": null, "suspect_herkunft": null, "severity": "property_only", "motive": "robbery", "damage_amount_eur": 5000, "damage_estimate": "approximate"}}}},
+  {{"article_index": 4, "classification": "crime", "clean_title": "Unfall in Ellwangen — Sachschaden", "is_update": false, "incident_body": "Ellwangen: Unfall beim Rangieren\n\nAm Samstag gegen 14:30 Uhr beschädigte ein 45-Jähriger beim Rangieren...", "location": {{"street": null, "house_number": null, "district": null, "city": "Ellwangen", "location_hint": null, "cross_street": null, "confidence": 0.5}}, "incident_time": {{"date": "2025-01-18", "time": "14:30", "precision": "approximate"}}, "crime": {{"pks_code": "7200", "pks_category": "Unfallflucht/Fahrerflucht", "sub_type": "Sachschaden beim Rangieren", "confidence": 0.8}}, "details": {{"weapon_types": null, "drug_type": null, "victim_count": 0, "suspect_count": 1, "victim_age": null, "suspect_age": "45", "victim_gender": null, "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": null, "severity": "property_only", "motive": null, "damage_amount_eur": 3000, "damage_estimate": "approximate"}}}}
 ]

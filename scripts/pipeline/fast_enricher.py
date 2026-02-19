@@ -116,9 +116,15 @@ D) "update" — Nachtrag/Korrektur/Folgemeldung zu einem früheren Vorfall. Zur�
   Bei reinen Korrekturen ohne neue Sachinformationen (z.B. "Alter war 16, nicht 18"): NUR update-Objekt.
 
 === REGEL 1: MULTI-INCIDENT ERKENNUNG ===
+KRITISCH: Sammelartikel mit N verschiedenen Vorfällen MÜSSEN in N separate JSON-Objekte aufgeteilt werden.
+Ein einziges JSON-Objekt für einen Sammelartikel ist IMMER FALSCH.
+FAUSTREGEL: Body > 3000 Zeichen mit verschiedenen Ortsnamen/Straßen → fast sicher ein Sammelartikel!
 Sammelartikel enthalten MEHRERE separate Vorfälle. Erkenne an:
 - Semikolon-getrennte Themen im Titel (z.B. "Messerangriff; Verkehrsunfälle; Brandstiftung")
 - Fettgedruckte Zwischen-Überschriften mit Ortsnamen (z.B. "Schorndorf: Radlader verliert Ladung")
+- "City (Landkreis): Title" Zwischen-Überschriften (z.B. "Kirchentellinsfurt (TÜ): Verkehrsunfall")
+- Erster Vorfall oft ohne eigene Überschrift direkt nach "City(ots)" Einleitung
+- Absätze die mit Datum beginnen: "Am DD.MM.YYYY gegen HH:MM Uhr..." = separate Vorfälle
 - Titelformat "Pressemitteilung ... mit Berichten aus dem [Kreis]"
 - Mehrere Orts-Absätze mit jeweils eigener Straße/Stadt
 - "a)", "b)" oder "1.", "2.", "3." nummerierte Abschnitte mit verschiedenen Vorfällen
@@ -184,10 +190,11 @@ Für JEDEN Straftat-Vorfall, extrahiere:
 
 6. is_update: true wenn der Artikel eine Folgemeldung/Nachtrag zu einem früheren Vorfall ist, sonst false.
 
-7. INCIDENT_BODY: NUR bei Sammelartikeln (mehrere Vorfälle im selben article_index):
-   Gib den relevanten Textabschnitt aus dem Body zurück, der zu DIESEM Vorfall gehört.
-   Kopiere den Originaltext wortwörtlich — nicht umschreiben oder zusammenfassen.
+7. INCIDENT_BODY: **PFLICHT** bei Sammelartikeln (mehrere Vorfälle im selben article_index):
+   Für JEDEN Vorfall im Sammelartikel MUSS "incident_body" angegeben werden.
+   Kopiere den relevanten Textabschnitt aus dem Body wortwörtlich — nicht umschreiben.
    Bei Einzelmeldungen (nur 1 Vorfall pro Artikel): Feld weglassen.
+   FEHLT incident_body bei einem Sammelartikel, werden die Daten FALSCH zugeordnet!
 
 PKS-Kategorien (häufigste zuerst):
 Gewalt:
@@ -231,7 +238,9 @@ Antworte NUR mit einem JSON-Array. Keine Erklärungen, kein Markdown:
   {{"article_index": 0, "classification": "junk", "reason": "Verkehrshinweis"}},
   {{"article_index": 1, "classification": "crime", "clean_title": "Messerangriff in Mannheim — Mann schwer verletzt", "is_update": false, "location": {{"street": "Breite Straße", "house_number": "12", "district": "Innenstadt", "city": "Mannheim", "location_hint": null, "cross_street": null, "confidence": 1.0}}, "incident_time": {{"date": "2025-01-15", "time": "21:15", "precision": "exact"}}, "crime": {{"pks_code": "2200", "pks_category": "Körperverletzung", "sub_type": "Gefährliche Körperverletzung mit Messer", "confidence": 0.95}}, "details": {{"weapon_types": ["Messer"], "drug_type": null, "victim_count": 1, "suspect_count": 1, "victim_age": "34", "suspect_age": "22", "victim_gender": "male", "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": "syrisch", "victim_description": null, "suspect_description": "ca. 180 cm, schlanke Statur, kurze dunkle Haare, bekleidet mit schwarzer Jacke und Jeans", "severity": "serious", "motive": "dispute", "damage_amount_eur": 5000, "damage_estimate": "approximate"}}}},
   {{"article_index": 2, "classification": "feuerwehr", "reason": "Gasausströmung ohne Straftatverdacht"}},
-  {{"article_index": 3, "classification": "update", "reason": "Nachtrag zu Brandfall", "update_type": "nachtrag"}}
+  {{"article_index": 3, "classification": "update", "reason": "Nachtrag zu Brandfall", "update_type": "nachtrag"}},
+  {{"article_index": 4, "classification": "crime", "clean_title": "Einbruch in Aalen — Schule betroffen", "is_update": false, "incident_body": "Aalen: Einbruch in Schule\n\nEin Unbekannter brach in der Nacht zum Montag in eine Schule in der Friedrichstraße ein...", "location": {{"street": "Friedrichstraße", "house_number": null, "district": null, "city": "Aalen", "location_hint": "Schule", "cross_street": null, "confidence": 0.9}}, "incident_time": {{"date": "2025-01-20", "time": "02:00", "precision": "approximate"}}, "crime": {{"pks_code": "4350", "pks_category": "Wohnungseinbruchdiebstahl", "sub_type": "Einbruch in Schule", "confidence": 0.9}}, "details": {{"weapon_types": null, "drug_type": null, "victim_count": 0, "suspect_count": 1, "victim_age": null, "suspect_age": null, "victim_gender": null, "suspect_gender": null, "victim_herkunft": null, "suspect_herkunft": null, "severity": "property_only", "motive": "robbery", "damage_amount_eur": 5000, "damage_estimate": "approximate"}}}},
+  {{"article_index": 4, "classification": "crime", "clean_title": "Unfall in Ellwangen — Sachschaden", "is_update": false, "incident_body": "Ellwangen: Unfall beim Rangieren\n\nAm Samstag gegen 14:30 Uhr beschädigte ein 45-Jähriger beim Rangieren...", "location": {{"street": null, "house_number": null, "district": null, "city": "Ellwangen", "location_hint": null, "cross_street": null, "confidence": 0.5}}, "incident_time": {{"date": "2025-01-18", "time": "14:30", "precision": "approximate"}}, "crime": {{"pks_code": "7200", "pks_category": "Unfallflucht/Fahrerflucht", "sub_type": "Sachschaden beim Rangieren", "confidence": 0.8}}, "details": {{"weapon_types": null, "drug_type": null, "victim_count": 0, "suspect_count": 1, "victim_age": null, "suspect_age": "45", "victim_gender": null, "suspect_gender": "male", "victim_herkunft": null, "suspect_herkunft": null, "severity": "property_only", "motive": null, "damage_amount_eur": 3000, "damage_estimate": "approximate"}}}}
 ]
 """
 
@@ -315,6 +324,11 @@ _CITY_TITLE_RE = re.compile(r'\n\n([A-ZÄÖÜ0-9][^\n:]{0,60}:\s[^\n]+)\n\n')
 _ZEIT_SECTION_RE = re.compile(r'\n\n([A-ZÄÖÜ][^\n]{3,120})\n\nZeit:\t', re.MULTILINE)
 # Preamble before the first incident (e.g. "Hofheim(ots)\n\n")
 _PREAMBLE_RE = re.compile(r'^.*?\(ots\)\s*[-–—]?\s*\n', re.DOTALL)
+# Date-paragraph: "Am DD.MM.YYYY gegen/um HH:MM Uhr..." starts a new incident
+_DATE_PARAGRAPH_RE = re.compile(
+    r'\n\n(Am\s+\d{1,2}\.\d{1,2}\.\d{4}\s)',
+    re.MULTILINE
+)
 
 
 def _split_body_sections(body: str, incident_count: int) -> list[str] | None:
@@ -344,6 +358,11 @@ def _split_body_sections(body: str, incident_count: int) -> list[str] | None:
 
     # Strategy 4: Sachsen "Title\n\nZeit:\t" blocks
     sections = _try_split_zeit_sections(body, incident_count)
+    if sections:
+        return sections
+
+    # Strategy 5: Date-paragraph ("Am DD.MM.YYYY...")
+    sections = _try_split_date_paragraphs(body, incident_count)
     if sections:
         return sections
 
@@ -395,12 +414,38 @@ def _try_split_by_pattern(body: str, incident_count: int, pattern: re.Pattern) -
 
 
 def _try_split_city_title(body: str, incident_count: int) -> list[str] | None:
-    """Split on 'City: Title' sub-headings separated by blank lines."""
+    """Split on 'City: Title' sub-headings separated by blank lines.
+
+    Supports preamble tolerance: if len(matches) == incident_count - 1,
+    the text before the first city header is treated as the first section
+    (after stripping the "City(ots)" preamble prefix).
+    """
     matches = list(_CITY_TITLE_RE.finditer(body))
-    if len(matches) != incident_count:
+    if not matches:
+        return None
+
+    has_preamble = False
+    if len(matches) == incident_count:
+        pass  # exact match
+    elif len(matches) == incident_count - 1:
+        # Preamble before first city header = first incident
+        preamble_end = matches[0].start() + 2  # +2 to skip leading \n\n
+        preamble = body[:preamble_end].strip()
+        # Strip "City(ots)\n\n" prefix from preamble
+        preamble = _PREAMBLE_RE.sub('', preamble).strip()
+        if len(preamble) < 50:
+            return None  # preamble too short to be a real incident
+        has_preamble = True
+    else:
         return None
 
     sections = []
+    if has_preamble:
+        preamble_end = matches[0].start() + 2
+        preamble_text = body[:preamble_end].strip()
+        preamble_text = _PREAMBLE_RE.sub('', preamble_text).strip()
+        sections.append(preamble_text)
+
     for i, m in enumerate(matches):
         # Section starts at the title line (after the leading \n\n)
         start = m.start() + 2
@@ -421,6 +466,45 @@ def _try_split_zeit_sections(body: str, incident_count: int) -> list[str] | None
         # Section starts at the title line (group 1), which begins after \n\n
         start = m.start() + 2  # skip the leading \n\n
         end = matches[i + 1].start() + 2 if i + 1 < len(matches) else len(body)
+        sections.append(body[start:end].strip())
+
+    return sections
+
+
+def _try_split_date_paragraphs(body: str, incident_count: int) -> list[str] | None:
+    """Split on date-paragraph boundaries ('Am DD.MM.YYYY ...').
+
+    Supports preamble tolerance: if regex finds N-1 matches and
+    incident_count == N, text before the first match is the first section.
+    """
+    matches = list(_DATE_PARAGRAPH_RE.finditer(body))
+    if not matches:
+        return None
+
+    has_preamble = False
+    if len(matches) == incident_count:
+        pass  # exact match
+    elif len(matches) == incident_count - 1:
+        # Text before first date-paragraph is preamble/first incident
+        preamble_end = matches[0].start()
+        preamble = body[:preamble_end].strip()
+        preamble = _PREAMBLE_RE.sub('', preamble).strip()
+        if len(preamble) < 50:
+            return None
+        has_preamble = True
+    else:
+        return None
+
+    sections = []
+    if has_preamble:
+        preamble_text = body[:matches[0].start()].strip()
+        preamble_text = _PREAMBLE_RE.sub('', preamble_text).strip()
+        sections.append(preamble_text)
+
+    for i, m in enumerate(matches):
+        # Section starts at the "Am DD.MM..." text (skip the leading \n\n)
+        start = m.start() + 2
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
         sections.append(body[start:end].strip())
 
     return sections
@@ -691,15 +775,27 @@ class FastEnricher:
                         enrichments.append(enrichment)
 
                     # Split body into per-incident sections for digests
+                    body = art.get("body", "")
                     if len(enrichments) > 1:
                         # LLM may have returned incident_body directly
                         has_llm_bodies = all(e.get("incident_body") for e in enrichments)
                         if not has_llm_bodies:
                             # Regex fallback for when LLM didn't provide body sections
-                            sections = _split_body_sections(art.get("body", ""), len(enrichments))
+                            sections = _split_body_sections(body, len(enrichments))
                             if sections:
                                 for enrichment, section_body in zip(enrichments, sections):
                                     enrichment["incident_body"] = section_body
+                            else:
+                                url = art.get("url", "")
+                                print(f"    WARNING: {len(enrichments)} incidents but body split failed "
+                                      f"(body={len(body)} chars): {url[:80]}")
+                    elif len(enrichments) == 1 and len(body) > 3000:
+                        # Potential unsplit mega-digest — check for city-header patterns
+                        n_headers = len(list(_CITY_TITLE_RE.finditer(body)))
+                        if n_headers >= 3:
+                            url = art.get("url", "")
+                            print(f"    WARNING: Potential unsplit digest "
+                                  f"(body={len(body)} chars, {n_headers} city headers): {url[:80]}")
 
                     self.cache[key] = enrichments
                     results_by_idx[orig_idx] = [{**art, **e} for e in enrichments]
