@@ -2,16 +2,16 @@ import { ImageResponse } from 'next/og';
 import { KREIS_BY_SLUG } from '@/lib/slugs/registry';
 import { BUNDESLAND_BY_CODE } from '@/lib/slugs/bundesland-registry';
 
-export const alt = 'Kriminalitaet in Deutschland — De-Puls';
+export const alt = 'Kriminalitaet in Deutschland — Adlerlicht';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-export default async function Image({ params }: { params: Promise<{ city: string }> }) {
-  const { city } = await params;
-  const kreis = KREIS_BY_SLUG[city];
+export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const kreis = KREIS_BY_SLUG[slug];
   const bl = kreis ? BUNDESLAND_BY_CODE[kreis.bundeslandCode] : null;
 
-  const cityName = kreis?.name ?? city;
+  const cityName = kreis?.name ?? slug;
   const stateName = bl?.name ?? '';
 
   return new ImageResponse(
@@ -78,9 +78,9 @@ export default async function Image({ params }: { params: Promise<{ city: string
                 marginRight: 12,
               }}
             >
-              <div style={{ color: '#0a0a0a', fontSize: 20, fontWeight: 800, display: 'flex' }}>D</div>
+              <div style={{ color: '#0a0a0a', fontSize: 20, fontWeight: 800, display: 'flex' }}>A</div>
             </div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#fafafa', display: 'flex' }}>De-Puls</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#fafafa', display: 'flex' }}>Adlerlicht</div>
           </div>
 
           {/* Title */}
