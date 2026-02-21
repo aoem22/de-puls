@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { CityLeaguePanel, type RanglisteFilterMode } from './CityLeaguePanel';
 import { Footer } from './Footer';
 import { DashboardTopControls } from './DashboardTopControls';
 import { DashboardSnapshotGrid } from './DashboardSnapshotGrid';
 import { DashboardLiveFeedSection } from './DashboardLiveFeedSection';
+import { PinnedSearchResult } from './PinnedSearchResult';
 import { useSecurityOverview } from '@/lib/supabase/hooks';
+import type { DashboardSearchResult } from '@/lib/supabase';
 import type { DashboardTimeframe, SecurityOverviewResponse } from '@/lib/dashboard/types';
 import {
   CRIME_CATEGORIES,
@@ -78,6 +80,8 @@ export function DashboardPage({ initialData }: DashboardPageProps) {
   const [ranglisteMode, setRanglisteMode] = useState<RanglisteFilterMode>('staedte');
   const [highlightedFeedId, setHighlightedFeedId] = useState<string | null>(null);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [pinnedSearchResult, setPinnedSearchResult] = useState<DashboardSearchResult | null>(null);
+  const pinnedRef = useRef<HTMLDivElement>(null);
   const { favoriteIds, toggleFavorite, count: favoriteCount } = useFavorites();
   const effectiveDrugFilter = focusCategory === 'drugs' ? drugFilter : null;
 
@@ -156,6 +160,14 @@ export function DashboardPage({ initialData }: DashboardPageProps) {
     setFeedPage(1);
   }, [clearLocationSelection]);
 
+  const handleSearchResultSelect = useCallback((result: DashboardSearchResult) => {
+    setPinnedSearchResult(result);
+    // Scroll the pinned card into view after render
+    requestAnimationFrame(() => {
+      pinnedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, []);
+
   const locationFilterLabel = useMemo(() => {
     if (selectedCity) return selectedCity;
     if (selectedPlz) return `PLZ ${selectedPlz}`;
@@ -208,6 +220,7 @@ export function DashboardPage({ initialData }: DashboardPageProps) {
             favoriteCount={favoriteCount}
             showFavoritesOnly={showFavoritesOnly}
             onToggleFavoritesOnly={() => setShowFavoritesOnly((v) => !v)}
+            onSearchResultSelect={handleSearchResultSelect}
           />
 
           <DashboardSnapshotGrid
@@ -268,6 +281,17 @@ export function DashboardPage({ initialData }: DashboardPageProps) {
               />
             )}
           </section>
+
+          {pinnedSearchResult && (
+            <div ref={pinnedRef}>
+              <PinnedSearchResult
+                result={pinnedSearchResult}
+                onDismiss={() => setPinnedSearchResult(null)}
+                isFavorite={favoriteIds.has(pinnedSearchResult.id)}
+                onToggleFavorite={toggleFavorite}
+              />
+            </div>
+          )}
 
           <DashboardLiveFeedSection
             showLoading={showLoading}

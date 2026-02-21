@@ -245,6 +245,62 @@ export function useSearchCrimes(query: string) {
   );
 }
 
+/**
+ * Dashboard search: returns results with details (title, date, city, etc.)
+ * for rendering a search dropdown on the front page.
+ */
+export interface DashboardSearchResult {
+  id: string;
+  title: string;
+  clean_title: string | null;
+  published_at: string;
+  incident_date: string | null;
+  incident_time: string | null;
+  location_text: string | null;
+  city: string | null;
+  bundesland: string | null;
+  categories: CrimeCategory[];
+  source_url: string;
+}
+
+interface DashboardSearchResponse {
+  total: number;
+  results: DashboardSearchResult[];
+}
+
+export interface DashboardSearchFilters {
+  category?: string | null;
+  weapon?: string | null;
+  drug?: string | null;
+  from?: string | null;
+  to?: string | null;
+}
+
+export function useDashboardSearch(query: string, filters?: DashboardSearchFilters) {
+  const url = (() => {
+    if (query.length < 2) return null;
+    const params = new URLSearchParams();
+    params.set('q', query);
+    params.set('detail', '1');
+    if (filters?.category) params.set('category', filters.category);
+    if (filters?.weapon) params.set('weapon', filters.weapon);
+    if (filters?.drug) params.set('drug', filters.drug);
+    if (filters?.from) params.set('from', filters.from);
+    if (filters?.to) params.set('to', filters.to);
+    return `/api/map/crimes/search?${params}`;
+  })();
+
+  return useSWR<DashboardSearchResponse, Error>(
+    url,
+    jsonFetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
+    }
+  );
+}
+
 export function useSecurityOverview(
   category: CrimeCategory | null,
   timeframe: DashboardTimeframe = DEFAULT_DASHBOARD_TIMEFRAME,

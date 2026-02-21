@@ -791,6 +791,19 @@ export function ChoroplethMap() {
     onSearchQueryChange: setSearchQuery,
     searchResultCount: searchResultIds?.length ?? null,
     isSearching: isSearching && debouncedSearch.length >= 2,
+    searchResults: searchIdSet ? orderedBlaulichtCrimes : undefined,
+    onSearchResultClick: (crime: CrimeRecord) => {
+      setIsBlaulichtPlaying(false);
+      setSelectedCrime(crime);
+      setHoveredCrime(null);
+      if (crime.latitude != null && crime.longitude != null && mapRef.current) {
+        mapRef.current.flyTo({
+          center: [crime.longitude, crime.latitude],
+          zoom: Math.max(mapRef.current.getZoom(), 11),
+          duration: 800,
+        });
+      }
+    },
     favoritesCount,
     showFavoritesOnly,
     onToggleFavoritesOnly: () => setShowFavoritesOnly((prev) => !prev),

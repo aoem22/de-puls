@@ -1,9 +1,12 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { DashboardTimeframe, SecurityOverviewResponse } from '@/lib/dashboard/types';
-import { DASHBOARD_TIMEFRAME_OPTIONS } from '@/lib/dashboard/timeframes';
+import { DASHBOARD_TIMEFRAME_OPTIONS, DASHBOARD_YEAR } from '@/lib/dashboard/timeframes';
 import { CRIME_CATEGORIES, type CrimeCategory } from '@/lib/types/crime';
 import { WeaponIcon } from '@/components/Map/BlaulichtPlaybackControl';
+import { DashboardSearchBar } from './DashboardSearchBar';
+import type { DashboardSearchResult, DashboardSearchFilters } from '@/lib/supabase';
 
 const CATEGORY_CONFIG_MAP = new Map<string, (typeof CRIME_CATEGORIES)[number]>(
   CRIME_CATEGORIES.map((category) => [category.key, category]),
@@ -41,6 +44,7 @@ interface DashboardTopControlsProps {
   favoriteCount?: number;
   showFavoritesOnly?: boolean;
   onToggleFavoritesOnly?: () => void;
+  onSearchResultSelect?: (result: DashboardSearchResult) => void;
 }
 
 export function DashboardTopControls({
@@ -62,12 +66,64 @@ export function DashboardTopControls({
   favoriteCount,
   showFavoritesOnly,
   onToggleFavoritesOnly,
+  onSearchResultSelect,
 }: DashboardTopControlsProps) {
   const chipScrollerClass = '-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide scroll-touch sm:mx-0 sm:flex-wrap sm:overflow-x-visible sm:px-0 sm:pb-0';
 
+  // Compute date range for the active timeframe (mirrors build-overview.ts logic)
+  const searchFilters = useMemo((): DashboardSearchFilters => {
+    const now = Date.now();
+    const dayMs = 86_400_000;
+    const dayStart = new Date(now);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const ds = dayStart.getTime();
+
+    let from: string | null = null;
+    let to: string | null = null;
+
+    switch (timeframe) {
+      case 'today':
+        from = new Date(ds).toISOString();
+        to = new Date(ds + dayMs).toISOString();
+        break;
+      case 'yesterday':
+        from = new Date(ds - dayMs).toISOString();
+        to = new Date(ds).toISOString();
+        break;
+      case 'last_week': {
+        const dow = dayStart.getUTCDay();
+        const mondayOffset = dow === 0 ? 6 : dow - 1;
+        const thisMonday = ds - mondayOffset * dayMs;
+        from = new Date(thisMonday - 7 * dayMs).toISOString();
+        to = new Date(thisMonday).toISOString();
+        break;
+      }
+      case 'this_month':
+        from = new Date(Date.UTC(dayStart.getUTCFullYear(), dayStart.getUTCMonth(), 1)).toISOString();
+        to = new Date(Date.UTC(dayStart.getUTCFullYear(), dayStart.getUTCMonth() + 1, 1)).toISOString();
+        break;
+      case 'last_month':
+        from = new Date(Date.UTC(dayStart.getUTCFullYear(), dayStart.getUTCMonth() - 1, 1)).toISOString();
+        to = new Date(Date.UTC(dayStart.getUTCFullYear(), dayStart.getUTCMonth(), 1)).toISOString();
+        break;
+      case 'year_to_date':
+        from = new Date(Date.UTC(DASHBOARD_YEAR, 0, 1)).toISOString();
+        to = new Date(Date.UTC(DASHBOARD_YEAR + 1, 0, 1)).toISOString();
+        break;
+    }
+
+    return {
+      category: focusCategory,
+      weapon: weaponFilter,
+      drug: focusCategory === 'drugs' ? drugFilter : null,
+      from,
+      to,
+    };
+  }, [timeframe, focusCategory, weaponFilter, drugFilter]);
+
   return (
     <section
-      className="dashboard-rise rounded-[1.5rem] border p-4 sm:rounded-[2rem] sm:p-8"
+      className="dashboard-rise relative z-20 rounded-[1.5rem] border p-4 sm:rounded-[2rem] sm:p-8"
       style={{
         borderColor: 'var(--border-subtle)',
         background: 'linear-gradient(145deg, var(--card) 0%, var(--card-elevated) 100%)',
@@ -282,6 +338,13 @@ export function DashboardTopControls({
             </button>
           )}
         </div>
+      </div>
+
+      <div className="mt-4 sm:mt-5">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
+          Suche
+        </p>
+        <DashboardSearchBar onResultSelect={onSearchResultSelect} filters={searchFilters} />
       </div>
     </section>
   );

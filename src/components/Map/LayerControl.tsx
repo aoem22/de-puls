@@ -15,8 +15,8 @@ import {
   DEUTSCHLANDATLAS_META,
   isDeutschlandatlasKey,
 } from '../../../lib/indicators/types';
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { CRIME_CATEGORIES, WEAPON_LABELS, DRUG_LABELS, type CrimeCategory, type MapLocationFilter } from '@/lib/types/crime';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { CRIME_CATEGORIES, WEAPON_LABELS, DRUG_LABELS, type CrimeCategory, type CrimeRecord, type MapLocationFilter } from '@/lib/types/crime';
 import { WeaponIcon } from './BlaulichtPlaybackControl';
 import { useTranslation, translations, tNested } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
@@ -59,6 +59,9 @@ export interface LayerControlProps {
   onSearchQueryChange?: (query: string) => void;
   searchResultCount?: number | null;
   isSearching?: boolean;
+  // Search results list (clickable rows below search input)
+  searchResults?: CrimeRecord[];
+  onSearchResultClick?: (crime: CrimeRecord) => void;
   // Favorites filter
   favoritesCount?: number;
   showFavoritesOnly?: boolean;
@@ -167,6 +170,8 @@ export function LayerControl({
   onSearchQueryChange,
   searchResultCount,
   isSearching,
+  searchResults,
+  onSearchResultClick,
   favoritesCount,
   showFavoritesOnly,
   onToggleFavoritesOnly,
@@ -701,6 +706,14 @@ export function LayerControl({
               </button>
             )}
           </div>
+          {/* Search results list */}
+          {searchQuery && searchQuery.length >= 2 && searchResults && searchResults.length > 0 && onSearchResultClick && (
+            <SearchResultsList
+              results={searchResults}
+              onResultClick={onSearchResultClick}
+              lang={lang}
+            />
+          )}
         </div>
       )}
 
@@ -988,6 +1001,87 @@ function CityCrimeLegend({
           </>
         )}
       </p>
+    </div>
+  );
+}
+
+// ── Search results list ──────────────────────────────────────────────────
+const SEARCH_RESULTS_MAX = 50;
+
+const crimeColorLookup = new Map(
+  CRIME_CATEGORIES.map((cat) => [cat.key, cat.color]),
+);
+
+function SearchResultsList({
+  results,
+  onResultClick,
+  lang,
+}: {
+  results: CrimeRecord[];
+  onResultClick: (crime: CrimeRecord) => void;
+  lang: 'de' | 'en';
+}) {
+  // Show newest first for better usability
+  const sorted = useMemo(
+    () => [...results].sort((a, b) => {
+      const ta = Date.parse(a.publishedAt) || 0;
+      const tb = Date.parse(b.publishedAt) || 0;
+      return tb - ta;
+    }),
+    [results],
+  );
+
+  const visible = sorted.slice(0, SEARCH_RESULTS_MAX);
+  const total = results.length;
+
+  const formatDate = useCallback((iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  }, []);
+
+  return (
+    <div className="mt-2 max-h-[280px] overflow-y-auto scrollbar-thin rounded-md border border-[var(--border)] bg-[var(--background)]">
+      {visible.map((crime) => {
+        const catColor = crime.categories[0]
+          ? crimeColorLookup.get(crime.categories[0]) ?? '#3b82f6'
+          : '#3b82f6';
+        return (
+          <button
+            key={crime.id}
+            type="button"
+            onClick={() => onResultClick(crime)}
+            className="w-full flex items-start gap-2 px-2 py-1.5 text-left hover:bg-[var(--card-elevated)] active:bg-[var(--card-elevated)] transition-colors border-b border-[var(--border)] last:border-b-0"
+          >
+            <div
+              className="w-2 h-2 rounded-full flex-shrink-0 mt-1"
+              style={{ backgroundColor: catColor }}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-[var(--text-primary)] leading-snug line-clamp-1">
+                {crime.cleanTitle || crime.title}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {crime.publishedAt && (
+                  <span className="text-[10px] text-[var(--text-muted)] tabular-nums">
+                    {formatDate(crime.publishedAt)}
+                  </span>
+                )}
+                {crime.city && (
+                  <span className="text-[10px] text-[var(--text-tertiary)] truncate">
+                    {crime.city}
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+      {total > SEARCH_RESULTS_MAX && (
+        <div className="px-2 py-1.5 text-[10px] text-[var(--text-muted)] text-center">
+          {SEARCH_RESULTS_MAX} {lang === 'de' ? 'von' : 'of'} {total.toLocaleString('de-DE')} {lang === 'de' ? 'angezeigt' : 'shown'}
+        </div>
+      )}
     </div>
   );
 }
