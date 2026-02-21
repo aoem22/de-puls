@@ -7,7 +7,7 @@ import { DashboardTopControls } from './DashboardTopControls';
 import { DashboardSnapshotGrid } from './DashboardSnapshotGrid';
 import { DashboardLiveFeedSection } from './DashboardLiveFeedSection';
 import { useSecurityOverview } from '@/lib/supabase/hooks';
-import type { DashboardTimeframe } from '@/lib/dashboard/types';
+import type { DashboardTimeframe, SecurityOverviewResponse } from '@/lib/dashboard/types';
 import {
   CRIME_CATEGORIES,
   DRUG_LABELS as DRUG_LABELS_TYPED,
@@ -62,7 +62,11 @@ function categoryLabel(category: CrimeCategory | null): string {
   return CRIME_CATEGORIES.find((item) => item.key === category)?.label ?? category;
 }
 
-export function DashboardPage() {
+interface DashboardPageProps {
+  initialData?: SecurityOverviewResponse;
+}
+
+export function DashboardPage({ initialData }: DashboardPageProps) {
   const [focusCategory, setFocusCategory] = useState<CrimeCategory | null>(null);
   const [weaponFilter, setWeaponFilter] = useState<string | null>(null);
   const [drugFilter, setDrugFilter] = useState<string | null>(null);
@@ -77,6 +81,10 @@ export function DashboardPage() {
   const { favoriteIds, toggleFavorite, count: favoriteCount } = useFavorites();
   const effectiveDrugFilter = focusCategory === 'drugs' ? drugFilter : null;
 
+  // Only use SSR initialData as fallback when filters match the default SSR params
+  const isDefaultView = !focusCategory && timeframe === 'year_to_date' && feedPage === 1
+    && !weaponFilter && !effectiveDrugFilter && !selectedCity && !bundeslandFilter && !selectedPlz;
+
   const { data, isLoading, error } = useSecurityOverview(
     focusCategory,
     timeframe,
@@ -87,6 +95,7 @@ export function DashboardPage() {
     null,
     bundeslandFilter,
     selectedPlz,
+    isDefaultView ? initialData : undefined,
   );
   const { theme, toggleTheme } = useTheme();
   const resetFeedContext = useCallback(() => {

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { DashboardLiveFeedItem } from '@/lib/dashboard/types';
 import { FormattedBody } from '@/components/ui/FormattedBody';
+import { useCrimeBody } from '@/lib/supabase/hooks';
 
 const SEVERITY_LABELS: Record<string, string> = {
   fatal: 'Tödlich',
@@ -89,6 +90,39 @@ function formatEur(amount: number): string {
 function getKnownWeaponTypes(types: string[] | undefined | null): string[] {
   if (!types || !Array.isArray(types)) return [];
   return types.filter((w) => w !== 'unknown' && w !== 'none');
+}
+
+function ExpandedBody({ id, inlineBody, sourceUrl }: { id: string; inlineBody: string | null; sourceUrl: string }) {
+  // Use inline body if already available (e.g. from drug-filter fallback which still includes body),
+  // otherwise lazy-fetch it
+  const { data: fetchedBody, isLoading } = useCrimeBody(inlineBody != null ? null : id);
+  const body = inlineBody ?? fetchedBody ?? null;
+
+  return (
+    <div
+      className="border-t px-3 py-3"
+      style={{ borderColor: 'var(--border-inner)' }}
+    >
+      {isLoading && !body && (
+        <div className="h-12 animate-pulse rounded-lg" style={{ background: 'var(--loading-skeleton)' }} />
+      )}
+      {body && <FormattedBody text={body} compact />}
+      {!isLoading && !body && (
+        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>Kein Artikeltext verfügbar.</p>
+      )}
+      {sourceUrl && (
+        <a
+          href={sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-block text-[11px] font-semibold underline decoration-dotted underline-offset-2"
+          style={{ color: 'var(--accent)' }}
+        >
+          Originalquelle
+        </a>
+      )}
+    </div>
+  );
 }
 
 function LoadingCard() {
@@ -355,24 +389,8 @@ export function DashboardLiveFeedSection({
                 </div>
               </button>
 
-              {isExpanded && row.body && (
-                <div
-                  className="border-t px-3 py-3"
-                  style={{ borderColor: 'var(--border-inner)' }}
-                >
-                  <FormattedBody text={row.body} compact />
-                  {row.source_url && (
-                    <a
-                      href={row.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-block text-[11px] font-semibold underline decoration-dotted underline-offset-2"
-                      style={{ color: 'var(--accent)' }}
-                    >
-                      Originalquelle
-                    </a>
-                  )}
-                </div>
+              {isExpanded && (
+                <ExpandedBody id={row.id} inlineBody={row.body} sourceUrl={row.source_url} />
               )}
             </div>
           );

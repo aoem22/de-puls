@@ -543,6 +543,10 @@ export interface PlzRankingRow {
   previous_count: number;
 }
 
+/**
+ * Returns pre-aggregated PLZ counts for current and previous time windows.
+ * Uses SQL RPC when no drug filter; falls back to fetchAllRows + JS bucketing otherwise.
+ */
 export async function getPlzRanking(
   currentStartIso: string,
   currentEndIso: string,
@@ -552,6 +556,36 @@ export async function getPlzRanking(
   weaponType: string | null = null,
   drugType: string | null = null,
   pipelineRun: string | null = null,
+  bundesland: string | null = null,
+): Promise<PlzRankingRow[]> {
+  if (drugType) {
+    return getPlzRankingFallback(
+      currentStartIso, currentEndIso, previousStartIso, previousEndIso,
+      category, weaponType, drugType, pipelineRun, bundesland,
+    );
+  }
+
+  return rpc<PlzRankingRow[]>('dashboard_plz_ranking', {
+    p_current_start: currentStartIso,
+    p_current_end: currentEndIso,
+    p_prev_start: previousStartIso,
+    p_prev_end: previousEndIso,
+    p_category: category,
+    p_weapon: weaponType,
+    p_pipeline_run: pipelineRun,
+    p_bundesland: bundesland,
+  });
+}
+
+async function getPlzRankingFallback(
+  currentStartIso: string,
+  currentEndIso: string,
+  previousStartIso: string,
+  previousEndIso: string,
+  category: CrimeCategory | null,
+  weaponType: string | null,
+  drugType: string | null,
+  pipelineRun: string | null,
   bundesland: string | null = null,
 ): Promise<PlzRankingRow[]> {
   const rows = await fetchAllRows<{ plz: string; sort_date: string | null; drug_type: string | null }>(
@@ -673,7 +707,7 @@ export interface LiveFeedItem {
 
 const LIVE_FEED_SELECT = [
   'id', 'title', 'clean_title', 'published_at', 'location_text', 'district', 'city',
-  'bundesland', 'categories', 'severity', 'confidence', 'body',
+  'bundesland', 'categories', 'severity', 'confidence',
   'weapon_type', 'weapon_types', 'drug_type', 'motive', 'victim_count', 'suspect_count',
   'victim_age', 'suspect_age', 'victim_gender', 'suspect_gender',
   'victim_herkunft', 'suspect_herkunft', 'damage_amount_eur',
@@ -727,15 +761,12 @@ export async function getLiveFeed(
     };
   }
 
-  // Count query
+  // Count + data queries run in parallel (they're independent)
   let countQ = supabase
     .from('crime_records')
     .select('*', { count: 'exact', head: true });
   countQ = applyFeedFilters(countQ);
-  const { count, error: countErr } = await countQ;
-  if (countErr) throw new Error(`getLiveFeed count error: ${countErr.message}`);
 
-  // Data query — sorted by Tatzeit descending (latest first), then by time (nulls at end)
   let dataQ = supabase
     .from('crime_records')
     .select(LIVE_FEED_SELECT)
@@ -743,12 +774,14 @@ export async function getLiveFeed(
     .order('incident_time', { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);
   dataQ = applyFeedFilters(dataQ);
-  const { data, error } = await dataQ;
-  if (error) throw new Error(`getLiveFeed data error: ${error.message}`);
+
+  const [countResult, dataResult] = await Promise.all([countQ, dataQ]);
+  if (countResult.error) throw new Error(`getLiveFeed count error: ${countResult.error.message}`);
+  if (dataResult.error) throw new Error(`getLiveFeed data error: ${dataResult.error.message}`);
 
   return {
-    items: (data ?? []) as LiveFeedItem[],
-    total: count ?? 0,
+    items: (dataResult.data ?? []) as LiveFeedItem[],
+    total: countResult.count ?? 0,
   };
 }
 

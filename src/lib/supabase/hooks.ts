@@ -1,6 +1,7 @@
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 import { fetchCrimeById, fetchCrimeStats, fetchPipelineRuns, fetchAuslaenderByYear, fetchDeutschlandatlas, fetchAllCityCrimes, fetchAllDatasetMeta, fetchDashboardStats, fetchCityRankingByCategory, fetchHotspotKreise, fetchLiveFeed } from './queries';
+import { supabase } from './client';
 import type { CrimeRecord, CrimeCategory } from '../types/crime';
 import type { BlaulichtStats, AuslaenderRow, DeutschlandatlasRow, CityCrimeRow, DatasetMetaRow } from './types';
 import type { DashboardTimeframe, SecurityOverviewResponse } from '@/lib/dashboard/types';
@@ -254,6 +255,7 @@ export function useSecurityOverview(
   kreis: string | null = null,
   bundesland: string | null = null,
   plz: string | null = null,
+  fallbackData?: SecurityOverviewResponse,
 ) {
   const params = new URLSearchParams();
   if (category) params.set('category', category);
@@ -274,6 +276,30 @@ export function useSecurityOverview(
       revalidateOnFocus: false,
       dedupingInterval: 60000,
       keepPreviousData: true,
+      fallbackData,
+    },
+  );
+}
+
+/**
+ * SWR hook for lazily fetching a single crime record's body text.
+ * Only fires when id is non-null.
+ */
+export function useCrimeBody(id: string | null) {
+  return useSWR<string | null, Error>(
+    id ? ['crime-body', id] : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('crime_records')
+        .select('body')
+        .eq('id', id!)
+        .single();
+      if (error) throw new Error(`useCrimeBody error: ${error.message}`);
+      return (data as { body: string | null } | null)?.body ?? null;
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 300000,
     },
   );
 }
