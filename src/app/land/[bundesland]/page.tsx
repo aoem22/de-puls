@@ -4,13 +4,14 @@ import { notFound } from 'next/navigation';
 import { BUNDESLAND_BY_SLUG, ALL_BUNDESLAND_SLUGS } from '@/lib/slugs/bundesland-registry';
 import { getKreiseByBundesland } from '@/lib/slugs/registry';
 import { CRIME_CATEGORIES } from '@/lib/types/crime';
+import { CRIME_SLUG_MAP } from '@/lib/slugs/crime-slugs';
 import { fetchCityRanking } from '@/lib/supabase/seo-queries';
 import { Breadcrumbs } from '@/components/seo/Breadcrumbs';
 
 export const revalidate = 86400;
 export const dynamicParams = false;
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://adlerlicht.de';
 
 export function generateStaticParams() {
   return ALL_BUNDESLAND_SLUGS.map((bundesland) => ({ bundesland }));
@@ -30,7 +31,7 @@ export async function generateMetadata(
     title,
     description,
     openGraph: {
-      title: `${title} | De-Puls`,
+      title: `${title} | Adlerlicht`,
       description,
       url: `${SITE_URL}/land/${bundesland}`,
       type: 'website',
@@ -90,14 +91,16 @@ export default async function BundeslandPage(
         <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Deliktarten</h2>
         <div className="flex flex-wrap gap-2">
           {CRIME_CATEGORIES.map((cat) => {
+            const crimeSlug = CRIME_SLUG_MAP[cat.key];
             return (
-              <span
+              <a
                 key={cat.key}
-                className="text-sm px-3 py-1.5 rounded-lg border border-[var(--card-border)] text-[var(--text-tertiary)] flex items-center gap-1.5"
+                href={`/land/${bundesland}/${crimeSlug.slug}`}
+                className="text-sm px-3 py-1.5 rounded-lg border border-[var(--card-border)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--text-faint)] transition-colors flex items-center gap-1.5"
               >
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
                 {cat.label}
-              </span>
+              </a>
             );
           })}
         </div>

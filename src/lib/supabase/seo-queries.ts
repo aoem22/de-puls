@@ -11,8 +11,15 @@ import {
   isPointInBoundary,
   type BoundaryGeometry,
 } from '../geo-utils';
+import { getKreiseByBundesland } from '../slugs/registry';
 
 export type { BoundaryGeometry };
+
+// ---------------------------------------------------------------------------
+// Lightweight select for feed-only queries (BlaulichtFeed uses only these)
+// ---------------------------------------------------------------------------
+
+const FEED_SELECT = 'id, title, clean_title, published_at, categories, location_text, source_url';
 
 // ---------------------------------------------------------------------------
 // Row → CrimeRecord transform (same as queries.ts)
@@ -61,6 +68,21 @@ function rowToCrimeRecord(row: CrimeRecordRow): CrimeRecord {
     city: row.city,
     plz: row.plz,
     bundesland: row.bundesland,
+  };
+}
+
+/** Lightweight mapper for feed queries — only maps fields used by BlaulichtFeed */
+function rowToFeedRecord(row: Record<string, unknown>): CrimeRecord {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    cleanTitle: (row.clean_title as string) ?? null,
+    publishedAt: row.published_at as string,
+    sourceUrl: (row.source_url as string) ?? '',
+    locationText: (row.location_text as string) ?? null,
+    precision: 'unknown',
+    categories: (row.categories as CrimeCategory[]) ?? [],
+    confidence: 0,
   };
 }
 
@@ -316,4 +338,258 @@ export async function fetchKreisBbox(ags: string): Promise<number[] | null> {
 
   if (error || !data) return null;
   return (data as { bbox: number[] }).bbox;
+}
+
+// ---------------------------------------------------------------------------
+// Blaulicht records by crime category (national)
+// ---------------------------------------------------------------------------
+
+export async function fetchBlaulichtByCategory(
+  crimeKey: CrimeCategory,
+  limit = 15,
+): Promise<CrimeRecord[]> {
+  const { data, error } = await supabase
+    .from('crime_records')
+    .select(FEED_SELECT)
+    .eq('hidden', false)
+    .contains('categories', [crimeKey])
+    .order('sort_date', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching blaulicht by category:', error);
+    return [];
+  }
+
+  return ((data ?? []) as Record<string, unknown>[]).map(rowToFeedRecord);
+}
+
+// ---------------------------------------------------------------------------
+// Blaulicht records by bundesland + category
+// ---------------------------------------------------------------------------
+
+export async function fetchBlaulichtByBundeslandAndCategory(
+  bundesland: string,
+  crimeKey: CrimeCategory,
+  limit = 15,
+): Promise<CrimeRecord[]> {
+  const { data, error } = await supabase
+    .from('crime_records')
+    .select(FEED_SELECT)
+    .eq('hidden', false)
+    .eq('bundesland', bundesland)
+    .contains('categories', [crimeKey])
+    .order('sort_date', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching blaulicht by bundesland+category:', error);
+    return [];
+  }
+
+  return ((data ?? []) as Record<string, unknown>[]).map(rowToFeedRecord);
+}
+
+// ---------------------------------------------------------------------------
+// Blaulicht records by PLZ
+// ---------------------------------------------------------------------------
+
+export async function fetchBlaulichtByPlz(
+  plz: string,
+  limit = 15,
+): Promise<CrimeRecord[]> {
+  const { data, error } = await supabase
+    .from('crime_records')
+    .select(FEED_SELECT)
+    .eq('hidden', false)
+    .eq('plz', plz)
+    .order('sort_date', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching blaulicht by PLZ:', error);
+    return [];
+  }
+
+  return ((data ?? []) as Record<string, unknown>[]).map(rowToFeedRecord);
+}
+
+// ---------------------------------------------------------------------------
+// Distinct PLZ values for a Kreis (for city page PLZ section)
+// ---------------------------------------------------------------------------
+
+export async function fetchPlzListForKreis(ags: string): Promise<string[]> {
+  // Get bbox for the kreis to scope the PLZ query
+  const geoRes = await supabase
+    .from('geo_boundaries')
+    .select('bbox')
+    .eq('ags', ags)
+    .eq('level', 'kreis')
+    .limit(1)
+    .maybeSingle();
+
+  const bbox = (geoRes.data as { bbox?: number[] } | null)?.bbox;
+  if (!bbox) return [];
+
+  const [minLon, minLat, maxLon, maxLat] = bbox;
+
+  const { data, error } = await supabase
+    .from('crime_records')
+    .select('plz')
+    .eq('hidden', false)
+    .not('plz', 'is', null)
+    .gte('latitude', minLat)
+    .lte('latitude', maxLat)
+    .gte('longitude', minLon)
+    .lte('longitude', maxLon)
+    .limit(5000);
+
+  if (error) {
+    console.error('Error fetching PLZ list for kreis:', error);
+    return [];
+  }
+
+  const plzSet = new Set<string>();
+  for (const row of (data ?? []) as Array<{ plz: string | null }>) {
+    if (row.plz) plzSet.add(row.plz);
+  }
+
+  return Array.from(plzSet).sort();
+}
+
+// ---------------------------------------------------------------------------
+// Archive stats (count + category breakdown for a time period)
+// ---------------------------------------------------------------------------
+
+export interface ArchiveStats {
+  total: number;
+  byCategory: Partial<Record<CrimeCategory, number>>;
+}
+
+export async function fetchArchiveStats(
+  year: number,
+  month?: number,
+): Promise<ArchiveStats> {
+  const startDate = month
+    ? `${year}-${String(month).padStart(2, '0')}-01`
+    : `${year}-01-01`;
+  const endDate = month
+    ? month === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 1).padStart(2, '0')}-01`
+    : `${year + 1}-01-01`;
+
+  const PAGE_SIZE = 5000;
+  let total = 0;
+  const byCategory: Partial<Record<CrimeCategory, number>> = {};
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('crime_records')
+      .select('categories')
+      .eq('hidden', false)
+      .gte('sort_date', startDate)
+      .lt('sort_date', endDate)
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error('Error fetching archive stats:', error);
+      break;
+    }
+
+    const rows = (data ?? []) as Array<{ categories: CrimeCategory[] }>;
+    for (const row of rows) {
+      total++;
+      for (const cat of row.categories) {
+        byCategory[cat] = (byCategory[cat] || 0) + 1;
+      }
+    }
+
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return { total, byCategory };
+}
+
+// ---------------------------------------------------------------------------
+// Blaulicht records for archive pages (by time period)
+// ---------------------------------------------------------------------------
+
+export async function fetchBlaulichtByTimePeriod(
+  year: number,
+  month?: number,
+  limit = 20,
+): Promise<CrimeRecord[]> {
+  const startDate = month
+    ? `${year}-${String(month).padStart(2, '0')}-01`
+    : `${year}-01-01`;
+  const endDate = month
+    ? month === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 1).padStart(2, '0')}-01`
+    : `${year + 1}-01-01`;
+
+  const { data, error } = await supabase
+    .from('crime_records')
+    .select(FEED_SELECT)
+    .eq('hidden', false)
+    .gte('sort_date', startDate)
+    .lt('sort_date', endDate)
+    .order('sort_date', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching blaulicht by time period:', error);
+    return [];
+  }
+
+  return ((data ?? []) as Record<string, unknown>[]).map(rowToFeedRecord);
+}
+
+// ---------------------------------------------------------------------------
+// City ranking filtered by Bundesland
+// ---------------------------------------------------------------------------
+
+export async function fetchCityRankingByBundesland(
+  crimeKey: CrimeCategory,
+  bundeslandCode: string,
+): Promise<CityRankingEntry[]> {
+  const kreiseInState = getKreiseByBundesland(bundeslandCode);
+  if (kreiseInState.length === 0) return [];
+
+  const agsArray = kreiseInState.map((k) => k.ags);
+
+  const { data, error } = await supabase
+    .from('city_crime_data')
+    .select('*')
+    .in('ags', agsArray)
+    .order('year', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching city ranking by bundesland:', error);
+    return [];
+  }
+
+  const rows = (data ?? []) as unknown as CityCrimeRow[];
+
+  const latestByAgs = new Map<string, CityCrimeRow>();
+  for (const row of rows) {
+    if (!latestByAgs.has(row.ags)) {
+      latestByAgs.set(row.ags, row);
+    }
+  }
+
+  const ranking: CityRankingEntry[] = [];
+  for (const [, row] of latestByAgs) {
+    const crimes = row.crimes as Record<string, { cases: number; hz: number; aq: number }>;
+    if (crimes[crimeKey]) {
+      const c = crimes[crimeKey];
+      ranking.push({ ags: row.ags, name: row.name, hz: c.hz, cases: c.cases, aq: c.aq });
+    }
+  }
+
+  ranking.sort((a, b) => b.hz - a.hz);
+  return ranking;
 }
