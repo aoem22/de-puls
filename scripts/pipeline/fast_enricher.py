@@ -774,21 +774,15 @@ class FastEnricher:
 
                         enrichments.append(enrichment)
 
-                    # Split body into per-incident sections for digests
+                    # Check if LLM provided per-incident body text for digests
                     body = art.get("body", "")
                     if len(enrichments) > 1:
-                        # LLM may have returned incident_body directly
                         has_llm_bodies = all(e.get("incident_body") for e in enrichments)
                         if not has_llm_bodies:
-                            # Regex fallback for when LLM didn't provide body sections
-                            sections = _split_body_sections(body, len(enrichments))
-                            if sections:
-                                for enrichment, section_body in zip(enrichments, sections):
-                                    enrichment["incident_body"] = section_body
-                            else:
-                                url = art.get("url", "")
-                                print(f"    WARNING: {len(enrichments)} incidents but body split failed "
-                                      f"(body={len(body)} chars): {url[:80]}")
+                            missing = sum(1 for e in enrichments if not e.get("incident_body"))
+                            url = art.get("url", "")
+                            print(f"    WARNING: {len(enrichments)} incidents, {missing} missing incident_body "
+                                  f"(body={len(body)} chars): {url[:80]}")
                     elif len(enrichments) == 1 and len(body) > 3000:
                         # Potential unsplit mega-digest — check for city-header patterns
                         n_headers = len(list(_CITY_TITLE_RE.finditer(body)))
