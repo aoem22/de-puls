@@ -7,6 +7,7 @@ import { WeaponIcon } from './BlaulichtPlaybackControl';
 import { useTranslation, translations, tNested, type Language } from '@/lib/i18n';
 import { fetchRelatedArticles } from '@/lib/supabase/queries';
 import { useCrimeDetail } from '@/lib/supabase/hooks';
+import { FormattedBody } from '@/components/ui/FormattedBody';
 import { useDraggableSheet } from './useBottomSheet';
 
 interface BlaulichtDetailPanelProps {
@@ -469,9 +470,7 @@ function TimelineSection({ crime, lang }: { crime: CrimeRecord; lang: Language }
 
                 {isExpanded && art.body && (
                   <div className="ml-5 mt-1 mb-2 pl-3 border-l border-[var(--card-border)]">
-                    <p className="text-xs text-[var(--text-tertiary)] leading-relaxed whitespace-pre-wrap line-clamp-6">
-                      {art.body}
-                    </p>
+                    <FormattedBody text={art.body} compact maxParagraphs={3} />
                     {art.sourceUrl && (
                       <a
                         href={art.sourceUrl}
@@ -713,9 +712,7 @@ export function BlaulichtDetailPanel({ crime: slimCrime, onClose, isPreview = fa
                   </span>
                   <div className="flex-1 h-px bg-[var(--card-elevated)]" />
                 </div>
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
-                  {bodyText}
-                </p>
+                <FormattedBody text={bodyText} />
               </div>
             ) : isLoadingDetail ? (
               <div className="px-5 py-5 space-y-2.5 animate-pulse">
@@ -824,9 +821,7 @@ export function BlaulichtDetailPanel({ crime: slimCrime, onClose, isPreview = fa
                   <div className="flex-1 h-px bg-[var(--card-elevated)]" />
                 </div>
               )}
-              <p className={`text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-6'}`}>
-                {bodyText}
-              </p>
+              <FormattedBody text={bodyText} maxParagraphs={isExpanded ? undefined : 3} />
             </div>
           ) : isLoadingDetail ? (
             <div className="px-4 py-4 space-y-2 animate-pulse">

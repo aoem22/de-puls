@@ -171,11 +171,7 @@ export function ChoroplethMap() {
 
   // Debounce search query (300ms)
   useEffect(() => {
-    if (!searchQuery) {
-      setDebouncedSearch('');
-      return;
-    }
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), searchQuery ? 300 : 0);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 

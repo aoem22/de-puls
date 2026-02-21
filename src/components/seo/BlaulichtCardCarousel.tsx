@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CRIME_CATEGORIES, type CrimeRecord } from '@/lib/types/crime';
+import { FormattedBody } from '@/components/ui/FormattedBody';
 
 interface BlaulichtCardCarouselProps {
   records: CrimeRecord[];
@@ -94,9 +95,9 @@ export function BlaulichtCardCarousel({
         </div>
 
         {fullText ? (
-          <p className="mt-3 text-sm text-[var(--text-secondary)] whitespace-pre-line max-h-52 overflow-y-auto pr-1 custom-scrollbar">
-            {fullText}
-          </p>
+          <div className="mt-3 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+            <FormattedBody text={fullText} maxParagraphs={4} />
+          </div>
         ) : (
           <p className="mt-3 text-sm text-[var(--text-muted)]">
             Kein Beschreibungstext vorhanden.
