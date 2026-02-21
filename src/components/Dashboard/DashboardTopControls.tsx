@@ -79,7 +79,7 @@ export function DashboardTopControls({
             Sicherheits-Dashboard Deutschland
           </p>
           <h1 className="mt-2 text-[clamp(1.75rem,8vw,3.3rem)] font-bold leading-[1.04]" style={{ color: 'var(--text-primary)' }}>
-            AdlerAuge
+            Adlerlicht
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed sm:text-base" style={{ color: 'var(--text-secondary)' }}>
             Über{' '}
