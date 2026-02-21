@@ -16,7 +16,7 @@ Usage:
     python3 scripts/pipeline/quality_fix.py -f flagged_ids.json --run-name feb2026_test100 --report my_report.md
 
 Export favorites from browser console:
-    copy(localStorage.getItem('kanakmap_favorites'))
+    copy(localStorage.getItem('adlerlicht_favorites'))
     // paste into flagged_ids.json
 """
 

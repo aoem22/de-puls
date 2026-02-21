@@ -4,7 +4,7 @@ Async scraper for Hamburg Police press releases (polizei.hamburg).
 
 Fetches press releases from the Hamburg police portal, extracts article
 metadata and body text, and outputs structured JSON matching the pipeline
-format used by the rest of the KanakMap pipeline.
+format used by the rest of the Adlerlicht pipeline.
 
 The parser is built defensively with multiple CSS selector fallbacks since
 the exact HTML structure may change over time.
@@ -41,7 +41,7 @@ os.environ["SSL_CERT_FILE"] = certifi.where()
 # ---------------------------------------------------------------------------
 BASE_URL = "https://www.polizei.hamburg"
 LISTING_PATH = "/pressemeldungen/"
-USER_AGENT = "kanakmap-scraper/1.0 (+contact: scraper@example.com)"
+USER_AGENT = "adlerlicht-scraper/1.0 (+contact: scraper@adlerlicht.de)"
 
 # Async configuration
 DEFAULT_CONCURRENT = 10  # polizei.hamburg is smaller, be gentler

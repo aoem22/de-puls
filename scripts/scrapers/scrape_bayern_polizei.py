@@ -44,7 +44,7 @@ os.environ['SSL_CERT_FILE'] = certifi.where()
 BASE_URL = "https://www.polizei.bayern.de"
 LISTING_URL = f"{BASE_URL}/aktuelles/pressemitteilungen/"
 ES_SEARCH_URL = f"{BASE_URL}/es/search"
-USER_AGENT = "de-puls/1.0 (+contact: scraper@example.com)"
+USER_AGENT = "adlerlicht/1.0 (+contact: scraper@adlerlicht.de)"
 
 # Async configuration
 CONCURRENT_REQUESTS = 20

@@ -21,13 +21,13 @@ export const viewport: Viewport = {
   ],
 };
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://adlerlicht.de';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'De-Puls – Interaktive Deutschlandkarte sozialer Indikatoren',
-    template: '%s | De-Puls',
+    default: 'Adlerlicht – Interaktive Deutschlandkarte sozialer Indikatoren',
+    template: '%s | Adlerlicht',
   },
   description:
     'Interaktive Karte sozialer Indikatoren in Deutschland: Ausländeranteil, Kriminalstatistik, Kinderarmut, Arbeitslosigkeit und mehr – visualisiert nach 400 Kreisen und kreisfreien Städten.',
@@ -37,9 +37,9 @@ export const metadata: Metadata = {
     'Kinderarmut', 'Arbeitslosigkeit', 'Polizeimeldungen', 'Blaulicht',
     'interaktive Karte', 'Germany social map', 'crime statistics Germany',
   ],
-  authors: [{ name: 'De-Puls' }],
-  creator: 'De-Puls',
-  publisher: 'De-Puls',
+  authors: [{ name: 'Adlerlicht' }],
+  creator: 'Adlerlicht',
+  publisher: 'Adlerlicht',
   robots: {
     index: true,
     follow: true,
@@ -56,14 +56,14 @@ export const metadata: Metadata = {
     locale: 'de_DE',
     alternateLocale: 'en_US',
     url: SITE_URL,
-    siteName: 'De-Puls',
-    title: 'De-Puls – Interaktive Deutschlandkarte sozialer Indikatoren',
+    siteName: 'Adlerlicht',
+    title: 'Adlerlicht – Interaktive Deutschlandkarte sozialer Indikatoren',
     description:
       'Ausländeranteil, Kriminalstatistik, Kinderarmut und mehr – interaktiv visualisiert für alle 400 deutschen Kreise.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'De-Puls – Deutschlandkarte sozialer Indikatoren',
+    title: 'Adlerlicht – Deutschlandkarte sozialer Indikatoren',
     description:
       'Ausländeranteil, Kriminalstatistik, Kinderarmut und mehr – interaktiv visualisiert für alle 400 deutschen Kreise.',
   },
@@ -77,7 +77,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'De-Puls',
+    title: 'Adlerlicht',
   },
   manifest: '/manifest.json',
   category: 'technology',

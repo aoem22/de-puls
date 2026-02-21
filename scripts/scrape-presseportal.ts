@@ -8,7 +8,7 @@ import type { CrimeCategory, CrimeDataset, CrimeRecord, LocationPrecision } from
 const BASE_URL = 'https://www.presseportal.de';
 const ROBOTS_URL = `${BASE_URL}/robots.txt`;
 const DEFAULT_RANGE_DAYS = 365;
-const USER_AGENT = `de-puls/1.0 (+contact: ${process.env.NOMINATIM_EMAIL ?? 'your-email@example.com'})`;
+const USER_AGENT = `adlerlicht/1.0 (+contact: ${process.env.NOMINATIM_EMAIL ?? 'scraper@adlerlicht.de'})`;
 const FETCH_TIMEOUT_MS = Number.parseInt(process.env.FETCH_TIMEOUT_MS ?? '30000', 10);
 const FETCH_RETRIES = Number.parseInt(process.env.FETCH_RETRIES ?? '3', 10);
 const SITEMAP_CONCURRENCY = Number.parseInt(process.env.SITEMAP_CONCURRENCY ?? '4', 10);

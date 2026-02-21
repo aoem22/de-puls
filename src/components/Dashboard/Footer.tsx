@@ -30,10 +30,10 @@ export function Footer() {
         {/* Brand */}
         <div className="sm:col-span-2 lg:col-span-1">
           <div className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-            DE-PULS
+            ADLERLICHT
           </div>
           <p className="text-xs leading-relaxed" style={{ color: 'var(--text-faint)' }}>
-            Deutschlands Sicherheitspuls.
+            Deutschlands Sicherheitslicht.
             <br />
             Live. Datenbasiert.
           </p>
@@ -96,7 +96,7 @@ export function Footer() {
       <div className="mx-auto mt-8 flex max-w-5xl flex-col items-center justify-between gap-2 border-t pt-4 text-center text-[11px] sm:flex-row sm:gap-1 sm:text-left"
         style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-faint)' }}
       >
-        <span>&copy; 2026 De-Puls &middot; Alle Angaben ohne Gewähr</span>
+        <span>&copy; 2026 Adlerlicht &middot; Alle Angaben ohne Gewähr</span>
         <span>Kein offizielles Angebot einer Behörde</span>
       </div>
     </footer>

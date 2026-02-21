@@ -20,12 +20,12 @@ export default function ImpressumPage() {
             Angaben gemaess &sect; 5 TMG
           </p>
           <p>
-            De-Puls<br />
-            Kontakt: info@de-puls.de
+            Adlerlicht<br />
+            Kontakt: info@adlerlicht.de
           </p>
           <h2 className="text-lg font-bold mt-6 mb-2" style={{ color: 'var(--text-primary)' }}>Haftungsausschluss</h2>
           <p>
-            Alle Angaben auf dieser Seite ohne Gewaehr. De-Puls ist kein offizielles Angebot einer Behoerde.
+            Alle Angaben auf dieser Seite ohne Gewaehr. Adlerlicht ist kein offizielles Angebot einer Behoerde.
             Die dargestellten Daten stammen aus oeffentlich zugaenglichen Quellen und werden automatisiert verarbeitet.
           </p>
         </div>

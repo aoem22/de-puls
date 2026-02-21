@@ -6,8 +6,8 @@ function JsonLd() {
     '@graph': [
       {
         '@type': 'WebApplication',
-        name: 'De-Puls',
-        url: process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de',
+        name: 'Adlerlicht',
+        url: process.env.NEXT_PUBLIC_SITE_URL || 'https://adlerlicht.de',
         description:
           'Interaktive Karte sozialer Indikatoren in Deutschland: Ausländeranteil, Kriminalstatistik, Kinderarmut, Arbeitslosigkeit und mehr – visualisiert nach 400 Kreisen.',
         applicationCategory: 'ReferenceApplication',
@@ -51,9 +51,9 @@ function JsonLd() {
       },
       {
         '@type': 'Organization',
-        name: 'De-Puls',
-        url: process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de',
-        logo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de'}/icon-512.png`,
+        name: 'Adlerlicht',
+        url: process.env.NEXT_PUBLIC_SITE_URL || 'https://adlerlicht.de',
+        logo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://adlerlicht.de'}/icon-512.png`,
       },
     ],
   };
@@ -69,9 +69,9 @@ function JsonLd() {
 function SeoContent() {
   return (
     <div className="sr-only">
-      <h1>De-Puls – Interaktive Deutschlandkarte sozialer Indikatoren</h1>
+      <h1>Adlerlicht – Interaktive Deutschlandkarte sozialer Indikatoren</h1>
       <p>
-        De-Puls visualisiert soziale Indikatoren für alle 400 Kreise und
+        Adlerlicht visualisiert soziale Indikatoren für alle 400 Kreise und
         kreisfreien Städte Deutschlands auf einer interaktiven Choropleth-Karte.
       </p>
 
@@ -108,9 +108,9 @@ function SeoContent() {
         <li>Progressive Web App (PWA) für mobile Nutzung</li>
       </ul>
 
-      <h2>About De-Puls (English)</h2>
+      <h2>About Adlerlicht (English)</h2>
       <p>
-        De-Puls is an interactive choropleth map of social indicators across
+        Adlerlicht is an interactive choropleth map of social indicators across
         Germany&apos;s 400 districts. Explore foreign population shares, crime
         statistics, child poverty rates, unemployment data, and real-time
         police press releases – all visualized on an interactive map.
@@ -129,13 +129,13 @@ export default function KartePage() {
       </main>
       <noscript>
         <div style={{ padding: '2rem', color: '#fafafa', background: '#0a0a0a' }}>
-          <h1>De-Puls – Interaktive Deutschlandkarte</h1>
+          <h1>Adlerlicht – Interaktive Deutschlandkarte</h1>
           <p>
-            De-Puls benötigt JavaScript, um die interaktive Karte
+            Adlerlicht benötigt JavaScript, um die interaktive Karte
             darzustellen. Bitte aktivieren Sie JavaScript in Ihrem Browser.
           </p>
           <p>
-            De-Puls requires JavaScript to display the interactive map.
+            Adlerlicht requires JavaScript to display the interactive map.
             Please enable JavaScript in your browser.
           </p>
         </div>

@@ -8,10 +8,10 @@ export default function BundeslandLayout({ children }: { children: React.ReactNo
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center text-sm font-bold text-[var(--background)]">
-              D
+              A
             </div>
             <span className="text-lg font-bold tracking-tight group-hover:text-cyan-400 transition-colors">
-              De-Puls
+              Adlerlicht
             </span>
           </Link>
           <Link

@@ -1,4 +1,4 @@
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://de-puls.de';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://adlerlicht.de';
 
 interface BreadcrumbItem {
   label: string;

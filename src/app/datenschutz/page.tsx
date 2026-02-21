@@ -18,7 +18,7 @@ export default function DatenschutzPage() {
         <div className="prose prose-sm" style={{ color: 'var(--text-secondary)' }}>
           <h2 className="text-lg font-bold mt-6 mb-2" style={{ color: 'var(--text-primary)' }}>1. Datenerhebung</h2>
           <p>
-            De-Puls erhebt keine personenbezogenen Daten der Nutzer. Es werden keine Cookies gesetzt und kein Tracking durchgefuehrt.
+            Adlerlicht erhebt keine personenbezogenen Daten der Nutzer. Es werden keine Cookies gesetzt und kein Tracking durchgefuehrt.
           </p>
           <h2 className="text-lg font-bold mt-6 mb-2" style={{ color: 'var(--text-primary)' }}>2. Datenquellen</h2>
           <p>

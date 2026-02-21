@@ -46,7 +46,7 @@ print = functools.partial(print, flush=True)  # type: ignore[assignment]
 
 # Constants
 BASE_URL = "https://polizei.brandenburg.de"
-USER_AGENT = "kanakmap/1.0 (+contact: scraper@example.com)"
+USER_AGENT = "adlerlicht/1.0 (+contact: scraper@adlerlicht.de)"
 
 # Search API URL template
 # {category} is percent-encoded (e.g. Kriminalit%C3%A4t)

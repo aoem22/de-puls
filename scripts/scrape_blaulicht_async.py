@@ -33,7 +33,7 @@ os.environ['SSL_CERT_FILE'] = certifi.where()
 # Constants
 BASE_URL = "https://www.presseportal.de"
 BLAULICHT_URL = f"{BASE_URL}/blaulicht/"
-USER_AGENT = "de-puls/1.0 (+contact: scraper@example.com)"
+USER_AGENT = "adlerlicht/1.0 (+contact: scraper@adlerlicht.de)"
 
 # Async configuration - the key to 10-20x speedup
 CONCURRENT_REQUESTS = 20  # Fetch 20 pages/articles at once

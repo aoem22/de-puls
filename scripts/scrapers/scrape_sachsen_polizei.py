@@ -49,7 +49,7 @@ os.environ["SSL_CERT_FILE"] = certifi.where()
 BASE_URL = "https://medienservice.sachsen.de"
 SEARCH_API = f"{BASE_URL}/medien/news/search.json"
 ARTICLE_URL_TPL = f"{BASE_URL}/medien/news/{{id}}"
-USER_AGENT = "kanakmap-scraper/1.0 (+https://github.com/kanakmap)"
+USER_AGENT = "adlerlicht-scraper/1.0 (+https://adlerlicht.de)"
 
 # Polizeidirektionen — institution_id -> (display name, primary city)
 POLIZEIDIREKTIONEN = {

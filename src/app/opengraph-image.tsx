@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 
 export const runtime = 'nodejs';
 
-export const alt = 'De-Puls – Interaktive Choropleth-Karte von Deutschland';
+export const alt = 'Adlerlicht – Interaktive Choropleth-Karte von Deutschland';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -182,7 +182,7 @@ export default async function Image() {
                   display: 'flex',
                 }}
               >
-                D
+                A
               </div>
             </div>
             <div
@@ -194,7 +194,7 @@ export default async function Image() {
                 display: 'flex',
               }}
             >
-              De-Puls
+              Adlerlicht
             </div>
           </div>
 

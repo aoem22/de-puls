@@ -42,7 +42,7 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 # Constants
 DEFAULT_MODEL = "google/gemini-3-flash-preview"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-USER_AGENT = "de-puls/1.0 (+contact: scraper@example.com)"
+USER_AGENT = "adlerlicht/1.0 (+contact: scraper@adlerlicht.de)"
 API_DELAY_SECONDS = 0.5
 GEOCODE_DELAY_SECONDS = 1.1
 MAX_RETRIES = 3

@@ -1,4 +1,4 @@
-# KanakMap Enrichment Pipeline
+# Adlerlicht Enrichment Pipeline
 
 > Complete architecture reference for the German police press-release enrichment pipeline.
 

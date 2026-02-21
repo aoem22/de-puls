@@ -52,7 +52,7 @@ export function HeroSection({
               className="mt-3 text-[clamp(2.1rem,6vw,4rem)] font-bold leading-[0.95] tracking-tight"
               style={{ color: 'var(--text-primary)' }}
             >
-              DE-PULS
+              ADLERLICHT
             </h1>
             <p
               className="mt-3 max-w-2xl text-sm sm:text-base"

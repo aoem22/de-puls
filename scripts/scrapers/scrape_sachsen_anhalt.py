@@ -36,7 +36,7 @@ os.environ['SSL_CERT_FILE'] = certifi.where()
 # Constants
 BASE_URL = "https://www.sachsen-anhalt.de"
 LISTING_PATH = "/bs/pressemitteilungen/polizei"
-USER_AGENT = "kanakmap/1.0 (+contact: scraper@example.com)"
+USER_AGENT = "adlerlicht/1.0 (+contact: scraper@adlerlicht.de)"
 
 # Async configuration
 CONCURRENT_REQUESTS = 10  # Conservative for government site

@@ -22,7 +22,7 @@ export function Sidebar(props: LayerControlProps) {
       <div className="flex items-center h-12 flex-shrink-0 border-b border-[var(--card-border)] px-3">
         {!isCollapsed && (
           <span className="text-sm font-semibold text-[var(--text-primary)] flex-1 truncate sidebar-content-fade-in">
-            De-Puls
+            Adlerlicht
           </span>
         )}
         <button
