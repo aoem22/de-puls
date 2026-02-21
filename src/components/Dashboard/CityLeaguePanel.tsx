@@ -278,7 +278,6 @@ export function CityLeaguePanel({
   topPlz,
   topPlzPoints,
   periodLabel,
-  categoryLabel,
   isYearView,
   selectedCity,
   selectedPlz,

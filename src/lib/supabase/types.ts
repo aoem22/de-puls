@@ -73,6 +73,28 @@ export type CrimeRecordUpdate = Partial<Omit<CrimeRecordRow, 'id' | 'created_at'
   updated_at?: string;
 };
 
+/**
+ * User favorites row — device-scoped bookmarks on crime_records
+ */
+export interface UserFavoriteRow {
+  id: string;
+  device_id: string;
+  record_id: string;
+  comment: string;
+  created_at: string;
+}
+
+export type UserFavoriteInsert = {
+  device_id: string;
+  record_id: string;
+  comment?: string;
+  id?: string;
+  created_at?: string;
+};
+export type UserFavoriteUpdate = {
+  comment?: string;
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Json = any;
 
@@ -88,21 +110,25 @@ export interface Database {
         Row: CrimeRecordRow;
         Insert: CrimeRecordInsert;
         Update: CrimeRecordUpdate;
+        Relationships: [];
       };
       auslaender_data: {
         Row: { ags: string; year: string; name: string; regions: Json };
         Insert: { ags: string; year: string; name: string; regions: Json };
         Update: Partial<{ ags: string; year: string; name: string; regions: Json }>;
+        Relationships: [];
       };
       deutschlandatlas_data: {
         Row: { ags: string; year: string; name: string; indicators: Json };
         Insert: { ags: string; year: string; name: string; indicators: Json };
         Update: Partial<{ ags: string; year: string; name: string; indicators: Json }>;
+        Relationships: [];
       };
       city_crime_data: {
         Row: { ags: string; year: string; name: string; crimes: Json };
         Insert: { ags: string; year: string; name: string; crimes: Json };
         Update: Partial<{ ags: string; year: string; name: string; crimes: Json }>;
+        Relationships: [];
       };
       geo_boundaries: {
         Row: {
@@ -144,11 +170,19 @@ export interface Database {
           source_dataset: string | null;
           snapshot: string | null;
         }>;
+        Relationships: [];
       };
       dataset_meta: {
         Row: { dataset: string; years: string[]; source: string | null; description: string | null; updated_at: string };
         Insert: { dataset: string; years: string[]; source: string | null; description: string | null };
         Update: Partial<{ dataset: string; years: string[]; source: string | null; description: string | null }>;
+        Relationships: [];
+      };
+      user_favorites: {
+        Row: UserFavoriteRow;
+        Insert: UserFavoriteInsert;
+        Update: UserFavoriteUpdate;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

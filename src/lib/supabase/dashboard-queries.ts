@@ -12,7 +12,6 @@ import { parseAges } from '@/lib/utils/age-parser';
 
 // Typed RPC helper — avoids fighting with Supabase's strict generics
 // for custom functions that aren't in the auto-generated Database type.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function rpc<T>(name: string, args?: Record<string, unknown>): Promise<T> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any).rpc(name, args);
@@ -172,7 +171,7 @@ function normalizeCityName(city: string | null, bundesland: string | null): stri
   if (!city || !city.trim()) return null;
 
   // Unicode dash normalization (U+2011 → regular hyphen)
-  let c = city.trim().replace(/\u2011/g, '-');
+  const c = city.trim().replace(/\u2011/g, '-');
 
   // Kreis-as-city exclusion
   if (/(?:land)?kreis/i.test(c)) return null;
@@ -760,17 +759,39 @@ export interface ContextStatMetric {
   helper: string;
 }
 
+export interface ContextStatMetric {
+  label: string;
+  value: string;
+  helper: string;
+}
+
 export interface ContextStats {
-  peakTime: ContextStatMetric | null;
-  suspectProfile: ContextStatMetric | null;
-  victimProfile: ContextStatMetric | null;
-  topWeapon: ContextStatMetric | null;
-  topMotive: ContextStatMetric | null;
-  avgDamage: ContextStatMetric | null;
-  topDrug: ContextStatMetric | null;
+  suspectProfile: ContextStatMetric[];
+  victimProfile: ContextStatMetric[];
+  modusOperandi: ContextStatMetric[];
+  sceneTime: ContextStatMetric[];
+  damageReport: ContextStatMetric[];
+  herkunft: ContextStatMetric[];
+  peakTime?: { band: string; pct: number };
 }
 
 const TIME_BANDS = ['00–04', '04–08', '08–12', '12–16', '16–20', '20–24'] as const;
+
+/** Minimum data points required before showing a stat — prevents misleading small-N percentages */
+const MIN_SAMPLE = 3;
+
+const WEAPON_LABELS: Record<string, string> = {
+  knife: 'Messer', gun: 'Schusswaffe', blunt: 'Schlagwaffe', explosive: 'Sprengstoff', pepper_spray: 'Pfefferspray',
+};
+const MOTIVE_LABELS: Record<string, string> = {
+  robbery: 'Raub', dispute: 'Streit', road_rage: 'Verkehrskonflikt', drugs: 'Drogen', domestic: 'Häuslich', hate: 'Hass',
+};
+const DRUG_LABELS: Record<string, string> = {
+  cannabis: 'Cannabis', cocaine: 'Kokain', heroin: 'Heroin', amphetamine: 'Amphetamin', ecstasy: 'Ecstasy', meth: 'Crystal Meth', other: 'Sonstige',
+};
+const SEVERITY_LABELS: Record<string, string> = {
+  minor: 'Leicht', serious: 'Schwer', critical: 'Lebensgefährlich', fatal: 'Tödlich', property_only: 'Sachschaden',
+};
 
 function topEntry(counts: Record<string, number>, total: number): { value: string; pct: number } | null {
   let best = '';
@@ -786,7 +807,7 @@ function buildProfileMetric(
   ages: number[],
   genders: Record<string, number>,
   genderTotal: number,
-): ContextStatMetric | null {
+): { value: string; helper: string } | null {
   if (ages.length === 0 && genderTotal === 0) return null;
   const avgAge = ages.length > 0
     ? Math.round(ages.reduce((a, b) => a + b, 0) / ages.length)
@@ -829,6 +850,15 @@ export async function getContextStats(
     suspect_ages: string[];
     victim_ages: string[];
     drug_type_counts: Record<string, number>;
+    suspect_herkunft_counts?: Record<string, number>;
+    victim_herkunft_counts?: Record<string, number>;
+    location_hint_counts?: Record<string, number>;
+    severity_counts?: Record<string, number>;
+    suspect_count_sum?: number;
+    suspect_count_cases?: number;
+    suspect_solo_count?: number;
+    victim_count_sum?: number;
+    victim_count_cases?: number;
   }
 
   const stats = await rpc<ContextStatsRaw>('dashboard_context_stats', {
@@ -840,84 +870,151 @@ export async function getContextStats(
     p_bundesland: bundesland,
   });
 
-  // ── peakTime ──
+  // 1. Scene & Time (sceneTime)
+  const sceneTime: ContextStatMetric[] = [];
   const timeBuckets = stats.time_buckets ?? [0, 0, 0, 0, 0, 0];
   const timeTotal = timeBuckets.reduce((a, b) => a + b, 0);
-  let peakTime: ContextStatMetric | null = null;
+  let peakTime: { band: string; pct: number } | undefined;
   if (timeTotal > 0) {
     let peakIdx = 0;
     for (let i = 1; i < 6; i++) {
       if (timeBuckets[i] > timeBuckets[peakIdx]) peakIdx = i;
     }
-    peakTime = {
+    const peakPct = Math.round((timeBuckets[peakIdx] / timeTotal) * 100);
+    peakTime = { band: TIME_BANDS[peakIdx], pct: peakPct };
+    sceneTime.push({
+      label: 'Tatzeit',
       value: `${TIME_BANDS[peakIdx]} Uhr`,
-      helper: `${Math.round((timeBuckets[peakIdx] / timeTotal) * 100)}% der Fälle`,
-    };
+      helper: `${peakPct}% d. F.`,
+    });
   }
 
-  // ── suspectProfile (ages parsed in JS) ──
+  const locationCounts = stats.location_hint_counts ?? {};
+  const locationTotal = Object.values(locationCounts).reduce((a, b) => a + b, 0);
+  const locationTop = topEntry(locationCounts, locationTotal);
+  if (locationTop && locationTotal >= MIN_SAMPLE) {
+    sceneTime.push({
+      label: 'Häufiger Tatort',
+      value: locationTop.value,
+      helper: `${locationTop.pct}% d. F.`,
+    });
+  }
+
+  // 2. Herkunft (top 3 nationalities from suspect_herkunft_counts)
+  const herkunft: ContextStatMetric[] = [];
+  const herkunftCounts = stats.suspect_herkunft_counts ?? {};
+  const herkunftTotal = Object.values(herkunftCounts).reduce((a, b) => a + b, 0);
+  if (herkunftTotal >= MIN_SAMPLE) {
+    const sorted = Object.entries(herkunftCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    for (const [nationality, count] of sorted) {
+      herkunft.push({
+        label: nationality,
+        value: count.toLocaleString('de-DE'),
+        helper: `${Math.round((count / herkunftTotal) * 100)}%`,
+      });
+    }
+  }
+
+  // 3. Suspect Profile (suspectProfile) — Herkunft moved to its own card
+  const suspectProfile: ContextStatMetric[] = [];
+
   const suspectAges: number[] = [];
-  for (const ageStr of (stats.suspect_ages ?? [])) {
-    suspectAges.push(...parseAges(ageStr));
-  }
+  for (const ageStr of (stats.suspect_ages ?? [])) suspectAges.push(...parseAges(ageStr));
   const suspectGenderTotal = Object.values(stats.suspect_genders ?? {}).reduce((a, b) => a + b, 0);
-  const suspectProfile = buildProfileMetric(suspectAges, stats.suspect_genders ?? {}, suspectGenderTotal);
-
-  // ── victimProfile ──
-  const victimAges: number[] = [];
-  for (const ageStr of (stats.victim_ages ?? [])) {
-    victimAges.push(...parseAges(ageStr));
+  const suspectDemographics = buildProfileMetric(suspectAges, stats.suspect_genders ?? {}, suspectGenderTotal);
+  if (suspectDemographics && (suspectAges.length >= MIN_SAMPLE || suspectGenderTotal >= MIN_SAMPLE)) {
+    suspectProfile.push({ label: 'Demographie', value: suspectDemographics.value, helper: suspectDemographics.helper });
   }
-  const victimGenderTotal = Object.values(stats.victim_genders ?? {}).reduce((a, b) => a + b, 0);
-  const victimProfile = buildProfileMetric(victimAges, stats.victim_genders ?? {}, victimGenderTotal);
 
-  // ── topWeapon ──
+  // Einzeltäter vs. Gruppe
+  const soloCount = stats.suspect_solo_count ?? 0;
+  const soloCases = stats.suspect_count_cases ?? 0;
+  if (soloCases >= MIN_SAMPLE) {
+    const soloPct = Math.round((soloCount / soloCases) * 100);
+    suspectProfile.push({ label: 'Einzeltäter', value: `${soloPct}%`, helper: `${soloCount} Fälle` });
+  }
+
+  if (stats.suspect_count_cases && stats.suspect_count_sum && stats.suspect_count_cases >= MIN_SAMPLE) {
+    const avgSuspects = (stats.suspect_count_sum / stats.suspect_count_cases).toFixed(1);
+    const val = avgSuspects.endsWith('.0') ? avgSuspects.slice(0, -2) : avgSuspects;
+    suspectProfile.push({ label: 'Gruppengröße', value: `Ø ${val} Pers.`, helper: `${stats.suspect_count_cases} Fälle` });
+  }
+
+  // 3. Victim Profile (victimProfile)
+  const victimProfile: ContextStatMetric[] = [];
+  const victimAges: number[] = [];
+  for (const ageStr of (stats.victim_ages ?? [])) victimAges.push(...parseAges(ageStr));
+  const victimGenderTotal = Object.values(stats.victim_genders ?? {}).reduce((a, b) => a + b, 0);
+  const victimDemographics = buildProfileMetric(victimAges, stats.victim_genders ?? {}, victimGenderTotal);
+  if (victimDemographics && (victimAges.length >= MIN_SAMPLE || victimGenderTotal >= MIN_SAMPLE)) {
+    victimProfile.push({ label: 'Demographie', value: victimDemographics.value, helper: victimDemographics.helper });
+  }
+
+  const severityTotal = Object.values(stats.severity_counts ?? {}).reduce((a, b) => a + b, 0);
+  const severityTop = topEntry(stats.severity_counts ?? {}, severityTotal);
+  if (severityTop && severityTotal >= MIN_SAMPLE) {
+    victimProfile.push({ label: 'Verletzung', value: SEVERITY_LABELS[severityTop.value] ?? severityTop.value, helper: `${severityTop.pct}%` });
+  }
+
+  const victimHerkunftTotal = Object.values(stats.victim_herkunft_counts ?? {}).reduce((a, b) => a + b, 0);
+  const victimHerkunftTop = topEntry(stats.victim_herkunft_counts ?? {}, victimHerkunftTotal);
+  if (victimHerkunftTop && victimHerkunftTotal >= MIN_SAMPLE) {
+    victimProfile.push({ label: 'Herkunft', value: victimHerkunftTop.value, helper: `${victimHerkunftTop.pct}%` });
+  }
+
+  // 4. Modus Operandi
+  const modusOperandi: ContextStatMetric[] = [];
   const weaponTotal = Object.values(stats.weapon_counts ?? {}).reduce((a, b) => a + b, 0);
   const weaponTop = topEntry(stats.weapon_counts ?? {}, weaponTotal);
-  const topWeapon: ContextStatMetric | null = weaponTop
-    ? { value: weaponTop.value, helper: `${weaponTop.pct}% der Fälle` }
-    : null;
+  if (weaponTop && weaponTotal >= MIN_SAMPLE) {
+    modusOperandi.push({ label: 'Tatmittel', value: WEAPON_LABELS[weaponTop.value] ?? weaponTop.value, helper: `${weaponTop.pct}%` });
+  }
 
-  // ── topMotive ──
   const motiveTotal = Object.values(stats.motive_counts ?? {}).reduce((a, b) => a + b, 0);
   const motiveTop = topEntry(stats.motive_counts ?? {}, motiveTotal);
-  const topMotive: ContextStatMetric | null = motiveTop
-    ? { value: motiveTop.value, helper: `${motiveTop.pct}% der Fälle` }
-    : null;
+  if (motiveTop && motiveTotal >= MIN_SAMPLE) {
+    modusOperandi.push({ label: 'Motiv', value: MOTIVE_LABELS[motiveTop.value] ?? motiveTop.value, helper: `${motiveTop.pct}%` });
+  }
 
-  // ── avgDamage ──
-  const damageCount = stats.damage_count ?? 0;
-  const damageSum = stats.damage_sum ?? 0;
-  const avgDamage: ContextStatMetric | null = damageCount > 0
-    ? {
-        value: damageSum / damageCount >= 1000
-          ? `${(damageSum / damageCount / 1000).toFixed(1)}k €`
-          : `${Math.round(damageSum / damageCount).toLocaleString('de-DE')} €`,
-        helper: `${damageCount} Fälle mit Angabe`,
-      }
-    : null;
-
-  // ── topDrug (normalize raw drug_type counts via extractDrugTypes) ──
-  const normalizedDrugCounts: Record<string, number> = {};
   let drugTotal = 0;
+  const normalizedDrugCounts: Record<string, number> = {};
   for (const [rawDrugType, count] of Object.entries(stats.drug_type_counts ?? {})) {
     const drugTypes = extractDrugTypes(rawDrugType);
     for (const dt of drugTypes) {
-      normalizedDrugCounts[dt] = (normalizedDrugCounts[dt] ?? 0) + count;
-      drugTotal += count;
+      if (dt !== 'other') {
+        normalizedDrugCounts[dt] = (normalizedDrugCounts[dt] ?? 0) + count;
+        drugTotal += count;
+      }
     }
   }
   const drugTop = topEntry(normalizedDrugCounts, drugTotal);
-  const topDrug: ContextStatMetric | null = drugTop
-    ? { value: drugTop.value, helper: `${drugTop.pct}% der Fälle` }
-    : null;
+  if (drugTop && drugTotal >= MIN_SAMPLE) {
+    modusOperandi.push({ label: 'Milieu', value: DRUG_LABELS[drugTop.value] ?? drugTop.value, helper: `${drugTop.pct}% (Droge)` });
+  }
 
-  return { peakTime, suspectProfile, victimProfile, topWeapon, topMotive, avgDamage, topDrug };
+  // 5. Damage Report (damageReport)
+  const damageReport: ContextStatMetric[] = [];
+  const damageCount = stats.damage_count ?? 0;
+  const damageSum = stats.damage_sum ?? 0;
+  if (damageCount >= MIN_SAMPLE) {
+    damageReport.push({
+      label: 'Durchschnitt',
+      value: damageSum / damageCount >= 1000 ? `${(damageSum / damageCount / 1000).toFixed(1)}k €` : `${Math.round(damageSum / damageCount).toLocaleString('de-DE')} €`,
+      helper: `${damageCount} Fälle`,
+    });
+  }
+  // Reuse location logic for damage if property crime/vandalism/burglary
+  if (locationTop && locationTotal >= MIN_SAMPLE && (category === 'burglary' || category === 'vandalism' || category === 'arson')) {
+    damageReport.push({ label: 'Oft betroffen', value: locationTop.value, helper: `${locationTop.pct}%` });
+  }
+
+  return { suspectProfile, victimProfile, modusOperandi, sceneTime, damageReport, herkunft, peakTime };
 }
 
 const CONTEXT_STATS_SELECT = [
   'incident_time', 'suspect_age', 'suspect_gender', 'victim_age', 'victim_gender',
   'weapon_type', 'motive', 'damage_amount_eur', 'drug_type',
+  'suspect_herkunft', 'victim_herkunft', 'location_hint', 'severity', 'suspect_count', 'victim_count'
 ].join(',');
 
 async function getContextStatsFallback(
@@ -939,6 +1036,12 @@ async function getContextStatsFallback(
     motive: string | null;
     damage_amount_eur: number | null;
     drug_type: string | null;
+    suspect_herkunft: string | null;
+    victim_herkunft: string | null;
+    location_hint: string | null;
+    severity: string | null;
+    suspect_count: number | null;
+    victim_count: number | null;
   }
 
   let rows = await fetchAllRows<StatsRow>((from, to) => {
@@ -951,7 +1054,8 @@ async function getContextStatsFallback(
 
   rows = filterByDrugType(rows, drugType);
 
-  // ── peakTime ──
+  // 1. Scene & Time
+  const sceneTime: ContextStatMetric[] = [];
   const timeBuckets = [0, 0, 0, 0, 0, 0];
   let timeTotal = 0;
   for (const r of rows) {
@@ -964,32 +1068,97 @@ async function getContextStatsFallback(
       timeTotal++;
     }
   }
-  let peakTime: ContextStatMetric | null = null;
+  let peakTime: { band: string; pct: number } | undefined;
   if (timeTotal > 0) {
     let peakIdx = 0;
     for (let i = 1; i < 6; i++) {
       if (timeBuckets[i] > timeBuckets[peakIdx]) peakIdx = i;
     }
-    peakTime = {
+    const peakPct = Math.round((timeBuckets[peakIdx] / timeTotal) * 100);
+    peakTime = { band: TIME_BANDS[peakIdx], pct: peakPct };
+    sceneTime.push({
+      label: 'Tatzeit',
       value: `${TIME_BANDS[peakIdx]} Uhr`,
-      helper: `${Math.round((timeBuckets[peakIdx] / timeTotal) * 100)}% der Fälle`,
-    };
+      helper: `${peakPct}% d. F.`,
+    });
   }
 
-  // ── suspectProfile ──
+  const locationCounts: Record<string, number> = {};
+  let locationTotal = 0;
+  for (const r of rows) {
+    if (r.location_hint) {
+      locationCounts[r.location_hint] = (locationCounts[r.location_hint] ?? 0) + 1;
+      locationTotal++;
+    }
+  }
+  const locationTop = topEntry(locationCounts, locationTotal);
+  if (locationTop && locationTotal >= MIN_SAMPLE) {
+    sceneTime.push({
+      label: 'Häufiger Tatort',
+      value: locationTop.value,
+      helper: `${locationTop.pct}% d. F.`,
+    });
+  }
+
+  // 2. Herkunft (top 3 nationalities)
+  const herkunft: ContextStatMetric[] = [];
+  const suspectHerkunftCounts: Record<string, number> = {};
+  let suspectHerkunftTotal = 0;
+  for (const r of rows) {
+    if (r.suspect_herkunft) {
+      suspectHerkunftCounts[r.suspect_herkunft] = (suspectHerkunftCounts[r.suspect_herkunft] ?? 0) + 1;
+      suspectHerkunftTotal++;
+    }
+  }
+  if (suspectHerkunftTotal >= MIN_SAMPLE) {
+    const sorted = Object.entries(suspectHerkunftCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    for (const [nationality, count] of sorted) {
+      herkunft.push({
+        label: nationality,
+        value: count.toLocaleString('de-DE'),
+        helper: `${Math.round((count / suspectHerkunftTotal) * 100)}%`,
+      });
+    }
+  }
+
+  // 3. Suspect Profile — Herkunft moved to its own card
+  const suspectProfile: ContextStatMetric[] = [];
+
   const suspectAges: number[] = [];
   const suspectGenders: Record<string, number> = {};
   let suspectGenderTotal = 0;
+  let suspectCountSum = 0;
+  let suspectCountCases = 0;
+  let suspectSoloCount = 0;
   for (const r of rows) {
     if (r.suspect_age) suspectAges.push(...parseAges(r.suspect_age));
     if (r.suspect_gender) {
       suspectGenders[r.suspect_gender] = (suspectGenders[r.suspect_gender] ?? 0) + 1;
       suspectGenderTotal++;
     }
+    if (r.suspect_count != null) {
+      suspectCountSum += r.suspect_count;
+      suspectCountCases++;
+      if (r.suspect_count === 1) suspectSoloCount++;
+    }
   }
-  const suspectProfile = buildProfileMetric(suspectAges, suspectGenders, suspectGenderTotal);
+  const suspectDemographics = buildProfileMetric(suspectAges, suspectGenders, suspectGenderTotal);
+  if (suspectDemographics && (suspectAges.length >= MIN_SAMPLE || suspectGenderTotal >= MIN_SAMPLE)) {
+    suspectProfile.push({ label: 'Demographie', value: suspectDemographics.value, helper: suspectDemographics.helper });
+  }
+  // Einzeltäter vs. Gruppe
+  if (suspectCountCases >= MIN_SAMPLE) {
+    const soloPct = Math.round((suspectSoloCount / suspectCountCases) * 100);
+    suspectProfile.push({ label: 'Einzeltäter', value: `${soloPct}%`, helper: `${suspectSoloCount} Fälle` });
+  }
+  if (suspectCountCases >= MIN_SAMPLE) {
+    const avgSuspects = (suspectCountSum / suspectCountCases).toFixed(1);
+    const val = avgSuspects.endsWith('.0') ? avgSuspects.slice(0, -2) : avgSuspects;
+    suspectProfile.push({ label: 'Gruppengröße', value: `Ø ${val} Pers.`, helper: `${suspectCountCases} Fälle` });
+  }
 
-  // ── victimProfile ──
+  // 3. Victim Profile
+  const victimProfile: ContextStatMetric[] = [];
   const victimAges: number[] = [];
   const victimGenders: Record<string, number> = {};
   let victimGenderTotal = 0;
@@ -1000,9 +1169,39 @@ async function getContextStatsFallback(
       victimGenderTotal++;
     }
   }
-  const victimProfile = buildProfileMetric(victimAges, victimGenders, victimGenderTotal);
+  const victimDemographics = buildProfileMetric(victimAges, victimGenders, victimGenderTotal);
+  if (victimDemographics && (victimAges.length >= MIN_SAMPLE || victimGenderTotal >= MIN_SAMPLE)) {
+    victimProfile.push({ label: 'Demographie', value: victimDemographics.value, helper: victimDemographics.helper });
+  }
 
-  // ── topWeapon ──
+  const severityCounts: Record<string, number> = {};
+  let severityTotal = 0;
+  for (const r of rows) {
+    if (r.severity && r.severity !== 'unknown') {
+      severityCounts[r.severity] = (severityCounts[r.severity] ?? 0) + 1;
+      severityTotal++;
+    }
+  }
+  const severityTop = topEntry(severityCounts, severityTotal);
+  if (severityTop && severityTotal >= MIN_SAMPLE) {
+    victimProfile.push({ label: 'Verletzung', value: SEVERITY_LABELS[severityTop.value] ?? severityTop.value, helper: `${severityTop.pct}%` });
+  }
+
+  const victimHerkunftCounts: Record<string, number> = {};
+  let victimHerkunftTotal = 0;
+  for (const r of rows) {
+    if (r.victim_herkunft) {
+      victimHerkunftCounts[r.victim_herkunft] = (victimHerkunftCounts[r.victim_herkunft] ?? 0) + 1;
+      victimHerkunftTotal++;
+    }
+  }
+  const victimHerkunftTop = topEntry(victimHerkunftCounts, victimHerkunftTotal);
+  if (victimHerkunftTop && victimHerkunftTotal >= MIN_SAMPLE) {
+    victimProfile.push({ label: 'Herkunft', value: victimHerkunftTop.value, helper: `${victimHerkunftTop.pct}%` });
+  }
+
+  // 4. Modus Operandi
+  const modusOperandi: ContextStatMetric[] = [];
   const weaponCounts: Record<string, number> = {};
   let weaponTotal = 0;
   for (const r of rows) {
@@ -1012,25 +1211,41 @@ async function getContextStatsFallback(
     }
   }
   const weaponTop = topEntry(weaponCounts, weaponTotal);
-  const topWeapon: ContextStatMetric | null = weaponTop
-    ? { value: weaponTop.value, helper: `${weaponTop.pct}% der Fälle` }
-    : null;
+  if (weaponTop && weaponTotal >= MIN_SAMPLE) {
+    modusOperandi.push({ label: 'Tatmittel', value: WEAPON_LABELS[weaponTop.value] ?? weaponTop.value, helper: `${weaponTop.pct}%` });
+  }
 
-  // ── topMotive ──
   const motiveCounts: Record<string, number> = {};
   let motiveTotal = 0;
   for (const r of rows) {
-    if (r.motive) {
+    if (r.motive && r.motive !== 'unknown') {
       motiveCounts[r.motive] = (motiveCounts[r.motive] ?? 0) + 1;
       motiveTotal++;
     }
   }
   const motiveTop = topEntry(motiveCounts, motiveTotal);
-  const topMotive: ContextStatMetric | null = motiveTop
-    ? { value: motiveTop.value, helper: `${motiveTop.pct}% der Fälle` }
-    : null;
+  if (motiveTop && motiveTotal >= MIN_SAMPLE) {
+    modusOperandi.push({ label: 'Motiv', value: MOTIVE_LABELS[motiveTop.value] ?? motiveTop.value, helper: `${motiveTop.pct}%` });
+  }
 
-  // ── avgDamage ──
+  const drugCounts: Record<string, number> = {};
+  let drugTotal = 0;
+  for (const r of rows) {
+    const drugTypes = extractDrugTypes(r.drug_type);
+    for (const dt of drugTypes) {
+      if (dt !== 'other') {
+        drugCounts[dt] = (drugCounts[dt] ?? 0) + 1;
+        drugTotal++;
+      }
+    }
+  }
+  const drugTop = topEntry(drugCounts, drugTotal);
+  if (drugTop && drugTotal >= MIN_SAMPLE) {
+    modusOperandi.push({ label: 'Milieu', value: DRUG_LABELS[drugTop.value] ?? drugTop.value, helper: `${drugTop.pct}% (Droge)` });
+  }
+
+  // 5. Damage Report
+  const damageReport: ContextStatMetric[] = [];
   let damageSum = 0;
   let damageCount = 0;
   for (const r of rows) {
@@ -1039,31 +1254,18 @@ async function getContextStatsFallback(
       damageCount++;
     }
   }
-  const avgDamage: ContextStatMetric | null = damageCount > 0
-    ? {
-        value: damageSum / damageCount >= 1000
-          ? `${(damageSum / damageCount / 1000).toFixed(1)}k €`
-          : `${Math.round(damageSum / damageCount).toLocaleString('de-DE')} €`,
-        helper: `${damageCount} Fälle mit Angabe`,
-      }
-    : null;
-
-  // ── topDrug ──
-  const drugCounts: Record<string, number> = {};
-  let drugTotal = 0;
-  for (const r of rows) {
-    const drugTypes = extractDrugTypes(r.drug_type);
-    for (const dt of drugTypes) {
-      drugCounts[dt] = (drugCounts[dt] ?? 0) + 1;
-      drugTotal++;
-    }
+  if (damageCount >= MIN_SAMPLE) {
+    damageReport.push({
+      label: 'Durchschnitt',
+      value: damageSum / damageCount >= 1000 ? `${(damageSum / damageCount / 1000).toFixed(1)}k €` : `${Math.round(damageSum / damageCount).toLocaleString('de-DE')} €`,
+      helper: `${damageCount} Fälle`,
+    });
   }
-  const drugTop = topEntry(drugCounts, drugTotal);
-  const topDrug: ContextStatMetric | null = drugTop
-    ? { value: drugTop.value, helper: `${drugTop.pct}% der Fälle` }
-    : null;
+  if (locationTop && locationTotal >= MIN_SAMPLE && (category === 'burglary' || category === 'vandalism' || category === 'arson')) {
+    damageReport.push({ label: 'Oft betroffen', value: locationTop.value, helper: `${locationTop.pct}%` });
+  }
 
-  return { peakTime, suspectProfile, victimProfile, topWeapon, topMotive, avgDamage, topDrug };
+  return { suspectProfile, victimProfile, modusOperandi, sceneTime, damageReport, herkunft, peakTime };
 }
 
 // ────────────────────────── Weapon & Drug counts (RPC) ──────────────────────────

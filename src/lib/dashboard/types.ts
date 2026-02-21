@@ -9,18 +9,19 @@ export type DashboardTimeframe =
   | 'year_to_date';
 
 export interface DashboardContextValue {
+  label: string;
   value: string;
   helper: string;
 }
 
 export interface DashboardContextStats {
-  peakTime: DashboardContextValue | null;
-  suspectProfile: DashboardContextValue | null;
-  victimProfile: DashboardContextValue | null;
-  topWeapon: DashboardContextValue | null;
-  topMotive: DashboardContextValue | null;
-  avgDamage: DashboardContextValue | null;
-  topDrug: DashboardContextValue | null;
+  suspectProfile: DashboardContextValue[];
+  victimProfile: DashboardContextValue[];
+  modusOperandi: DashboardContextValue[];
+  sceneTime: DashboardContextValue[];
+  damageReport: DashboardContextValue[];
+  herkunft: DashboardContextValue[];
+  peakTime?: { band: string; pct: number };
 }
 
 export interface DashboardLiveFeedItem {

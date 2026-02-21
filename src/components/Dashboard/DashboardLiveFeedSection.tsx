@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { DashboardLiveFeedItem } from '@/lib/dashboard/types';
+import { FormattedBody } from '@/components/ui/FormattedBody';
 
 const SEVERITY_LABELS: Record<string, string> = {
   fatal: 'Tödlich',
@@ -132,6 +133,9 @@ interface DashboardLiveFeedSectionProps {
   highlightedId?: string | null;
   locationFilterLabel: string | null;
   onClearLocationFilter: () => void;
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (id: string) => void;
+  showFavoritesOnly?: boolean;
 }
 
 export function DashboardLiveFeedSection({
@@ -145,9 +149,16 @@ export function DashboardLiveFeedSection({
   highlightedId,
   locationFilterLabel,
   onClearLocationFilter,
+  favoriteIds,
+  onToggleFavorite,
+  showFavoritesOnly,
 }: DashboardLiveFeedSectionProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const visibleExpandedId = liveFeed.some((row) => row.id === expandedId) ? expandedId : null;
+  const displayFeed = useMemo(
+    () => showFavoritesOnly && favoriteIds ? liveFeed.filter((row) => favoriteIds.has(row.id)) : liveFeed,
+    [liveFeed, showFavoritesOnly, favoriteIds],
+  );
+  const visibleExpandedId = displayFeed.some((row) => row.id === expandedId) ? expandedId : null;
 
   // Track which item is currently highlighted (auto-clears after animation)
   const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
@@ -208,14 +219,16 @@ export function DashboardLiveFeedSection({
             </button>
           )}
         </div>
-        {!showLoading && liveFeed.length > 0 && (
+        {!showLoading && displayFeed.length > 0 && (
           <span className="text-[11px] tabular-nums sm:text-xs" style={{ color: 'var(--text-muted)' }}>
-            {((feedPage - 1) * liveFeedPageSize + 1).toLocaleString('de-DE')}–{((feedPage - 1) * liveFeedPageSize + liveFeed.length).toLocaleString('de-DE')} von {liveFeedTotal.toLocaleString('de-DE')}
+            {showFavoritesOnly
+              ? `${displayFeed.length.toLocaleString('de-DE')} Favorit${displayFeed.length === 1 ? '' : 'en'}`
+              : `${((feedPage - 1) * liveFeedPageSize + 1).toLocaleString('de-DE')}–${((feedPage - 1) * liveFeedPageSize + displayFeed.length).toLocaleString('de-DE')} von ${liveFeedTotal.toLocaleString('de-DE')}`}
           </span>
         )}
       </div>
       <div className="mt-3 space-y-2">
-        {(!showLoading ? liveFeed : []).map((row) => {
+        {(!showLoading ? displayFeed : []).map((row) => {
           const isExpanded = visibleExpandedId === row.id;
           const knownWeapons = getKnownWeaponTypes(row.weapon_types);
           const hasWeaponTag = knownWeapons.length > 0;
@@ -278,6 +291,18 @@ export function DashboardLiveFeedSection({
                     {formatDate(row.sort_date ?? row.incident_date ?? row.published_at)}
                     {row.incident_date && row.incident_time ? ` ${row.incident_time}` : ''}
                   </span>
+                  {onToggleFavorite && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(row.id); }}
+                      className="shrink-0 p-0.5 transition-colors hover:scale-110"
+                      aria-label={favoriteIds?.has(row.id) ? 'Favorit entfernen' : 'Als Favorit markieren'}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill={favoriteIds?.has(row.id) ? '#f59e0b' : 'none'} stroke={favoriteIds?.has(row.id) ? '#f59e0b' : 'var(--text-faint)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
 
                 <p className="mt-1.5 text-sm font-semibold leading-snug" style={{ color: 'var(--text-primary)' }}>
@@ -335,12 +360,7 @@ export function DashboardLiveFeedSection({
                   className="border-t px-3 py-3"
                   style={{ borderColor: 'var(--border-inner)' }}
                 >
-                  <p
-                    className="whitespace-pre-line text-xs leading-relaxed"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {row.body}
-                  </p>
+                  <FormattedBody text={row.body} compact />
                   {row.source_url && (
                     <a
                       href={row.source_url}
@@ -357,9 +377,11 @@ export function DashboardLiveFeedSection({
             </div>
           );
         })}
-        {!showLoading && liveFeed.length === 0 && (
+        {!showLoading && displayFeed.length === 0 && (
           <p className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-inner)', color: 'var(--text-faint)' }}>
-            Keine Vorfälle im gewählten Zeitraum.
+            {showFavoritesOnly
+              ? 'Keine Favoriten im gewählten Zeitraum.'
+              : 'Keine Vorfälle im gewählten Zeitraum.'}
           </p>
         )}
         {showLoading && (

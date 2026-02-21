@@ -15,6 +15,7 @@ import {
   type CrimeCategory,
 } from '@/lib/types/crime';
 import { useTheme } from '@/lib/theme';
+import { useFavorites } from '@/lib/useFavorites';
 
 interface WeaponChip {
   key: string;
@@ -72,6 +73,8 @@ export function DashboardPage() {
   const [bundeslandFilter, setBundeslandFilter] = useState<string | null>(null);
   const [ranglisteMode, setRanglisteMode] = useState<RanglisteFilterMode>('staedte');
   const [highlightedFeedId, setHighlightedFeedId] = useState<string | null>(null);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const { favoriteIds, toggleFavorite, count: favoriteCount } = useFavorites();
   const effectiveDrugFilter = focusCategory === 'drugs' ? drugFilter : null;
 
   const { data, isLoading, error } = useSecurityOverview(
@@ -193,6 +196,9 @@ export function DashboardPage() {
             totalRecords2026={data?.snapshot.totalRecords2026}
             isDark={theme === 'dark'}
             onToggleTheme={toggleTheme}
+            favoriteCount={favoriteCount}
+            showFavoritesOnly={showFavoritesOnly}
+            onToggleFavoritesOnly={() => setShowFavoritesOnly((v) => !v)}
           />
 
           <DashboardSnapshotGrid
@@ -265,6 +271,9 @@ export function DashboardPage() {
             highlightedId={highlightedFeedId}
             locationFilterLabel={locationFilterLabel}
             onClearLocationFilter={handleClearLocationFilter}
+            favoriteIds={favoriteIds}
+            onToggleFavorite={toggleFavorite}
+            showFavoritesOnly={showFavoritesOnly}
           />
         </main>
 

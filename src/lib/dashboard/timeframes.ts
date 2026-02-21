@@ -3,7 +3,7 @@ import type { DashboardTimeframe } from '@/lib/dashboard/types';
 export const DASHBOARD_YEAR = 2026;
 
 export const DASHBOARD_TIMEFRAME_OPTIONS: Array<{ key: DashboardTimeframe; label: string }> = [
-  { key: 'today', label: 'Live' },
+  { key: 'today', label: 'Heute' },
   { key: 'yesterday', label: 'Gestern' },
   { key: 'last_week', label: 'Letzte Woche' },
   { key: 'this_month', label: 'Dieser Monat' },

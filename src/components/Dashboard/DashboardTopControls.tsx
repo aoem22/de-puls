@@ -38,6 +38,9 @@ interface DashboardTopControlsProps {
   totalRecords2026: number | null | undefined;
   isDark: boolean;
   onToggleTheme: () => void;
+  favoriteCount?: number;
+  showFavoritesOnly?: boolean;
+  onToggleFavoritesOnly?: () => void;
 }
 
 export function DashboardTopControls({
@@ -56,6 +59,9 @@ export function DashboardTopControls({
   totalRecords2026,
   isDark,
   onToggleTheme,
+  favoriteCount,
+  showFavoritesOnly,
+  onToggleFavoritesOnly,
 }: DashboardTopControlsProps) {
   const chipScrollerClass = '-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide scroll-touch sm:mx-0 sm:flex-wrap sm:overflow-x-visible sm:px-0 sm:pb-0';
 
@@ -73,7 +79,7 @@ export function DashboardTopControls({
             Sicherheits-Dashboard Deutschland
           </p>
           <h1 className="mt-2 text-[clamp(1.75rem,8vw,3.3rem)] font-bold leading-[1.04]" style={{ color: 'var(--text-primary)' }}>
-            Sicherheitslage im Überblick
+            AdlerAuge
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed sm:text-base" style={{ color: 'var(--text-secondary)' }}>
             Über{' '}
@@ -115,33 +121,6 @@ export function DashboardTopControls({
           </svg>
           {isDark ? 'Light' : 'Dark'}
         </button>
-      </div>
-
-      <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide scroll-touch sm:mx-0 sm:mt-5 sm:flex-wrap sm:overflow-x-visible sm:px-0 sm:pb-0">
-        {DASHBOARD_TIMEFRAME_OPTIONS.map((option) => {
-          const active = timeframe === option.key;
-          const isLive = option.key === 'today';
-          return (
-            <button
-              key={option.key}
-              onClick={() => onTimeframeChange(option.key)}
-              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                borderColor: active ? (isLive ? '#ef4444' : 'var(--accent)') : 'var(--border-subtle)',
-                background: active ? (isLive ? 'color-mix(in srgb, #ef4444 15%, transparent)' : 'color-mix(in srgb, var(--accent) 15%, transparent)') : 'var(--card)',
-                color: active ? (isLive ? '#ef4444' : 'var(--accent)') : 'var(--text-secondary)',
-              }}
-            >
-              {isLive && (
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                </span>
-              )}
-              {option.label}
-            </button>
-          );
-        })}
       </div>
 
       <div className="mt-5">
@@ -252,6 +231,58 @@ export function DashboardTopControls({
           </div>
         </div>
       )}
+
+      <div className="mt-4 sm:mt-5">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>
+          Zeitraum
+        </p>
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide scroll-touch sm:mx-0 sm:flex-wrap sm:overflow-x-visible sm:px-0 sm:pb-0">
+          {DASHBOARD_TIMEFRAME_OPTIONS.map((option) => {
+          const active = timeframe === option.key;
+          const isLive = option.key === 'today';
+          return (
+            <button
+              key={option.key}
+              onClick={() => onTimeframeChange(option.key)}
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
+              style={{
+                borderColor: active ? (isLive ? '#ef4444' : 'var(--accent)') : 'var(--border-subtle)',
+                background: active ? (isLive ? 'color-mix(in srgb, #ef4444 15%, transparent)' : 'color-mix(in srgb, var(--accent) 15%, transparent)') : 'var(--card)',
+                color: active ? (isLive ? '#ef4444' : 'var(--accent)') : 'var(--text-secondary)',
+              }}
+            >
+              {isLive && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                </span>
+              )}
+              {option.label}
+            </button>
+          );
+        })}
+          {onToggleFavoritesOnly && (
+            <button
+              onClick={onToggleFavoritesOnly}
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
+              style={{
+                borderColor: showFavoritesOnly ? '#f59e0b' : 'var(--border-subtle)',
+                background: showFavoritesOnly ? 'rgba(245,158,11,0.15)' : 'var(--card)',
+                color: showFavoritesOnly ? '#f59e0b' : 'var(--text-secondary)',
+              }}
+              aria-label="Nur Favoriten anzeigen"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={showFavoritesOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              Favoriten
+              {(favoriteCount ?? 0) > 0 && (
+                <span className="tabular-nums opacity-60">{favoriteCount}</span>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

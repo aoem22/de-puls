@@ -71,7 +71,7 @@ function computePresetRange(key: PresetKey): { from: string | null; to: string |
 
 const PRESETS: { key: PresetKey; labelDe: string; labelEn: string }[] = [
   { key: 'all', labelDe: 'Alle', labelEn: 'All' },
-  { key: 'today', labelDe: 'Live', labelEn: 'Live' },
+  { key: 'today', labelDe: 'Heute', labelEn: 'Today' },
   { key: 'yesterday', labelDe: 'Gestern', labelEn: 'Yesterday' },
   { key: 'week', labelDe: 'Woche', labelEn: 'Week' },
 ];
